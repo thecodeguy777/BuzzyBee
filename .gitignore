@@ -1,0 +1,10 @@
+node_modules
+dist
+dist-landing
+.DS_Store
+*.local
+.env
+.env.local
+.vite
+node_modules/.tmp
+*.log

@@ -1,0 +1,31 @@
+{
+  "name": "buzzybee",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:landing": "vite --config vite.config.landing.ts",
+    "build": "vue-tsc -b && vite build",
+    "build:landing": "vite build --config vite.config.landing.ts",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "lucide-vue-next": "^1.0.0",
+    "pinia": "^3.0.4",
+    "vue": "^3.5.30",
+    "vue-router": "^4.6.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/node": "^24.12.0",
+    "@vitejs/plugin-vue": "^6.0.5",
+    "@vue/tsconfig": "^0.9.0",
+    "daisyui": "^5.5.19",
+    "tailwindcss": "^4.2.2",
+    "typescript": "~5.9.3",
+    "vite": "^8.0.3",
+    "vite-plugin-vue-devtools": "^8.1.1",
+    "vue-tsc": "^3.2.5"
+  }
+}
