@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import rawBee from '@/assets/bee.svg?raw'
+import rawBee from '@/assets/bee-laptop.svg?raw'
 import { prefixSvgIds } from '@/utils/svg'
 
 const beeSvg = prefixSvgIds(rawBee, 'hero-bee')

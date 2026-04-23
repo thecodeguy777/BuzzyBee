@@ -7,6 +7,7 @@ import TestimonialsSection from '@/components/landing/TestimonialsSection.vue'
 import FaqSection from '@/components/landing/FaqSection.vue'
 import FinalCtaSection from '@/components/landing/FinalCtaSection.vue'
 import SiteFooter from '@/components/landing/SiteFooter.vue'
+import SectionWave from '@/components/landing/SectionWave.vue'
 </script>
 
 <template>
@@ -31,11 +32,17 @@ import SiteFooter from '@/components/landing/SiteFooter.vue'
     </header>
 
     <HeroSection />
+    <SectionWave variant="amber-mint" />
     <HowItWorksSection />
+    <SectionWave variant="mint-amber" />
     <WhyUsSection />
+    <SectionWave variant="cream" />
     <PricingSection />
+    <SectionWave variant="amber-mint" />
     <TestimonialsSection />
+    <SectionWave variant="mint-amber" />
     <FaqSection />
+    <SectionWave variant="cream" />
     <FinalCtaSection />
     <SiteFooter />
   </div>
