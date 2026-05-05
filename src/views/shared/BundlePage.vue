@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
-import { ArrowRight, CheckCircle2, Sparkles, ChevronRight } from 'lucide-vue-next'
+import { ArrowRight, CheckCircle2, ChevronRight } from 'lucide-vue-next'
 import { findBundle, findIndustry } from '@/data/whoWeServe'
 import LandingNav from '@/components/landing/LandingNav.vue'
 import SiteFooter from '@/components/landing/SiteFooter.vue'

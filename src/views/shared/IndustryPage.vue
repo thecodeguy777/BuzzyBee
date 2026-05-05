@@ -11,10 +11,7 @@ import {
 import {
   findIndustry,
   findBundle,
-  findService,
-  INDUSTRIES,
-  BUNDLES,
-  SERVICES
+  findService
 } from '@/data/whoWeServe'
 import LandingNav from '@/components/landing/LandingNav.vue'
 import SiteFooter from '@/components/landing/SiteFooter.vue'

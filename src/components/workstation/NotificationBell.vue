@@ -10,9 +10,6 @@ const { unreadCount } = useNotifications()
 const rootEl = ref<HTMLElement | null>(null)
 const open = ref(false)
 
-function toggle() {
-  open.value = !open.value
-}
 function close() {
   open.value = false
 }

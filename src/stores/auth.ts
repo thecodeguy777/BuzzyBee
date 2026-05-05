@@ -43,7 +43,7 @@ export const useAuthStore = defineStore('auth', () => {
         .split(' ')
         .filter(Boolean)
         .slice(0, 2)
-        .map((p) => p.charAt(0).toUpperCase())
+        .map((p: string) => p.charAt(0).toUpperCase())
         .join('') || 'BB'
     )
   })

@@ -10,10 +10,8 @@ import {
   Search
 } from 'lucide-vue-next'
 import { useTicketsStore, type TicketType, type TicketStatus, type TicketSeverity, type Ticket } from '@/stores/tickets'
-import { useAuthStore } from '@/stores/auth'
 
 const tickets = useTicketsStore()
-const auth = useAuthStore()
 
 const filterStatus = ref<'all' | TicketStatus>('open')
 const filterType = ref<'all' | TicketType>('all')

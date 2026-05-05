@@ -9,8 +9,7 @@ import {
   CheckCheck,
   CheckCircle2,
   UserPlus,
-  Inbox as InboxIcon,
-  Folder
+  Inbox as InboxIcon
 } from 'lucide-vue-next'
 import { useNotifications, type Notification } from '@/composables/useNotifications'
 import { useAuthStore } from '@/stores/auth'
@@ -41,7 +40,6 @@ const filtered = computed(() => {
   }
 })
 
-const filters: { id: FilterId; label: string; count?: number }[] = []
 const filterMeta = computed(() => [
   { id: 'all' as const, label: 'All', count: notifications.value.length },
   { id: 'unread' as const, label: 'Unread', count: unreadCount.value },

@@ -60,14 +60,27 @@ export interface Task {
   priority: 1 | 2 | 3 | 4
   priority_order: number
   due_on: string | null
+  /** Denormalized "primary" assignee — first row added to task_assignees. Kept for back-compat. */
   assignee_id: string | null
   assignee_name: string | null
   created_by: string | null
   attachments: TaskAttachment[]
   activity_log: TaskActivityEvent[]
+  /** Custom-field values keyed by field key (Stage, Links, etc). */
+  custom_fields: Record<string, unknown> | null
   completed_at: string | null
   created_at: string
   updated_at: string
+}
+
+/** A row in buzzybee.task_assignees — one per (task, user). */
+export interface TaskAssignee {
+  task_id: string
+  user_id: string
+  /** ISO timestamp when this person marked their part done; null = still in progress. */
+  completed_at: string | null
+  added_at: string
+  added_by: string | null
 }
 
 export const useTasksStore = defineStore('tasks', () => {
@@ -76,11 +89,14 @@ export const useTasksStore = defineStore('tasks', () => {
   const projects = useProjectsStore()
 
   const tasks = ref<Task[]>([])
+  /** Multi-assignee rows keyed by task_id. Loaded in fetchAll, updated via realtime. */
+  const assigneesByTask = ref<Record<string, TaskAssignee[]>>({})
   const loading = ref(false)
   const error = ref<string | null>(null)
   const selectedTaskId = ref<string | null>(null)
 
   let channel: RealtimeChannel | null = null
+  let assigneesChannel: RealtimeChannel | null = null
 
   // Tasks for the currently-selected client (used by global search etc.).
   const tasksForCurrentClient = computed(() =>
@@ -131,6 +147,99 @@ export const useTasksStore = defineStore('tasks', () => {
     } finally {
       loading.value = false
     }
+    // Pull task_assignees in parallel — separate query because RLS lives on
+    // its own table.
+    void fetchAssignees()
+  }
+
+  async function fetchAssignees() {
+    const { data, error: err } = await supabase
+      .from('task_assignees')
+      .select('*')
+    if (err) {
+      console.warn('[tasks] fetchAssignees:', err.message)
+      return
+    }
+    const grouped: Record<string, TaskAssignee[]> = {}
+    for (const r of (data ?? []) as TaskAssignee[]) {
+      if (!grouped[r.task_id]) grouped[r.task_id] = []
+      grouped[r.task_id].push(r)
+    }
+    assigneesByTask.value = grouped
+  }
+
+  /** Resolve assignees for a single task; returns [] if none loaded. */
+  function getAssignees(taskId: string): TaskAssignee[] {
+    return assigneesByTask.value[taskId] ?? []
+  }
+
+  /** % of assignees who have completed_at, for the table's progress bar fill. */
+  function assigneeProgress(taskId: string): { total: number; done: number; pct: number } {
+    const list = getAssignees(taskId)
+    const total = list.length
+    if (total === 0) return { total: 0, done: 0, pct: 0 }
+    const done = list.filter((a) => a.completed_at !== null).length
+    return { total, done, pct: Math.round((done / total) * 100) }
+  }
+
+  // ── Multi-assignee operations ────────────────────────────────────────────
+  async function addAssignee(taskId: string, userId: string) {
+    if (!auth.user) throw new Error('Not authenticated')
+    const { data, error: err } = await supabase
+      .from('task_assignees')
+      .insert({ task_id: taskId, user_id: userId, added_by: auth.user.id })
+      .select('*')
+      .single()
+    if (err) throw err
+    const row = data as TaskAssignee
+    // Optimistic local insert (realtime will dedupe).
+    const list = assigneesByTask.value[taskId] ? [...assigneesByTask.value[taskId]] : []
+    if (!list.some((a) => a.user_id === row.user_id)) list.push(row)
+    assigneesByTask.value = { ...assigneesByTask.value, [taskId]: list }
+  }
+
+  async function removeAssignee(taskId: string, userId: string) {
+    const { error: err } = await supabase
+      .from('task_assignees')
+      .delete()
+      .eq('task_id', taskId)
+      .eq('user_id', userId)
+    if (err) throw err
+    const list = (assigneesByTask.value[taskId] ?? []).filter((a) => a.user_id !== userId)
+    assigneesByTask.value = { ...assigneesByTask.value, [taskId]: list }
+  }
+
+  async function setAssigneeCompleted(taskId: string, userId: string, done: boolean) {
+    const completed_at = done ? new Date().toISOString() : null
+    const { error: err } = await supabase
+      .from('task_assignees')
+      .update({ completed_at })
+      .eq('task_id', taskId)
+      .eq('user_id', userId)
+    if (err) throw err
+    const list = (assigneesByTask.value[taskId] ?? []).map((a) =>
+      a.user_id === userId ? { ...a, completed_at } : a
+    )
+    assigneesByTask.value = { ...assigneesByTask.value, [taskId]: list }
+  }
+
+  function applyAssigneeRealtime(payload: any) {
+    const ev = payload.eventType as 'INSERT' | 'UPDATE' | 'DELETE'
+    const row = (ev === 'DELETE' ? payload.old : payload.new) as TaskAssignee
+    const list = assigneesByTask.value[row.task_id]
+      ? [...assigneesByTask.value[row.task_id]]
+      : []
+    if (ev === 'INSERT') {
+      if (!list.some((a) => a.user_id === row.user_id)) list.push(row)
+    } else if (ev === 'UPDATE') {
+      const idx = list.findIndex((a) => a.user_id === row.user_id)
+      if (idx !== -1) list[idx] = row
+      else list.push(row)
+    } else if (ev === 'DELETE') {
+      const idx = list.findIndex((a) => a.user_id === row.user_id)
+      if (idx !== -1) list.splice(idx, 1)
+    }
+    assigneesByTask.value = { ...assigneesByTask.value, [row.task_id]: list }
   }
 
   function applyRealtimeChange(payload: any) {
@@ -163,16 +272,32 @@ export const useTasksStore = defineStore('tasks', () => {
           console.warn('[tasks realtime]', status)
         }
       })
+
+    // Separate channel for task_assignees so a slow row event on one doesn't
+    // back-pressure the other.
+    if (assigneesChannel) return
+    assigneesChannel = supabase
+      .channel('bb-task-assignees')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'buzzybee', table: 'task_assignees' },
+        applyAssigneeRealtime
+      )
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[task-assignees realtime]', status)
+        }
+      })
   }
 
   async function stopRealtime() {
     if (channel) {
-      try {
-        await supabase.removeChannel(channel)
-      } catch {
-        /* ignore */
-      }
+      try { await supabase.removeChannel(channel) } catch { /* ignore */ }
       channel = null
+    }
+    if (assigneesChannel) {
+      try { await supabase.removeChannel(assigneesChannel) } catch { /* ignore */ }
+      assigneesChannel = null
     }
   }
 
@@ -330,6 +455,7 @@ export const useTasksStore = defineStore('tasks', () => {
 
   return {
     tasks,
+    assigneesByTask,
     tasksForCurrentClient,
     tasksForCurrentProject,
     tasksByStatus,
@@ -338,6 +464,12 @@ export const useTasksStore = defineStore('tasks', () => {
     loading,
     error,
     fetchAll,
+    fetchAssignees,
+    getAssignees,
+    assigneeProgress,
+    addAssignee,
+    removeAssignee,
+    setAssigneeCompleted,
     createTask,
     updateTask,
     setStatus,

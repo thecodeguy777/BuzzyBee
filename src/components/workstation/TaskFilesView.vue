@@ -101,11 +101,6 @@ function iconFor(f: TaskAttachmentMeta) {
   return FileIcon
 }
 
-function fmtDate(iso: string | undefined) {
-  if (!iso) return ''
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-}
-
 function uploaderName(f: FileRow) {
   if (f.uploaded_by && auth.user && f.uploaded_by === auth.user.id) {
     return auth.fullName || auth.user.email || 'You'

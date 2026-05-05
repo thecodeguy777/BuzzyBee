@@ -21,17 +21,18 @@ import {
   MessageSquare,
   Link2,
   Pencil,
-  GripVertical,
-  X
+  GripVertical
 } from 'lucide-vue-next'
 import { useTasksStore, type Task, type TaskStatus } from '@/stores/tasks'
 import { useTaskFieldsStore, type TaskFieldDef } from '@/stores/taskFields'
 import { useClientsStore } from '@/stores/clients'
+import { useTeamStore } from '@/stores/team'
 import { useColumnWidths } from '@/composables/useColumnWidths'
 
 const tasks = useTasksStore()
 const taskFields = useTaskFieldsStore()
 const clients = useClientsStore()
+const team = useTeamStore()
 
 // TKT-0004 — Excel-style resizable columns. Widths persist to localStorage
 // so a user's preferred layout survives reloads.
@@ -120,7 +121,7 @@ const groups = computed(() => {
   const map = new Map<TaskStatus, Task[]>()
   for (const s of statuses) map.set(s.value, [])
   for (const t of tasks.tasksForCurrentProject) map.get(t.status)?.push(t)
-  for (const [k, list] of map) {
+  for (const list of map.values()) {
     list.sort(
       (a, b) =>
         a.priority_order - b.priority_order ||
@@ -887,18 +888,34 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
                     </div>
                   </td>
 
-                  <!-- status: progress bar + label (TKT-0007) -->
+                  <!--
+                    Status: progress bar + label (TKT-0007).
+                    Multi-assignee (Model C): if the task has > 1 assignees,
+                    the bar's fill % comes from done_count / total. Status
+                    color still reflects the task-level status. So a task
+                    with Mary done + Rucela in_progress shows an amber bar
+                    filled to ~50%.
+                  -->
                   <td :class="[cellBase, editableCell, 'px-0 py-0 relative']">
                     <div class="flex items-center gap-2 px-3 py-1.5">
-                      <!-- bar track -->
                       <span
                         class="inline-block w-10 h-1.5 rounded-full overflow-hidden shrink-0 bg-base-200"
-                        :title="statusOf(t.status).label"
+                        :title="
+                          tasks.assigneeProgress(t.id).total > 1
+                            ? `${statusOf(t.status).label} · ${tasks.assigneeProgress(t.id).done}/${tasks.assigneeProgress(t.id).total} assignees done`
+                            : statusOf(t.status).label
+                        "
                       >
                         <span
                           class="block h-full rounded-full transition-[width,background-color] duration-300 ease-out"
                           :class="statusOf(t.status).barClass"
-                          :style="{ width: statusOf(t.status).pct + '%' }"
+                          :style="{
+                            width: (
+                              tasks.assigneeProgress(t.id).total > 1 && t.status !== 'done' && t.status !== 'cancelled'
+                                ? Math.max(8, tasks.assigneeProgress(t.id).pct)
+                                : statusOf(t.status).pct
+                            ) + '%'
+                          }"
                         />
                       </span>
                       <span
@@ -963,21 +980,40 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
                     />
                   </td>
 
-                  <!-- assignees (single avatar; multi-assignee is a future schema migration) -->
+                  <!-- assignees: stacked avatars (Model C multi-assignee) -->
                   <td :class="[cellBase, 'px-3 py-1.5']">
                     <button
-                      v-if="t.assignee_id && t.assignee_name"
+                      v-if="tasks.getAssignees(t.id).length > 0"
                       type="button"
                       class="inline-flex items-center hover:opacity-80 transition-opacity"
-                      :title="t.assignee_name"
+                      :title="
+                        tasks.getAssignees(t.id).length === 1
+                          ? (t.assignee_name ?? '—')
+                          : `${tasks.getAssignees(t.id).length} assignees · click to manage`
+                      "
                       @click="openDrawer(t)"
                     >
-                      <span
-                        class="w-7 h-7 rounded-full text-[0.65rem] font-semibold text-white flex items-center justify-center"
-                        :style="`background: ${hashColor(t.assignee_id)}; box-shadow: 0 0 0 2px white, 0 0 0 3px ${hashColor(t.assignee_id)};`"
-                      >
-                        {{ initials(t.assignee_name) }}
-                      </span>
+                      <div class="flex items-center -space-x-1.5">
+                        <span
+                          v-for="(a, i) in tasks.getAssignees(t.id).slice(0, 3)"
+                          :key="a.user_id"
+                          class="relative w-6 h-6 rounded-full text-[0.55rem] font-semibold text-white flex items-center justify-center ring-2 ring-white"
+                          :style="`background: ${hashColor(a.user_id)}; z-index: ${10 - i}`"
+                        >
+                          {{ initials(team.profiles[a.user_id]?.full_name || team.profiles[a.user_id]?.email?.split('@')[0] || '?') }}
+                          <span
+                            v-if="a.completed_at"
+                            class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-success ring-1 ring-white"
+                          />
+                        </span>
+                        <span
+                          v-if="tasks.getAssignees(t.id).length > 3"
+                          class="relative w-6 h-6 rounded-full text-[0.55rem] font-semibold flex items-center justify-center ring-2 ring-white bg-base-200 text-base-content/70"
+                          style="z-index: 7"
+                        >
+                          +{{ tasks.getAssignees(t.id).length - 3 }}
+                        </span>
+                      </div>
                     </button>
                     <span v-else class="text-base-content/35 text-sm">—</span>
                   </td>

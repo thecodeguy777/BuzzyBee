@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import {
   Mail,
   Clock,
@@ -10,7 +10,6 @@ import {
   Activity as ActivityIcon
 } from 'lucide-vue-next'
 import { supabase } from '@/lib/supabase'
-import { useAuthStore } from '@/stores/auth'
 import { useClientsStore } from '@/stores/clients'
 import { useTasksStore, type Task, type TaskActivityEvent } from '@/stores/tasks'
 import { useTeamStore, type MemberProfile } from '@/stores/team'
@@ -18,7 +17,6 @@ import { useTeamStore, type MemberProfile } from '@/stores/team'
 const props = defineProps<{ vaId: string }>()
 const emit = defineEmits<{ (e: 'back'): void }>()
 
-const auth = useAuthStore()
 const clients = useClientsStore()
 const tasks = useTasksStore()
 const team = useTeamStore()

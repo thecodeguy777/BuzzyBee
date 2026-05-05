@@ -9,9 +9,7 @@ import {
   Clock,
   CheckCircle2,
   ArrowRight,
-  CircleDashed,
   Pause,
-  Archive,
   Crown,
   Sparkles
 } from 'lucide-vue-next'

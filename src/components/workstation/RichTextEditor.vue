@@ -110,10 +110,6 @@ function setLink() {
     .run()
 }
 
-const isActive = computed(() => (name: string, attrs?: Record<string, unknown>) => {
-  return editor.value ? editor.value.isActive(name, attrs) : false
-})
-
 const tools = computed(() => {
   const e = editor.value
   return [

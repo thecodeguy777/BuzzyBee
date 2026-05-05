@@ -4,7 +4,6 @@ import {
   ListTodo,
   Calendar as CalendarIcon,
   Flag,
-  Hash,
   CircleDashed,
   Loader2,
   CircleAlert,

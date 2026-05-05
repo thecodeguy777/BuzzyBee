@@ -8,7 +8,6 @@ import {
   ListTodo,
   CheckCircle2,
   CircleAlert,
-  Loader2,
   CalendarDays,
   Folder,
   UserPlus,
