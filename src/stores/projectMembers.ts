@@ -168,42 +168,86 @@ export const useProjectMembersStore = defineStore('projectMembers', () => {
     if (err) throw err
   }
 
-  /** Search profiles within a client's team (via assignments). */
+  /**
+   * Search profiles for the Add Member picker.
+   *
+   * TKT-0002 fix: previously only queried assignments for THIS client, so:
+   *   - PMs added to the client via client_pms (no VA assignment yet) didn't show
+   *   - VAs on other clients in the same workspace didn't show
+   *   - Brand-new accounts didn't show even when a typed query matched
+   *
+   * New strategy:
+   *   1. With no query: show the client's roster (assignments + client_pms PMs)
+   *   2. With a query: search profiles directly via RLS-gated ilike. RLS
+   *      controls who you see (post-20260502g: admin/PM can see all PM/admin
+   *      profiles plus their own VA teammates).
+   * Both paths exclude profiles already on this project.
+   */
   async function searchTeammates(clientId: string, query: string, excludeIds: string[] = []) {
     const trimmed = query.trim()
-    let req = supabase
+    const exclude = new Set(excludeIds)
+
+    // Path B: there's a search query — go broad via RLS-gated profile search.
+    if (trimmed.length > 0) {
+      const pattern = `%${trimmed.split(/\s+/).filter(Boolean).join('%')}%`
+      const { data, error: err } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, avatar_url')
+        .or(`full_name.ilike.${pattern},email.ilike.${pattern}`)
+        .limit(20)
+      if (err) {
+        console.warn('[members] searchTeammates profile search:', err.message)
+        return []
+      }
+      return (data ?? []).filter((p) => !exclude.has(p.id)) as {
+        id: string; full_name: string | null; email: string | null; avatar_url: string | null
+      }[]
+    }
+
+    // Path A: no query — show the client's existing roster (assignments + PMs).
+    const userIds = new Set<string>()
+
+    const { data: assigns, error: aErr } = await supabase
       .from('assignments')
       .select('va_id, pm_id, status')
       .eq('client_id', clientId)
       .eq('status', 'active')
-    const { data: assigns, error: err } = await req
-    if (err) {
-      console.warn('[members] searchTeammates assignments:', err.message)
-      return [] as { id: string; full_name: string | null; email: string | null; avatar_url: string | null }[]
+    if (aErr) {
+      console.warn('[members] searchTeammates assignments:', aErr.message)
+    } else {
+      for (const a of (assigns ?? []) as { va_id: string | null; pm_id: string | null }[]) {
+        if (a.va_id) userIds.add(a.va_id)
+        if (a.pm_id) userIds.add(a.pm_id)
+      }
     }
-    const userIds = new Set<string>()
-    for (const a of (assigns ?? []) as { va_id: string | null; pm_id: string | null }[]) {
-      if (a.va_id) userIds.add(a.va_id)
-      if (a.pm_id) userIds.add(a.pm_id)
+
+    const { data: clientPms, error: pmErr } = await supabase
+      .from('client_pms')
+      .select('pm_id')
+      .eq('client_id', clientId)
+    if (pmErr) {
+      console.warn('[members] searchTeammates client_pms:', pmErr.message)
+    } else {
+      for (const r of (clientPms ?? []) as { pm_id: string }[]) {
+        userIds.add(r.pm_id)
+      }
     }
-    for (const id of excludeIds) userIds.delete(id)
+
+    for (const id of exclude) userIds.delete(id)
     if (userIds.size === 0) return []
 
-    let prof = supabase
+    const { data: profs, error: pErr } = await supabase
       .from('profiles')
       .select('id, full_name, email, avatar_url')
       .in('id', [...userIds])
       .limit(20)
-    if (trimmed.length > 0) {
-      const pattern = `%${trimmed.split(/\s+/).filter(Boolean).join('%')}%`
-      prof = prof.or(`full_name.ilike.${pattern},email.ilike.${pattern}`)
-    }
-    const { data: profs, error: pErr } = await prof
     if (pErr) {
       console.warn('[members] searchTeammates profiles:', pErr.message)
       return []
     }
-    return (profs ?? []) as { id: string; full_name: string | null; email: string | null; avatar_url: string | null }[]
+    return (profs ?? []) as {
+      id: string; full_name: string | null; email: string | null; avatar_url: string | null
+    }[]
   }
 
   watch(
@@ -228,6 +272,7 @@ export const useProjectMembersStore = defineStore('projectMembers', () => {
     loading,
     error,
     fetchAll,
+    loadProfiles,
     addMember,
     removeMember,
     updateRole,

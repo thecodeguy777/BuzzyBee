@@ -11,7 +11,9 @@ import {
   CheckCircle2,
   CircleSlash,
   Paperclip,
-  Pencil
+  Pencil,
+  ZoomOut,
+  Check
 } from 'lucide-vue-next'
 import { useTasksStore, type Task, type TaskStatus } from '@/stores/tasks'
 import { useClientsStore } from '@/stores/clients'
@@ -19,18 +21,21 @@ import { useClientsStore } from '@/stores/clients'
 const tasks = useTasksStore()
 const clients = useClientsStore()
 
+// TKT-0007 (board): the column header is filled with the status color and
+// shows a white-on-color label + count. No progress bar, no dot — the header
+// itself is the status indicator.
 const columns: {
   status: TaskStatus
   label: string
   icon: any
-  accent: string
-  dot: string
+  headerBgClass: string
+  countBgClass: string
 }[] = [
-  { status: 'todo', label: 'Todo', icon: CircleDashed, accent: 'border-base-content/20', dot: 'bg-base-content/40' },
-  { status: 'in_progress', label: 'In progress', icon: Loader2, accent: 'border-info/40', dot: 'bg-info' },
-  { status: 'blocked', label: 'Blocked', icon: CircleAlert, accent: 'border-error/40', dot: 'bg-error' },
-  { status: 'done', label: 'Done', icon: CheckCircle2, accent: 'border-success/40', dot: 'bg-success' },
-  { status: 'cancelled', label: 'Cancelled', icon: CircleSlash, accent: 'border-base-content/10', dot: 'bg-base-content/30' }
+  { status: 'todo',        label: 'Todo',        icon: CircleDashed, headerBgClass: 'bg-base-content/55', countBgClass: 'bg-white/20' },
+  { status: 'in_progress', label: 'In progress', icon: Loader2,      headerBgClass: 'bg-primary',         countBgClass: 'bg-white/20' },
+  { status: 'blocked',     label: 'Blocked',     icon: CircleAlert,  headerBgClass: 'bg-error',           countBgClass: 'bg-white/20' },
+  { status: 'done',        label: 'Done',        icon: CheckCircle2, headerBgClass: 'bg-success',         countBgClass: 'bg-white/20' },
+  { status: 'cancelled',   label: 'Cancelled',   icon: CircleSlash,  headerBgClass: 'bg-base-content/30', countBgClass: 'bg-white/20' }
 ]
 
 const cardsByStatus = computed(() => tasks.tasksByStatus)
@@ -163,6 +168,62 @@ function dueClass(due: string | null) {
   return 'text-base-content/60'
 }
 
+// ── Zoom presets (TKT-0004 style density) ─────────────────────────────────
+// Bundles column width + card density into a single control. SortableJS-safe:
+// we only swap classes, never CSS transforms, so drag offsets stay accurate.
+type ZoomLevel = 'default' | 'compact' | 'mini'
+const ZOOM_KEY = 'buzzybee.workstation.board-zoom'
+const zoom = ref<ZoomLevel>(
+  typeof window !== 'undefined'
+    ? ((window.localStorage.getItem(ZOOM_KEY) as ZoomLevel) || 'default')
+    : 'default'
+)
+watch(zoom, (v) => {
+  if (typeof window !== 'undefined') window.localStorage.setItem(ZOOM_KEY, v)
+})
+
+const zoomMenuOpen = ref(false)
+const zoomWrap = ref<HTMLElement | null>(null)
+function onZoomDocClick(e: MouseEvent) {
+  if (!zoomWrap.value) return
+  if (!zoomWrap.value.contains(e.target as Node)) zoomMenuOpen.value = false
+}
+onMounted(() => document.addEventListener('click', onZoomDocClick))
+onBeforeUnmount(() => document.removeEventListener('click', onZoomDocClick))
+
+const zoomPresets: { value: ZoomLevel; label: string; sub: string }[] = [
+  { value: 'default', label: 'Default', sub: 'Wide cards · full meta' },
+  { value: 'compact', label: 'Compact', sub: 'Narrower · due + priority' },
+  { value: 'mini',    label: 'Mini',    sub: 'Title only · max columns' }
+]
+const zoomLabel = computed(() =>
+  zoomPresets.find((p) => p.value === zoom.value)?.label ?? 'Default'
+)
+
+// Column width per preset.
+const colWidthClass = computed(() => {
+  switch (zoom.value) {
+    case 'mini':    return 'w-48'   // 192px
+    case 'compact': return 'w-60'   // 240px
+    default:        return 'w-72'   // 288px
+  }
+})
+// Card body padding per preset.
+const cardPadClass = computed(() => {
+  switch (zoom.value) {
+    case 'mini':    return 'p-2'
+    case 'compact': return 'p-2.5 space-y-1.5'
+    default:        return 'p-3 space-y-2'
+  }
+})
+const cardTitleClass = computed(() => {
+  switch (zoom.value) {
+    case 'mini':    return 'text-xs font-medium leading-snug pr-5 truncate'
+    case 'compact': return 'text-sm font-medium leading-snug pr-6'
+    default:        return 'text-sm font-medium leading-snug pr-6'
+  }
+})
+
 // ── Quick add ──────────────────────────────────────────────────────────────
 const newTitleByCol = ref<Record<TaskStatus, string>>({
   todo: '',
@@ -188,24 +249,79 @@ async function quickAdd(status: TaskStatus) {
 </script>
 
 <template>
-  <div class="-mx-4 px-4">
+  <div class="-mx-4 px-4 space-y-3">
+    <!-- Toolbar -->
+    <div class="flex items-center gap-2 flex-wrap">
+      <div class="flex-1" />
+      <div ref="zoomWrap" class="relative">
+        <button
+          type="button"
+          class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-base-300 bg-white text-xs font-medium hover:bg-base-200/60 transition-colors"
+          :aria-expanded="zoomMenuOpen"
+          aria-haspopup="true"
+          @click="zoomMenuOpen = !zoomMenuOpen"
+        >
+          <ZoomOut class="w-3.5 h-3.5 text-base-content/60" :stroke-width="1.75" />
+          Zoom: <span class="text-base-content/60">{{ zoomLabel }}</span>
+        </button>
+
+        <Transition
+          enter-active-class="transition-all duration-150 ease-out"
+          enter-from-class="opacity-0 -translate-y-1"
+          enter-to-class="opacity-100 translate-y-0"
+          leave-active-class="transition-all duration-100 ease-in"
+          leave-from-class="opacity-100"
+          leave-to-class="opacity-0"
+        >
+          <div
+            v-if="zoomMenuOpen"
+            class="absolute right-0 top-full mt-1 z-30 w-56 rounded-xl bg-white border border-base-300 shadow-hc-2 overflow-hidden"
+          >
+            <ul class="py-1">
+              <li v-for="p in zoomPresets" :key="p.value">
+                <button
+                  type="button"
+                  class="w-full text-left px-3 py-2 hover:bg-base-200/60 transition-colors flex items-start gap-2"
+                  @click="zoom = p.value; zoomMenuOpen = false"
+                >
+                  <Check
+                    class="w-3.5 h-3.5 mt-1 shrink-0"
+                    :class="zoom === p.value ? 'text-primary' : 'text-transparent'"
+                    :stroke-width="2"
+                  />
+                  <span class="flex-1 min-w-0">
+                    <span class="block text-sm font-medium" :class="zoom === p.value && 'text-primary'">{{ p.label }}</span>
+                    <span class="block text-[0.7rem] text-base-content/55 leading-snug">{{ p.sub }}</span>
+                  </span>
+                </button>
+              </li>
+            </ul>
+          </div>
+        </Transition>
+      </div>
+    </div>
+
     <div class="flex items-start gap-3 overflow-x-auto pb-4">
       <section
         v-for="col in columns"
         :key="col.status"
-        class="shrink-0 w-72 rounded-xl bg-base-200/50 border border-base-300 flex flex-col max-h-[calc(100vh-12rem)]"
+        class="shrink-0 rounded-xl bg-base-200/50 border border-base-300 flex flex-col max-h-[calc(100vh-12rem)] transition-[width] duration-200"
+        :class="colWidthClass"
         :data-status="col.status"
       >
-        <header class="flex items-center justify-between px-3 py-2.5 border-b border-base-300/60">
-          <div class="flex items-center gap-2 min-w-0">
-            <span class="w-1.5 h-1.5 rounded-full" :class="col.dot" />
-            <span class="text-xs font-semibold uppercase tracking-wider text-base-content/70 truncate">
-              {{ col.label }}
-            </span>
-            <span class="text-xs text-base-content/40">
-              {{ cardsByStatus[col.status].length }}
-            </span>
-          </div>
+        <header
+          class="flex items-center gap-2 px-3 py-2 rounded-t-xl text-white"
+          :class="col.headerBgClass"
+        >
+          <span class="text-xs font-semibold uppercase tracking-wider truncate flex-1">
+            {{ col.label }}
+          </span>
+          <span
+            class="text-[0.7rem] font-semibold tabular-nums px-1.5 py-0.5 rounded-full leading-none shrink-0"
+            :class="col.countBgClass"
+          >
+            {{ cardsByStatus[col.status].length }}
+          </span>
         </header>
 
         <div
@@ -231,18 +347,45 @@ async function quickAdd(status: TaskStatus) {
               <Pencil class="w-3 h-3" :stroke-width="1.75" />
             </button>
 
-            <div class="p-3 space-y-2">
+            <div :class="cardPadClass">
               <div
-                class="text-sm font-medium leading-snug pr-6"
-                :class="t.status === 'done' && 'text-base-content/50 line-through'"
+                :class="[
+                  cardTitleClass,
+                  t.status === 'done' && 'text-base-content/50 line-through'
+                ]"
               >
                 {{ t.title }}
               </div>
-              <div class="flex items-center justify-between gap-2 text-xs">
+              <!-- Mini mode: just title; show priority+due as compact icons inline if present -->
+              <div
+                v-if="zoom === 'mini'"
+                class="flex items-center gap-1.5 text-[0.65rem] text-base-content/50 mt-1"
+              >
+                <span
+                  v-if="t.due_on"
+                  class="flex items-center gap-0.5"
+                  :class="dueClass(t.due_on)"
+                >
+                  <CalendarDays class="w-2.5 h-2.5" :stroke-width="1.75" />
+                  {{ dueLabel(t.due_on) }}
+                </span>
+                <span
+                  v-if="t.priority !== 3"
+                  class="flex items-center"
+                  :class="priorityClass(t.priority)"
+                >
+                  <Flag class="w-2.5 h-2.5" :stroke-width="2.25" />
+                </span>
+              </div>
+              <!-- Compact + Default: full meta row, but ref number & attachments hidden in compact -->
+              <div
+                v-else
+                class="flex items-center justify-between gap-2 text-xs"
+              >
                 <div class="flex items-center gap-2 text-base-content/50">
-                  <span class="font-mono text-[0.65rem]">{{ t.reference_number }}</span>
+                  <span v-if="zoom === 'default'" class="font-mono text-[0.65rem]">{{ t.reference_number }}</span>
                   <span
-                    v-if="(t.attachments?.length ?? 0) > 0"
+                    v-if="zoom === 'default' && (t.attachments?.length ?? 0) > 0"
                     class="flex items-center gap-0.5"
                   >
                     <Paperclip class="w-3 h-3" :stroke-width="1.75" />

@@ -8,3 +8,4 @@ dist-landing
 .vite
 node_modules/.tmp
 *.log
+.claude/

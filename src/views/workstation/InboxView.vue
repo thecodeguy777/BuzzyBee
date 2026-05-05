@@ -139,7 +139,7 @@ async function onMarkAllRead() {
 </script>
 
 <template>
-  <div class="max-w-3xl space-y-4">
+  <div class="space-y-4">
     <header class="flex items-end justify-between gap-4 flex-wrap">
       <div>
         <h1 class="font-display text-xl font-semibold">Inbox</h1>

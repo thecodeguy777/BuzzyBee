@@ -13,13 +13,24 @@ import {
   User,
   Hash,
   History,
-  MessageSquare
+  MessageSquare,
+  Search,
+  Check,
+  UserMinus,
+  UserPlus,
+  ChevronDown
 } from 'lucide-vue-next'
 import { useTasksStore, type TaskStatus, type TaskActivityEvent } from '@/stores/tasks'
+import { useTeamStore, type MemberProfile } from '@/stores/team'
+import { useAuthStore } from '@/stores/auth'
+import { useProjectMembersStore } from '@/stores/projectMembers'
 import TaskAttachments from '@/components/workstation/TaskAttachments.vue'
 import RichTextEditor from '@/components/workstation/RichTextEditor.vue'
 
 const tasks = useTasksStore()
+const team = useTeamStore()
+const auth = useAuthStore()
+const members = useProjectMembersStore()
 
 const open = computed(() => tasks.selectedTask !== null)
 const t = computed(() => tasks.selectedTask)
@@ -153,6 +164,121 @@ async function destroy() {
     console.warn('[task drawer] delete failed:', (e as Error).message)
   }
 }
+
+// ── Assignee picker ─────────────────────────────────────────────────────────
+// Single-assignee for now (tasks.assignee_id is a single uuid). Multi-assignee
+// would need a task_assignees join-table migration; tracked as follow-up.
+//
+// Candidate pool: anyone with an active assignment on this task's client,
+// plus the current user (so PMs can self-assign even if they have no
+// assignments row). Sourced from team.assignments which is RLS-gated so we
+// only see members we're allowed to.
+const assigneeMenuOpen = ref(false)
+const assigneeSearch = ref('')
+
+function toggleAssigneeMenu() {
+  assigneeMenuOpen.value = !assigneeMenuOpen.value
+  if (assigneeMenuOpen.value) {
+    assigneeSearch.value = ''
+    // Lazy-fetch any missing profiles so the menu shows names not raw uuids.
+    const missing = candidateIds.value.filter((id) => !team.profiles[id])
+    if (missing.length) void team.fetchProfiles(missing)
+  }
+}
+
+// Scope of who can be assigned depends on the viewer's role:
+//   - PM/admin/superadmin: anyone with an active assignment on the client
+//     (broad — they're managing the account)
+//   - VA (handoff mode): only project members (narrow — handoff stays inside
+//     the project's working group)
+const candidateIds = computed<string[]>(() => {
+  if (!t.value) return []
+  const ids = new Set<string>()
+
+  if (auth.role === 'va') {
+    // Handoff: project members only.
+    for (const m of members.currentMembers) {
+      if (m.user_id) ids.add(m.user_id)
+    }
+  } else {
+    // Manager: anyone on the client.
+    for (const a of team.assignments) {
+      if (a.client_id !== t.value.client_id) continue
+      if (a.status !== 'active') continue
+      if (a.va_id) ids.add(a.va_id)
+      if (a.pm_id) ids.add(a.pm_id)
+    }
+  }
+
+  // Current user is always a valid self-assign target.
+  if (auth.user?.id) ids.add(auth.user.id)
+  return [...ids]
+})
+
+const candidates = computed<MemberProfile[]>(() => {
+  const list = candidateIds.value
+    .map((id) => team.profiles[id])
+    .filter((p): p is MemberProfile => Boolean(p))
+  const q = assigneeSearch.value.trim().toLowerCase()
+  const filtered = q
+    ? list.filter((p) => {
+        const hay = `${p.full_name ?? ''} ${p.email ?? ''}`.toLowerCase()
+        return hay.includes(q)
+      })
+    : list
+  // Sort: VAs first, then by name.
+  return filtered.sort((a, b) => {
+    const aIsVa = a.role === 'va' ? 0 : 1
+    const bIsVa = b.role === 'va' ? 0 : 1
+    if (aIsVa !== bIsVa) return aIsVa - bIsVa
+    const an = (a.full_name || a.email || '').toLowerCase()
+    const bn = (b.full_name || b.email || '').toLowerCase()
+    return an.localeCompare(bn)
+  })
+})
+
+async function assignTo(profile: MemberProfile | null) {
+  if (!t.value) return
+  const nextId = profile?.id ?? null
+  if (t.value.assignee_id === nextId) {
+    assigneeMenuOpen.value = false
+    return
+  }
+  // Update both the FK and denormalized name (so the table cell + activity
+  // log resolve correctly without waiting on a backend backfill).
+  await patch({
+    assignee_id: nextId,
+    assignee_name: profile?.full_name || profile?.email?.split('@')[0] || null
+  })
+  assigneeMenuOpen.value = false
+}
+
+function assigneeInitials(p: MemberProfile | null) {
+  if (!p) return '?'
+  const src = p.full_name || p.email || '?'
+  return (
+    src
+      .split(/\s|@/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((x) => x.charAt(0).toUpperCase())
+      .join('') || '?'
+  )
+}
+const AVATAR_PALETTE = ['#C8741A', '#A8743F', '#7A8A5C', '#8A6B9A', '#B85450', '#5C8A5A', '#C4925E']
+function assigneeColor(seed: string) {
+  let h = 0
+  for (const c of seed) h = (h * 31 + c.charCodeAt(0)) >>> 0
+  return AVATAR_PALETTE[h % AVATAR_PALETTE.length]
+}
+
+const assigneeWrap = ref<HTMLElement | null>(null)
+function onAssigneeDocClick(e: MouseEvent) {
+  if (!assigneeWrap.value) return
+  if (!assigneeWrap.value.contains(e.target as Node)) assigneeMenuOpen.value = false
+}
+onMounted(() => document.addEventListener('click', onAssigneeDocClick))
+onUnmounted(() => document.removeEventListener('click', onAssigneeDocClick))
 
 function blurActive() {
   if (typeof document === 'undefined') return
@@ -441,8 +567,148 @@ function openDuePicker(triggerEl: HTMLElement) {
               />
             </div>
 
-            <!-- assignee -->
+            <!--
+              Assignee picker. Visible to:
+                - PM/admin/superadmin (always, full picker scoped to client)
+                - VA (only when they are the current assignee — Pattern B
+                  handoff). Picker scoped to project members so they can't
+                  dump the task on a random user.
+            -->
             <div
+              v-if="auth.role !== 'va' || (auth.user && t?.assignee_id === auth.user.id)"
+              ref="assigneeWrap"
+              class="relative"
+            >
+              <button
+                type="button"
+                class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors"
+                :class="
+                  t?.assignee_id
+                    ? 'text-base-content/70 border-transparent hover:bg-base-200'
+                    : 'text-primary border-dashed border-primary/40 hover:bg-primary/10'
+                "
+                :title="
+                  auth.role === 'va'
+                    ? 'You own this · click to hand off'
+                    : t?.assignee_id
+                      ? `Assigned to ${t.assignee_name ?? '—'} · click to change`
+                      : 'Click to assign'
+                "
+                @click="toggleAssigneeMenu"
+              >
+                <template v-if="t?.assignee_id">
+                  <span
+                    class="w-4 h-4 rounded-full flex items-center justify-center text-[0.55rem] font-semibold text-white"
+                    :style="`background: ${assigneeColor(t.assignee_id)}`"
+                  >
+                    {{ assigneeInitials({ id: t.assignee_id, full_name: t.assignee_name, email: null, role: 'va', timezone: null, avatar_url: null }) }}
+                  </span>
+                  <span class="truncate max-w-[10rem]">{{ t.assignee_name ?? '—' }}</span>
+                </template>
+                <template v-else>
+                  <UserPlus class="w-3.5 h-3.5" :stroke-width="2" />
+                  <span>Assign</span>
+                </template>
+                <ChevronDown
+                  class="w-3 h-3 text-base-content/40 transition-transform"
+                  :class="assigneeMenuOpen && 'rotate-180'"
+                  :stroke-width="2"
+                />
+              </button>
+
+              <Transition
+                enter-active-class="transition-all duration-150 ease-out"
+                enter-from-class="opacity-0 -translate-y-1"
+                enter-to-class="opacity-100 translate-y-0"
+                leave-active-class="transition-all duration-100 ease-in"
+                leave-from-class="opacity-100"
+                leave-to-class="opacity-0"
+              >
+                <div
+                  v-if="assigneeMenuOpen"
+                  class="absolute left-0 top-full mt-1 z-30 w-72 rounded-xl bg-white border border-base-300 shadow-hc-2 overflow-hidden"
+                >
+                  <!-- search -->
+                  <div class="p-2 border-b border-base-300/60">
+                    <label class="flex items-center gap-2 px-2 py-1 rounded-md bg-base-200/50">
+                      <Search class="w-3.5 h-3.5 text-base-content/50" :stroke-width="1.75" />
+                      <input
+                        v-model="assigneeSearch"
+                        type="text"
+                        placeholder="Search VAs and PMs"
+                        class="flex-1 bg-transparent outline-none text-sm placeholder:text-base-content/40"
+                      />
+                    </label>
+                  </div>
+
+                  <!-- list -->
+                  <ul class="max-h-64 overflow-y-auto py-1">
+                    <li>
+                      <button
+                        type="button"
+                        class="w-full text-left px-3 py-2 hover:bg-base-200/60 transition-colors flex items-center gap-2 text-sm text-base-content/70"
+                        @click="assignTo(null)"
+                      >
+                        <span class="w-7 h-7 rounded-full flex items-center justify-center bg-base-200 text-base-content/60">
+                          <UserMinus class="w-3.5 h-3.5" :stroke-width="1.75" />
+                        </span>
+                        <span class="flex-1">Unassigned</span>
+                        <Check
+                          v-if="!t?.assignee_id"
+                          class="w-3.5 h-3.5 text-primary"
+                          :stroke-width="2"
+                        />
+                      </button>
+                    </li>
+                    <li
+                      v-for="p in candidates"
+                      :key="p.id"
+                    >
+                      <button
+                        type="button"
+                        class="w-full text-left px-3 py-2 hover:bg-base-200/60 transition-colors flex items-center gap-2"
+                        @click="assignTo(p)"
+                      >
+                        <span
+                          class="w-7 h-7 rounded-full flex items-center justify-center text-[0.65rem] font-semibold text-white shrink-0 overflow-hidden"
+                          :style="`background: ${assigneeColor(p.id)}`"
+                        >
+                          <img
+                            v-if="p.avatar_url"
+                            :src="p.avatar_url"
+                            :alt="p.full_name ?? ''"
+                            class="w-full h-full object-cover"
+                          />
+                          <span v-else>{{ assigneeInitials(p) }}</span>
+                        </span>
+                        <span class="flex-1 min-w-0">
+                          <span class="block text-sm font-medium truncate">{{ p.full_name || p.email || '—' }}</span>
+                          <span class="block text-[0.65rem] text-base-content/50 truncate">
+                            <span class="uppercase tracking-wider">{{ p.role }}</span>
+                            <span v-if="p.email && p.full_name"> · {{ p.email }}</span>
+                          </span>
+                        </span>
+                        <Check
+                          v-if="t?.assignee_id === p.id"
+                          class="w-3.5 h-3.5 text-primary shrink-0"
+                          :stroke-width="2"
+                        />
+                      </button>
+                    </li>
+                    <li
+                      v-if="candidates.length === 0"
+                      class="px-3 py-4 text-xs text-base-content/50 italic text-center"
+                    >
+                      {{ assigneeSearch ? 'No matches' : 'No teammates on this client yet' }}
+                    </li>
+                  </ul>
+                </div>
+              </Transition>
+            </div>
+
+            <!-- VA: read-only chip -->
+            <div
+              v-else
               class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-base-content/70"
               :title="t?.assignee_name ?? 'Unassigned'"
             >

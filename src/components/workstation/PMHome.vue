@@ -414,7 +414,7 @@ function goClient(id: string) {
 </script>
 
 <template>
-  <div class="space-y-6 max-w-6xl">
+  <div class="space-y-6">
     <!-- Hero — warm gradient card with serif greeting and italic AI tail -->
     <header
       class="rounded-2xl border px-6 py-5 sm:px-7 sm:py-6 flex items-center gap-5 shadow-hc-1"

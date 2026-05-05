@@ -163,7 +163,7 @@ const typeOptions: { value: 'all' | TicketType; label: string }[] = [
 </script>
 
 <template>
-  <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_24rem] gap-4 max-w-6xl">
+  <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_24rem] gap-4">
     <!-- LEFT: list -->
     <div class="space-y-3 min-w-0">
       <header>

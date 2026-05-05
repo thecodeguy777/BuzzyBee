@@ -201,6 +201,95 @@ function openVaDetail(vaId: string) {
   void router.push({ name: 'workstation-team', params: { vaId } })
 }
 
+// ── Add VA picker (mirrors the PM add flow) ───────────────────────────────
+const showAddVa = ref(false)
+const vaSearch = ref('')
+const vaSearchResults = ref<{ id: string; full_name: string | null; email: string | null }[]>([])
+const vaSearchLoading = ref(false)
+const vaActionError = ref<string | null>(null)
+let vaSearchDebounce: ReturnType<typeof setTimeout> | null = null
+
+watch(vaSearch, () => {
+  if (vaSearchDebounce) clearTimeout(vaSearchDebounce)
+  vaSearchDebounce = setTimeout(runVaSearch, 200)
+})
+watch(showAddVa, (is) => {
+  if (is) void runVaSearch()
+})
+
+async function runVaSearch() {
+  if (!c.value) return
+  vaSearchLoading.value = true
+  try {
+    const pattern = `%${vaSearch.value.split(/\s+/).filter(Boolean).join('%')}%`
+    let q = supabase
+      .from('profiles')
+      .select('id, full_name, email, role')
+      .eq('role', 'va')
+      .limit(15)
+    if (vaSearch.value.trim()) {
+      q = q.or(`full_name.ilike.${pattern},email.ilike.${pattern}`)
+    }
+    const { data, error: err } = await q
+    if (err) throw err
+    const existing = new Set(assignedVas.value.map((v) => v.va_id))
+    vaSearchResults.value = (data ?? [])
+      .filter((p) => !existing.has(p.id))
+      .map((p) => ({ id: p.id, full_name: (p as any).full_name ?? null, email: (p as any).email ?? null }))
+  } catch (e) {
+    console.warn('[va search]', (e as Error).message)
+    vaSearchResults.value = []
+  } finally {
+    vaSearchLoading.value = false
+  }
+}
+
+async function addVa(profileId: string) {
+  if (!c.value) return
+  vaActionError.value = null
+  // Default the VA's PM to the current user if they're a PM/admin on the
+  // client; otherwise leave null and an admin can set it later.
+  const myPmId = (clients.pmsByClient[c.value.id] ?? []).some(
+    (cp) => cp.pm_id === auth.user?.id
+  )
+    ? auth.user?.id
+    : null
+  try {
+    await team.addAssignment({
+      va_id: profileId,
+      client_id: c.value.id,
+      pm_id: myPmId ?? null
+    })
+    vaSearch.value = ''
+    vaSearchResults.value = []
+    showAddVa.value = false
+  } catch (e) {
+    const msg = (e as Error).message
+    if (msg.toLowerCase().includes('row-level security') || msg.toLowerCase().includes('permission denied')) {
+      vaActionError.value = "You don't have permission to add VAs to this client. Ask an admin or the primary PM."
+    } else {
+      vaActionError.value = msg
+    }
+    console.warn('[client drawer addVa]', msg)
+  }
+}
+
+async function removeVa(vaId: string) {
+  if (!c.value) return
+  if (!confirm('End this VA\'s assignment on this client? The history stays in the database.')) return
+  vaActionError.value = null
+  try {
+    const active = team.assignments.find(
+      (a) => a.va_id === vaId && a.client_id === c.value!.id && a.status === 'active'
+    )
+    if (!active) return
+    await team.endAssignment(active.id)
+  } catch (e) {
+    vaActionError.value = (e as Error).message
+    console.warn('[client drawer removeVa]', (e as Error).message)
+  }
+}
+
 const showAddPm = ref(false)
 const pmSearch = ref('')
 const pmSearchResults = ref<{ id: string; full_name: string | null; email: string | null }[]>([])
@@ -685,6 +774,15 @@ watch(open, (is) => {
               Virtual Assistants
               <span class="text-base-content/40 normal-case">({{ assignedVas.length }})</span>
             </div>
+            <button
+              v-if="auth.isAdmin"
+              type="button"
+              class="text-[0.65rem] uppercase tracking-wider font-semibold text-primary hover:underline transition-all flex items-center gap-1"
+              @click="showAddVa = !showAddVa"
+            >
+              <UserPlus class="w-3 h-3" :stroke-width="1.75" />
+              {{ showAddVa ? 'Done' : 'Add' }}
+            </button>
           </div>
 
           <ul v-if="assignedVas.length" class="space-y-1">
@@ -731,12 +829,76 @@ watch(open, (is) => {
                 <ListTodo class="w-3 h-3" :stroke-width="1.75" />
                 {{ v.open_tasks }}
               </div>
+              <button
+                v-if="auth.isAdmin"
+                type="button"
+                class="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-md flex items-center justify-center text-base-content/40 hover:text-error hover:bg-error/10 transition-all"
+                title="End assignment"
+                @click.stop="removeVa(v.va_id)"
+              >
+                <XIcon class="w-3.5 h-3.5" :stroke-width="1.75" />
+              </button>
             </li>
           </ul>
 
           <p v-else class="text-xs italic text-base-content/40 px-2 py-1">
-            No VAs assigned to this client yet.
+            {{
+              auth.isAdmin
+                ? 'No VAs assigned to this client yet.'
+                : 'No VAs assigned to this client yet. Ask an admin to add staff.'
+            }}
           </p>
+
+          <p v-if="vaActionError" class="text-xs text-error px-1">
+            {{ vaActionError }}
+          </p>
+
+          <!-- Inline VA picker -->
+          <Transition
+            enter-active-class="transition-all duration-200 ease-out"
+            enter-from-class="opacity-0 -translate-y-1"
+            enter-to-class="opacity-100 translate-y-0"
+            leave-active-class="transition-all duration-150 ease-in"
+            leave-from-class="opacity-100 translate-y-0"
+            leave-to-class="opacity-0 -translate-y-1"
+          >
+            <div v-if="showAddVa" class="rounded-lg border border-base-300 bg-base-100/40 p-2 space-y-2">
+              <label class="flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-base-300 bg-white focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/40">
+                <Search class="w-3.5 h-3.5 text-base-content/50" :stroke-width="1.75" />
+                <input
+                  v-model="vaSearch"
+                  type="text"
+                  placeholder="Search VAs by name or email…"
+                  class="flex-1 bg-transparent outline-none text-sm placeholder:text-base-content/40"
+                />
+              </label>
+
+              <ul v-if="vaSearchResults.length" class="space-y-0.5 max-h-48 overflow-y-auto">
+                <li v-for="r in vaSearchResults" :key="r.id">
+                  <div class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-base-200/60 group/r">
+                    <div class="w-7 h-7 rounded-full bg-secondary/20 text-secondary text-[0.65rem] font-semibold flex items-center justify-center shrink-0">
+                      {{ initialsOf(r.full_name, r.email) }}
+                    </div>
+                    <div class="flex-1 min-w-0 text-xs">
+                      <div class="font-medium truncate">{{ r.full_name || r.email }}</div>
+                      <div v-if="r.full_name && r.email" class="text-base-content/50 truncate">{{ r.email }}</div>
+                    </div>
+                    <button
+                      type="button"
+                      class="opacity-0 group-hover/r:opacity-100 transition-opacity text-[0.65rem] uppercase tracking-wider font-semibold text-primary hover:underline"
+                      @click="addVa(r.id)"
+                    >
+                      Assign
+                    </button>
+                  </div>
+                </li>
+              </ul>
+              <p v-else-if="vaSearchLoading" class="text-xs text-base-content/50 px-2 py-2">Searching…</p>
+              <p v-else class="text-xs italic text-base-content/40 px-2 py-2">
+                {{ vaSearch ? 'No matching VAs.' : 'No VAs available — type to search.' }}
+              </p>
+            </div>
+          </Transition>
         </section>
 
         <!-- Notes -->

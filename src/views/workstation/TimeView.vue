@@ -86,7 +86,7 @@ function timeRange(e: TimeEntry) {
 </script>
 
 <template>
-  <div class="max-w-4xl space-y-6">
+  <div class="space-y-6">
     <header>
       <h1 class="font-display text-xl font-semibold">Time</h1>
       <p class="text-xs text-base-content/60 mt-0.5">

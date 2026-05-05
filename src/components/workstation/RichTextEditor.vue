@@ -2,7 +2,6 @@
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import { BubbleMenu } from '@tiptap/vue-3/menus'
 import StarterKit from '@tiptap/starter-kit'
-import Link from '@tiptap/extension-link'
 import Placeholder from '@tiptap/extension-placeholder'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
@@ -48,16 +47,19 @@ const editor = useEditor({
     StarterKit.configure({
       bulletList: { keepMarks: true },
       orderedList: { keepMarks: true },
-      heading: { levels: [1, 2, 3] }
-    }),
-    Link.configure({
-      openOnClick: false,
-      autolink: true,
-      linkOnPaste: true,
-      HTMLAttributes: {
-        rel: 'noopener noreferrer nofollow',
-        target: '_blank',
-        class: 'rt-link'
+      heading: { levels: [1, 2, 3] },
+      // Tiptap v3 StarterKit ships Link by default; configure it here
+      // instead of importing @tiptap/extension-link separately (which would
+      // duplicate-register and warn).
+      link: {
+        openOnClick: false,
+        autolink: true,
+        linkOnPaste: true,
+        HTMLAttributes: {
+          rel: 'noopener noreferrer nofollow',
+          target: '_blank',
+          class: 'rt-link'
+        }
       }
     }),
     Placeholder.configure({ placeholder: props.placeholder }),

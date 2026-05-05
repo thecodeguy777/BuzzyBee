@@ -128,6 +128,87 @@ export const useTeamStore = defineStore('team', () => {
     { immediate: true }
   )
 
+  /**
+   * Create an active assignment binding a VA to a client (optionally with a
+   * PM as the day-to-day manager). Idempotent against the
+   * (va_id, client_id) WHERE status='active' unique index — if an active
+   * row already exists we just return it.
+   */
+  async function addAssignment(input: {
+    va_id: string
+    client_id: string
+    pm_id?: string | null
+  }): Promise<Assignment> {
+    if (!auth.user) throw new Error('Not authenticated')
+
+    // Reactivate a prior assignment for this VA+client if one exists.
+    const { data: existing, error: existErr } = await supabase
+      .from('assignments')
+      .select('*')
+      .eq('va_id', input.va_id)
+      .eq('client_id', input.client_id)
+      .order('started_at', { ascending: false })
+      .limit(1)
+    if (existErr) throw existErr
+    const prior = (existing?.[0] as Assignment | undefined) ?? null
+    if (prior && prior.status === 'active') {
+      // Already active. If a PM is supplied and differs, patch it; otherwise no-op.
+      if (input.pm_id !== undefined && prior.pm_id !== input.pm_id) {
+        const { data: patched, error: pErr } = await supabase
+          .from('assignments')
+          .update({ pm_id: input.pm_id })
+          .eq('id', prior.id)
+          .select('*')
+          .single()
+        if (pErr) throw pErr
+        const idx = assignments.value.findIndex((a) => a.id === prior.id)
+        if (idx !== -1) assignments.value[idx] = patched as Assignment
+        return patched as Assignment
+      }
+      return prior
+    }
+
+    // Insert a fresh active row.
+    const payload: Record<string, unknown> = {
+      va_id: input.va_id,
+      client_id: input.client_id,
+      pm_id: input.pm_id ?? null,
+      status: 'active'
+    }
+    const { data, error: err } = await supabase
+      .from('assignments')
+      .insert(payload)
+      .select('*')
+      .single()
+    if (err) throw err
+    const row = data as Assignment
+    if (!assignments.value.some((a) => a.id === row.id)) {
+      assignments.value = [row, ...assignments.value]
+    }
+    // Make sure the VA's profile is loaded for downstream UI.
+    if (!profiles.value[row.va_id]) {
+      void fetchProfiles([row.va_id])
+    }
+    return row
+  }
+
+  /** End an active assignment (sets status='ended', keeps the row for history). */
+  async function endAssignment(assignmentId: string): Promise<void> {
+    const { error: err } = await supabase
+      .from('assignments')
+      .update({ status: 'ended', ended_at: new Date().toISOString() })
+      .eq('id', assignmentId)
+    if (err) throw err
+    const idx = assignments.value.findIndex((a) => a.id === assignmentId)
+    if (idx !== -1) {
+      assignments.value[idx] = {
+        ...assignments.value[idx],
+        status: 'ended',
+        ended_at: new Date().toISOString()
+      }
+    }
+  }
+
   return {
     assignments,
     profiles,
@@ -137,6 +218,8 @@ export const useTeamStore = defineStore('team', () => {
     error,
     fetchAssignments,
     fetchProfiles,
-    clientsForVa
+    clientsForVa,
+    addAssignment,
+    endAssignment
   }
 })

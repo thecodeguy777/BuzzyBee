@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import Sortable from 'sortablejs'
 import {
   Plus,
   Trash2,
@@ -20,21 +21,47 @@ import {
   MessageSquare,
   Link2,
   Pencil,
+  GripVertical,
   X
 } from 'lucide-vue-next'
 import { useTasksStore, type Task, type TaskStatus } from '@/stores/tasks'
 import { useTaskFieldsStore, type TaskFieldDef } from '@/stores/taskFields'
 import { useClientsStore } from '@/stores/clients'
+import { useColumnWidths } from '@/composables/useColumnWidths'
 
 const tasks = useTasksStore()
 const taskFields = useTaskFieldsStore()
 const clients = useClientsStore()
+
+// TKT-0004 — Excel-style resizable columns. Widths persist to localStorage
+// so a user's preferred layout survives reloads.
+const { width: colWidth, beginDrag } = useColumnWidths('tasks-table')
+
+// Default widths in pixels per column key. Falls through to useColumnWidths'
+// per-column persisted value if the user has dragged.
+const defaultWidths: Record<string, number> = {
+  name: 320,
+  status: 140,
+  due: 110,
+  priority: 110,
+  stage: 110,
+  assignees: 110,
+  files: 80,
+  chat: 80
+}
+function colStyle(key: string, fallback?: number): Record<string, string> {
+  const w = colWidth(key, fallback ?? defaultWidths[key] ?? 160)
+  return { width: w + 'px', minWidth: w + 'px', maxWidth: w + 'px' }
+}
 
 const emit = defineEmits<{ (e: 'add-column'): void }>()
 
 // -----------------------------------------------------------------------------
 // Status / priority metadata
 // -----------------------------------------------------------------------------
+// Progress-bar mapping (TKT-0007). Each status has a position on the lifecycle
+// (0–100) and a track color. Blocked sits at the same position as In progress
+// but flagged red because it happens mid-flow.
 const statuses: {
   value: TaskStatus
   label: string
@@ -42,12 +69,14 @@ const statuses: {
   pillBg: string
   pillFg: string
   dotBg: string
+  pct: number
+  barClass: string
 }[] = [
-  { value: 'todo',         label: 'Todo',        icon: CircleDashed, pillBg: 'bg-base-200',        pillFg: 'text-base-content/70', dotBg: 'bg-base-content/40' },
-  { value: 'in_progress',  label: 'In progress', icon: Loader2,      pillBg: 'bg-primary/10',      pillFg: 'text-primary',          dotBg: 'bg-primary' },
-  { value: 'blocked',      label: 'Blocked',     icon: CircleAlert,  pillBg: 'bg-error/10',        pillFg: 'text-error',            dotBg: 'bg-error' },
-  { value: 'done',         label: 'Done',        icon: CheckCircle2, pillBg: 'bg-success/10',      pillFg: 'text-success',          dotBg: 'bg-success' },
-  { value: 'cancelled',    label: 'Cancelled',   icon: CircleSlash,  pillBg: 'bg-base-200',        pillFg: 'text-base-content/40', dotBg: 'bg-base-content/30' }
+  { value: 'todo',        label: 'Todo',        icon: CircleDashed, pillBg: 'bg-base-200',   pillFg: 'text-base-content/70', dotBg: 'bg-base-content/40', pct: 8,   barClass: 'bg-base-content/40' },
+  { value: 'in_progress', label: 'In progress', icon: Loader2,      pillBg: 'bg-primary/10', pillFg: 'text-primary',          dotBg: 'bg-primary',         pct: 55,  barClass: 'bg-primary' },
+  { value: 'blocked',     label: 'Blocked',     icon: CircleAlert,  pillBg: 'bg-error/10',   pillFg: 'text-error',            dotBg: 'bg-error',           pct: 55,  barClass: 'bg-error' },
+  { value: 'done',        label: 'Done',        icon: CheckCircle2, pillBg: 'bg-success/10', pillFg: 'text-success',          dotBg: 'bg-success',         pct: 100, barClass: 'bg-success' },
+  { value: 'cancelled',   label: 'Cancelled',   icon: CircleSlash,  pillBg: 'bg-base-200',   pillFg: 'text-base-content/40', dotBg: 'bg-base-content/30', pct: 0,   barClass: 'bg-base-content/30' }
 ]
 function statusOf(s: TaskStatus) {
   return statuses.find((x) => x.value === s) ?? statuses[0]
@@ -90,7 +119,7 @@ function toggleGroup(s: TaskStatus) {
 const groups = computed(() => {
   const map = new Map<TaskStatus, Task[]>()
   for (const s of statuses) map.set(s.value, [])
-  for (const t of tasks.tasksForCurrentClient) map.get(t.status)?.push(t)
+  for (const t of tasks.tasksForCurrentProject) map.get(t.status)?.push(t)
   for (const [k, list] of map) {
     list.sort(
       (a, b) =>
@@ -117,17 +146,17 @@ const totalCols = computed(() => 9 + customCols.value.length + 1)
 // One contextual suggestion based on the current state.
 // -----------------------------------------------------------------------------
 const suggestion = computed(() => {
-  const inFlight = tasks.tasksForCurrentClient.filter(
+  const inFlight = tasks.tasksForCurrentProject.filter(
     (t) => t.status === 'in_progress'
   )
-  const overdue = tasks.tasksForCurrentClient.filter(
+  const overdue = tasks.tasksForCurrentProject.filter(
     (t) =>
       t.due_on &&
       t.status !== 'done' &&
       t.status !== 'cancelled' &&
       new Date(t.due_on + 'T00:00:00').getTime() < Date.now()
   )
-  const unassigned = tasks.tasksForCurrentClient.filter(
+  const unassigned = tasks.tasksForCurrentProject.filter(
     (t) =>
       !t.assignee_id &&
       t.status !== 'done' &&
@@ -364,7 +393,189 @@ function isEditingUrl(taskId: string, key: string) {
 const cellBase = 'border-r border-base-300/40 align-middle'
 const editableCell =
   'group/cell focus-within:bg-primary/5 focus-within:ring-1 focus-within:ring-primary/40 focus-within:relative'
+
+// -----------------------------------------------------------------------------
+// SortableJS — drag rows to reorder within a group OR across groups (which
+// changes status). Same recipe as TaskBoardView: priority_order between
+// neighbors, status from the target tbody's data-status attribute.
+// -----------------------------------------------------------------------------
+const tbodyRefs = ref<Record<TaskStatus, HTMLElement | null>>({
+  todo: null,
+  in_progress: null,
+  blocked: null,
+  done: null,
+  cancelled: null
+})
+const sortables: Sortable[] = []
+
+function setTbodyRef(status: TaskStatus, el: Element | any) {
+  tbodyRefs.value[status] = (el as HTMLElement) ?? null
+}
+
+function readNewPriorityOrder(toEl: HTMLElement, taskId: string, status: TaskStatus): number {
+  const ids = Array.from(toEl.querySelectorAll<HTMLElement>('tr[data-task-id]'))
+    .map((el) => el.getAttribute('data-task-id') ?? '')
+    .filter(Boolean)
+  const newIndex = ids.indexOf(taskId)
+  const peers = (groups.value.find((g) => g.value === status)?.tasks ?? []).filter(
+    (t) => t.id !== taskId
+  )
+  const prev = newIndex > 0 ? peers[newIndex - 1] : null
+  const next = newIndex < peers.length ? peers[newIndex] : null
+  if (prev && next) return (prev.priority_order + next.priority_order) / 2
+  if (next) return next.priority_order - 10
+  if (prev) return prev.priority_order + 10
+  return 0
+}
+
+async function onRowSortEnd(evt: Sortable.SortableEvent) {
+  const taskId = evt.item.getAttribute('data-task-id') ?? ''
+  const toStatus = evt.to.getAttribute('data-status') as TaskStatus | null
+  if (!taskId || !toStatus) return
+
+  const dragged = tasks.tasks.find((t) => t.id === taskId)
+  if (!dragged) return
+
+  const newPriorityOrder = readNewPriorityOrder(evt.to as HTMLElement, taskId, toStatus)
+  const patch: Partial<Task> = { priority_order: newPriorityOrder }
+  if (dragged.status !== toStatus) patch.status = toStatus
+
+  try {
+    await tasks.updateTask(taskId, patch)
+  } catch (e) {
+    console.warn('[task table] reorder failed:', (e as Error).message)
+  }
+}
+
+function destroySortables() {
+  while (sortables.length) sortables.pop()?.destroy()
+}
+function buildSortables() {
+  destroySortables()
+  for (const s of statuses) {
+    const el = tbodyRefs.value[s.value]
+    if (!el) continue
+    sortables.push(
+      Sortable.create(el, {
+        group: 'bb-table-tasks',
+        animation: 150,
+        ghostClass: 'bb-row-ghost',
+        chosenClass: 'bb-row-chosen',
+        // Don't start a drag from inputs, selects, or buttons inside the row.
+        filter: 'input, select, textarea, button, a, [data-no-drag]',
+        preventOnFilter: false,
+        // Use a tiny delay so a quick click-into-input doesn't start a drag.
+        delay: 50,
+        delayOnTouchOnly: false,
+        handle: '.bb-row-grab',
+        onEnd: onRowSortEnd
+      })
+    )
+  }
+}
+
+onMounted(async () => {
+  await nextTick()
+  buildSortables()
+})
+onBeforeUnmount(() => destroySortables())
+
+// Rebuild when the group structure changes (collapse/expand or task list churn).
+watch(
+  () => groups.value.map((g) => g.value + ':' + g.tasks.length).join('|'),
+  async () => {
+    await nextTick()
+    buildSortables()
+  }
+)
 </script>
+
+<style>
+/*
+  Resizable column header recipe (TKT-0004).
+  - .bb-th gives the header consistent padding + relative positioning so the
+    .bb-resize handle can be absolutely positioned against the th's right edge.
+  - .bb-resize is a thin column-resize cursor zone over the th's right border.
+*/
+.bb-th {
+  position: relative;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--hc-ink-3);
+  padding: 0.625rem 0.75rem;
+  border-right: 1px solid color-mix(in oklch, var(--hc-divider) 40%, transparent);
+  display: table-cell;
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.bb-resize {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  user-select: none;
+  z-index: 5;
+  background: transparent;
+  transition: background 0.12s;
+}
+.bb-resize:hover,
+.bb-resize:active {
+  background: var(--hc-accent);
+  opacity: 0.5;
+}
+
+/* SortableJS visuals for table rows */
+.bb-row-ghost { opacity: 0.35; background: var(--hc-accent-bg); }
+.bb-row-chosen { cursor: grabbing !important; }
+.bb-row-grab {
+  cursor: grab;
+  color: var(--hc-ink-4);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+tr:hover .bb-row-grab { opacity: 1; }
+.bb-row-grab:active { cursor: grabbing; }
+
+/*
+  Frozen columns (Excel "Freeze Panes" — first two cells stay glued to the
+  left edge while everything else scrolls horizontally). Two columns are
+  pinned: the row-controls cell (grip + check) at left:0, and the Name cell
+  at left:48px (= width of the row-controls cell).
+  - z-index 4: above scrolling cells (default 0) but below the sticky thead
+    (which uses z-10 + sticky top:0).
+  - box-shadow on the rightmost frozen cell signals the divider visually.
+*/
+.bb-frozen-col {
+  position: sticky;
+  z-index: 4;
+}
+.bb-frozen-col-1 {
+  left: 0;
+}
+.bb-frozen-col-2 {
+  left: 48px;
+  box-shadow: 6px 0 8px -6px rgba(31, 27, 22, 0.10);
+}
+/* Header row's frozen cells need to layer above body but below sticky thead's
+   own z-index, and they pick up the warm header bg so the scroll content
+   doesn't bleed through. */
+thead .bb-frozen-col {
+  z-index: 11; /* > thead's z-10 default, so it stays opaque on horizontal scroll */
+  background: var(--hc-surface-warm);
+}
+/* Body rows — frozen cells take the row's bg, fall back to white. Hover bg
+   is applied at the row level; we mirror it on the frozen cells so they don't
+   show a different color while hovering. */
+tbody .bb-frozen-col { background: white; }
+tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 50%, white); }
+/* Group header rows + spacer + adder are colspanning, not affected by frozen cols. */
+</style>
 
 <template>
   <div class="space-y-3">
@@ -406,40 +617,76 @@ const editableCell =
     <!-- Table card -->
     <div class="bg-white rounded-2xl border border-base-300 shadow-hc-1 overflow-hidden">
       <div class="overflow-x-auto">
-        <table class="w-full text-sm border-collapse">
+        <!--
+          table-layout: fixed honors column widths set via inline style on
+          <th>. border-separate (with zero spacing) keeps cell borders
+          visible on sticky-positioned frozen columns — collapse mode
+          drops adjacent borders when cells overlap during horizontal scroll.
+        -->
+        <table
+          class="w-full text-sm border-separate"
+          style="table-layout: fixed; border-spacing: 0"
+        >
           <thead class="sticky top-0 z-10" style="background: var(--hc-surface-warm)">
             <tr class="border-b border-base-300/60">
-              <th class="w-8 border-r border-base-300/40 px-2 py-2.5"></th>
-              <th class="text-left font-semibold text-[0.65rem] uppercase tracking-[0.08em] text-base-content/55 px-3 py-2.5 border-r border-base-300/40 min-w-[18rem]">
-                Name
+              <th
+                class="border-r border-base-300/40 px-2 py-2.5 bb-frozen-col bb-frozen-col-1"
+                style="width: 48px"
+              ></th>
+
+              <th
+                class="bb-th bb-frozen-col bb-frozen-col-2"
+                :style="colStyle('name', 320)"
+              >
+                <span class="truncate">Name</span>
+                <span
+                  class="bb-resize"
+                  @mousedown="(e) => beginDrag('name', e, { defaultWidth: 320 })"
+                />
               </th>
-              <th class="text-left font-semibold text-[0.65rem] uppercase tracking-[0.08em] text-base-content/55 px-3 py-2.5 border-r border-base-300/40 w-[9rem]">
-                Status
+
+              <th class="bb-th" :style="colStyle('status')">
+                <span class="truncate">Status</span>
+                <span class="bb-resize" @mousedown="(e) => beginDrag('status', e, { defaultWidth: defaultWidths.status })" />
               </th>
-              <th class="text-left font-semibold text-[0.65rem] uppercase tracking-[0.08em] text-base-content/55 px-3 py-2.5 border-r border-base-300/40 w-[7rem]">
-                Due
+
+              <th class="bb-th" :style="colStyle('due')">
+                <span class="truncate">Due</span>
+                <span class="bb-resize" @mousedown="(e) => beginDrag('due', e, { defaultWidth: defaultWidths.due })" />
               </th>
-              <th class="text-left font-semibold text-[0.65rem] uppercase tracking-[0.08em] text-base-content/55 px-3 py-2.5 border-r border-base-300/40 w-[7rem]">
-                Priority
+
+              <th class="bb-th" :style="colStyle('priority')">
+                <span class="truncate">Priority</span>
+                <span class="bb-resize" @mousedown="(e) => beginDrag('priority', e, { defaultWidth: defaultWidths.priority })" />
               </th>
-              <th class="text-left font-semibold text-[0.65rem] uppercase tracking-[0.08em] text-base-content/55 px-3 py-2.5 border-r border-base-300/40 w-[7rem]">
-                Stage
+
+              <th class="bb-th" :style="colStyle('stage')">
+                <span class="truncate">Stage</span>
+                <span class="bb-resize" @mousedown="(e) => beginDrag('stage', e, { defaultWidth: defaultWidths.stage })" />
               </th>
-              <th class="text-left font-semibold text-[0.65rem] uppercase tracking-[0.08em] text-base-content/55 px-3 py-2.5 border-r border-base-300/40 w-[7rem]">
-                Assignees
+
+              <th class="bb-th" :style="colStyle('assignees')">
+                <span class="truncate">Assignees</span>
+                <span class="bb-resize" @mousedown="(e) => beginDrag('assignees', e, { defaultWidth: defaultWidths.assignees })" />
               </th>
-              <th class="text-left font-semibold text-[0.65rem] uppercase tracking-[0.08em] text-base-content/55 px-3 py-2.5 border-r border-base-300/40 w-[5rem]">
-                Files
+
+              <th class="bb-th" :style="colStyle('files')">
+                <span class="truncate">Files</span>
+                <span class="bb-resize" @mousedown="(e) => beginDrag('files', e, { defaultWidth: defaultWidths.files })" />
               </th>
-              <th class="text-left font-semibold text-[0.65rem] uppercase tracking-[0.08em] text-base-content/55 px-3 py-2.5 border-r border-base-300/40 w-[5rem]">
-                Chat
+
+              <th class="bb-th" :style="colStyle('chat')">
+                <span class="truncate">Chat</span>
+                <span class="bb-resize" @mousedown="(e) => beginDrag('chat', e, { defaultWidth: defaultWidths.chat })" />
               </th>
+
               <th
                 v-for="d in customCols"
                 :key="d.id"
-                class="text-left font-semibold text-[0.65rem] uppercase tracking-[0.08em] text-base-content/55 px-3 py-2.5 border-r border-base-300/40 w-[10rem] group/col"
+                class="bb-th group/col"
+                :style="colStyle(`custom:${d.id}`, 160)"
               >
-                <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center justify-between gap-2 flex-1 min-w-0">
                   <span class="truncate">{{ d.label }}</span>
                   <button
                     type="button"
@@ -450,8 +697,10 @@ const editableCell =
                     <Trash2 class="w-3 h-3" :stroke-width="1.75" />
                   </button>
                 </div>
+                <span class="bb-resize" @mousedown="(e) => beginDrag(`custom:${d.id}`, e, { defaultWidth: 160 })" />
               </th>
-              <th class="px-2 py-2.5 w-[2.5rem] text-center">
+
+              <th class="px-2 py-2.5 text-center" style="width: 40px">
                 <button
                   type="button"
                   class="text-base-content/40 hover:text-base-content"
@@ -464,6 +713,7 @@ const editableCell =
             </tr>
           </thead>
 
+          <!-- Banner + empty state (non-draggable) -->
           <tbody>
             <!-- HiveMindAI suggestion banner -->
             <tr
@@ -509,29 +759,39 @@ const editableCell =
                 No tasks for {{ clients.currentClient?.name ?? 'this client' }} yet.
               </td>
             </tr>
+          </tbody>
 
-            <!-- Groups -->
-            <template v-for="g in groups" :key="g.value">
+          <!-- Groups (TKT-0007: cleaner separation; TKT-0004 row reorder via SortableJS) -->
+          <template v-for="g in groups" :key="g.value">
+            <!-- Header tbody — non-draggable: spacer + group header + adder -->
+            <tbody>
+              <!-- Spacer row above each group (skipped on the first group) -->
+              <tr v-if="g.value !== groups[0]?.value" class="h-2">
+                <td :colspan="totalCols" class="p-0" style="background: var(--hc-paper)" />
+              </tr>
               <!-- Group header row -->
               <tr
-                class="cursor-pointer hover:bg-base-200/30 transition-colors"
-                style="background: var(--hc-surface-warm)"
+                class="cursor-pointer hover:bg-base-200/40 transition-colors"
+                style="
+                  background: var(--hc-surface-warm);
+                  box-shadow: inset 3px 0 0 0 var(--color-base-content);
+                "
                 @click="toggleGroup(g.value)"
               >
-                <td :colspan="totalCols" class="px-3 py-1.5">
+                <td :colspan="totalCols" class="px-3 py-2">
                   <div class="flex items-center gap-2">
                     <ChevronDown
                       v-if="!collapsed.has(g.value)"
-                      class="w-3.5 h-3.5 text-base-content/50"
-                      :stroke-width="1.75"
+                      class="w-3.5 h-3.5 text-base-content/55"
+                      :stroke-width="2"
                     />
                     <ChevronRight
                       v-else
-                      class="w-3.5 h-3.5 text-base-content/50"
-                      :stroke-width="1.75"
+                      class="w-3.5 h-3.5 text-base-content/55"
+                      :stroke-width="2"
                     />
                     <span class="w-2 h-2 rounded-sm" :class="g.dotBg" />
-                    <span class="text-xs font-semibold">{{ g.label }}</span>
+                    <span class="text-xs font-semibold uppercase tracking-wider">{{ g.label }}</span>
                     <span class="text-xs text-base-content/45 tabular-nums">{{ g.tasks.length }}</span>
                     <div class="flex-1" />
                     <button
@@ -566,35 +826,47 @@ const editableCell =
                   />
                 </td>
               </tr>
+            </tbody>
 
-              <!-- Task rows -->
-              <template v-if="!collapsed.has(g.value)">
+            <!-- Task rows tbody — SortableJS attaches here, data-status powers the drop target -->
+            <tbody
+              v-if="!collapsed.has(g.value)"
+              :ref="(el) => setTbodyRef(g.value, el)"
+              :data-status="g.value"
+            >
                 <tr
                   v-for="t in g.tasks"
                   :key="t.id"
+                  :data-task-id="t.id"
                   class="group border-b border-base-300/40 hover:bg-base-100/50"
                 >
-                  <!-- check -->
-                  <td :class="[cellBase, 'px-2 py-1.5 text-center']">
-                    <button
-                      type="button"
-                      class="inline-flex items-center justify-center hover:scale-110 transition-transform"
-                      :class="statusOf(t.status).pillFg"
-                      @click="toggleDone(t)"
-                    >
-                      <CheckCircle2
-                        v-if="t.status === 'done'"
-                        class="w-4 h-4"
-                        :stroke-width="2"
-                        fill="currentColor"
-                        fill-opacity="0.18"
-                      />
-                      <Circle v-else class="w-4 h-4" :stroke-width="1.75" />
-                    </button>
+                  <!-- check + drag handle (frozen column 1) -->
+                  <td :class="[cellBase, 'px-1 py-1.5 bb-frozen-col bb-frozen-col-1']">
+                    <div class="flex items-center justify-center gap-0.5">
+                      <span class="bb-row-grab" :title="'Drag to reorder'">
+                        <GripVertical class="w-3.5 h-3.5" :stroke-width="1.75" />
+                      </span>
+                      <button
+                        type="button"
+                        data-no-drag
+                        class="inline-flex items-center justify-center hover:scale-110 transition-transform"
+                        :class="statusOf(t.status).pillFg"
+                        @click="toggleDone(t)"
+                      >
+                        <CheckCircle2
+                          v-if="t.status === 'done'"
+                          class="w-4 h-4"
+                          :stroke-width="2"
+                          fill="currentColor"
+                          fill-opacity="0.18"
+                        />
+                        <Circle v-else class="w-4 h-4" :stroke-width="1.75" />
+                      </button>
+                    </div>
                   </td>
 
-                  <!-- name -->
-                  <td :class="[cellBase, editableCell, 'px-0 py-0 relative']">
+                  <!-- name (frozen column 2) -->
+                  <td :class="[cellBase, editableCell, 'px-0 py-0 relative bb-frozen-col bb-frozen-col-2']">
                     <div class="flex items-center pr-1">
                       <input
                         :value="t.title"
@@ -615,14 +887,24 @@ const editableCell =
                     </div>
                   </td>
 
-                  <!-- status pill -->
+                  <!-- status: progress bar + label (TKT-0007) -->
                   <td :class="[cellBase, editableCell, 'px-0 py-0 relative']">
-                    <div class="flex items-center px-3 py-1.5">
+                    <div class="flex items-center gap-2 px-3 py-1.5">
+                      <!-- bar track -->
                       <span
-                        class="inline-flex items-center gap-1.5 pl-2 pr-2.5 py-0.5 rounded-full text-xs font-medium"
-                        :class="[statusOf(t.status).pillBg, statusOf(t.status).pillFg]"
+                        class="inline-block w-10 h-1.5 rounded-full overflow-hidden shrink-0 bg-base-200"
+                        :title="statusOf(t.status).label"
                       >
-                        <span class="w-1.5 h-1.5 rounded-full" :class="statusOf(t.status).dotBg" />
+                        <span
+                          class="block h-full rounded-full transition-[width,background-color] duration-300 ease-out"
+                          :class="statusOf(t.status).barClass"
+                          :style="{ width: statusOf(t.status).pct + '%' }"
+                        />
+                      </span>
+                      <span
+                        class="text-xs font-medium truncate"
+                        :class="statusOf(t.status).pillFg"
+                      >
                         {{ statusOf(t.status).label }}
                       </span>
                       <select
@@ -856,9 +1138,8 @@ const editableCell =
                   <!-- trailing spacer -->
                   <td class="px-2 py-1.5"></td>
                 </tr>
-              </template>
-            </template>
-          </tbody>
+            </tbody>
+          </template>
         </table>
       </div>
     </div>

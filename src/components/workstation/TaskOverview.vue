@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useProjectsStore, type Project } from '@/stores/projects'
 import { useTasksStore } from '@/stores/tasks'
 import { useClientsStore } from '@/stores/clients'
+import { useAuthStore } from '@/stores/auth'
 import {
   ListTodo,
   CheckCircle2,
@@ -16,6 +17,7 @@ import {
 } from 'lucide-vue-next'
 import { useProjectMembersStore, type ProjectMemberRole } from '@/stores/projectMembers'
 import MemberPicker from '@/components/workstation/MemberPicker.vue'
+import ProjectActivityPanel from '@/components/workstation/ProjectActivityPanel.vue'
 
 const members = useProjectMembersStore()
 const showMemberPicker = ref(false)
@@ -53,8 +55,45 @@ async function removeMember(userId: string) {
 const projects = useProjectsStore()
 const tasks = useTasksStore()
 const clients = useClientsStore()
+const auth = useAuthStore()
 
 const p = computed<Project | null>(() => projects.currentProject)
+
+// Who can add/remove/role-change members on this project:
+//   - Admin / Superadmin (always)
+//   - PM listed on the client (via client_pms)
+//   - Project Lead (member with role='lead' on this project)
+// Contributors and Viewers see read-only.
+const canManageMembers = computed(() => {
+  if (auth.isAdmin) return true
+  const cid = p.value?.client_id
+  if (!cid || !auth.user) return false
+  const isPmOnClient =
+    auth.role === 'pm' &&
+    (clients.pmsByClient[cid] ?? []).some((cp) => cp.pm_id === auth.user!.id)
+  if (isPmOnClient) return true
+  const isLead = members.currentMembers.some(
+    (m) => m.user_id === auth.user!.id && m.role === 'lead'
+  )
+  return isLead
+})
+
+// "Unknown" rows in the Members panel happen when project_members rows
+// reference profiles that aren't in the local cache yet. The cache is
+// seeded by fetchAll() at boot and on realtime INSERT — but if the user's
+// visibility changed (e.g. RLS broadened, or someone was added before this
+// session loaded), it stays stale. Watch currentMembers and pull missing
+// profiles whenever the list changes.
+watch(
+  () => members.currentMembers,
+  (list) => {
+    const missing = list
+      .filter((m) => !m.full_name && !m.email)
+      .map((m) => m.user_id)
+    if (missing.length) void members.loadProfiles(missing)
+  },
+  { immediate: true, deep: true }
+)
 
 const name = ref('')
 const description = ref('')
@@ -172,7 +211,15 @@ async function destroy() {
 </script>
 
 <template>
-  <div class="space-y-6 max-w-3xl">
+  <div
+    :class="[
+      // No project: simple centered empty state. With project: 2-col grid
+      // (main content + sticky activity panel) on lg+, single column below.
+      p
+        ? 'grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_22rem] gap-6 items-start'
+        : 'max-w-3xl mx-auto'
+    ]"
+  >
     <!-- No project selected -->
     <div
       v-if="!p"
@@ -205,7 +252,8 @@ async function destroy() {
       </form>
     </div>
 
-    <template v-else>
+    <!-- Main content column (left cell of the grid on lg+) -->
+    <div v-else class="space-y-6 min-w-0">
       <!-- Project header / editor -->
       <div class="bg-white rounded-xl border border-base-300 shadow-md p-5 space-y-3">
         <div class="flex items-start justify-between gap-3">
@@ -309,6 +357,7 @@ async function destroy() {
             <span class="text-base-content/40 normal-case">({{ members.currentMembers.length }})</span>
           </div>
           <button
+            v-if="canManageMembers"
             type="button"
             class="btn btn-ghost btn-xs gap-1.5"
             @click="showMemberPicker = true"
@@ -351,16 +400,9 @@ async function destroy() {
               </div>
             </div>
 
-            <span
-              v-if="m.role === 'lead'"
-              class="hidden sm:inline-flex items-center gap-1 text-[0.65rem] font-semibold uppercase tracking-wider text-warning bg-warning/10 px-1.5 py-0.5 rounded shrink-0"
-              title="Lead"
-            >
-              <Crown class="w-3 h-3" :stroke-width="2" />
-              Lead
-            </span>
-
+            <!-- Manager: editable role dropdown (no redundant Lead badge) -->
             <select
+              v-if="canManageMembers"
               :value="m.role"
               class="text-xs px-2 py-1 rounded-md border border-base-300 bg-white hover:border-base-content/30 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 capitalize shrink-0 cursor-pointer"
               @change="changeRole(m.user_id, ($event.target as HTMLSelectElement).value as ProjectMemberRole)"
@@ -370,7 +412,22 @@ async function destroy() {
               <option value="viewer">Viewer</option>
             </select>
 
+            <!-- Non-manager: read-only role label -->
+            <span
+              v-else
+              class="inline-flex items-center gap-1 text-[0.65rem] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0"
+              :class="
+                m.role === 'lead'
+                  ? 'text-warning bg-warning/10'
+                  : 'text-base-content/55 bg-base-200/60'
+              "
+            >
+              <Crown v-if="m.role === 'lead'" class="w-3 h-3" :stroke-width="2" />
+              {{ m.role }}
+            </span>
+
             <button
+              v-if="canManageMembers"
               type="button"
               class="opacity-0 group-hover:opacity-100 transition-opacity w-7 h-7 rounded-md flex items-center justify-center text-base-content/40 hover:text-error hover:bg-error/10 shrink-0"
               title="Remove from project"
@@ -383,6 +440,7 @@ async function destroy() {
         <div v-else class="px-5 py-8 text-center text-sm text-base-content/50">
           <p>No members yet.</p>
           <button
+            v-if="canManageMembers"
             type="button"
             class="btn btn-ghost btn-xs gap-1.5 mt-2 text-primary"
             @click="showMemberPicker = true"
@@ -420,6 +478,9 @@ async function destroy() {
           </div>
         </details>
       </div>
-    </template>
+    </div>
+
+    <!-- Right column: project status + activity (lg+ only) -->
+    <ProjectActivityPanel v-if="p" class="hidden lg:flex" />
   </div>
 </template>

@@ -114,7 +114,7 @@ function dueClass(due: string | null) {
 </script>
 
 <template>
-  <div class="max-w-6xl space-y-5">
+  <div class="space-y-5">
     <nav
       class="flex items-center gap-1 border-b border-base-300 -mx-2 px-2"
       aria-label="Task views"

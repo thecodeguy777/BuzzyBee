@@ -5,17 +5,14 @@ import { RouterLink, useRouter } from 'vue-router'
 import {
   Home,
   Users,
-  ListTodo,
-  MessageSquare,
-  BookOpen,
-  FileText,
   LogOut,
   Menu,
   Clock,
   Inbox,
   CheckSquare,
   Bug,
-  UsersRound
+  UsersRound,
+  Plus
 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useClientsStore } from '@/stores/clients'
@@ -27,6 +24,7 @@ import GlobalSearch from '@/components/workstation/GlobalSearch.vue'
 import NotificationBell from '@/components/workstation/NotificationBell.vue'
 import ReportButton from '@/components/workstation/ReportButton.vue'
 import ActivityRail from '@/components/workstation/ActivityRail.vue'
+import RefreshButton from '@/components/workstation/RefreshButton.vue'
 
 const auth = useAuthStore()
 const clients = useClientsStore()
@@ -87,6 +85,65 @@ async function pickProject(clientId: string, projectId: string) {
   }
 }
 
+// ── New-project inline creator (per client) ───────────────────────────────
+// Any role can create a project. After creation the creator is auto-added as
+// project_members.role = 'lead' so they can manage it. RLS controls who else
+// sees it (VA-created projects are private to creator + members + PM/admin).
+const newProjectFor = ref<string | null>(null) // client_id we're creating under
+const newProjectName = ref('')
+const newProjectError = ref<string | null>(null)
+const newProjectSaving = ref(false)
+
+function startNewProject(clientId: string, ev?: Event) {
+  ev?.stopPropagation()
+  newProjectFor.value = clientId
+  newProjectName.value = ''
+  newProjectError.value = null
+  // Make sure the client is expanded so the input is visible.
+  if (!openClients.value.has(clientId)) {
+    const next = new Set(openClients.value)
+    next.add(clientId)
+    openClients.value = next
+    persistOpenClients()
+  }
+}
+function cancelNewProject() {
+  newProjectFor.value = null
+  newProjectName.value = ''
+  newProjectError.value = null
+}
+
+async function commitNewProject() {
+  const clientId = newProjectFor.value
+  const name = newProjectName.value.trim()
+  if (!clientId || !name || newProjectSaving.value) return
+  newProjectSaving.value = true
+  newProjectError.value = null
+  try {
+    const project = await projects.createProject({ name, client_id: clientId })
+    // Note: creator is auto-added as 'lead' by the projects_seed_members
+    // database trigger, which also seeds existing VAs/PMs on the client.
+    // No client-side membership write needed here.
+
+    // Switch context to the new project and route to Tasks.
+    if (clients.currentClientId !== clientId) clients.setCurrentClient(clientId)
+    projects.setCurrentProject(project.id)
+    cancelNewProject()
+    if (router.currentRoute.value.name !== 'workstation-tasks') {
+      await router.push({ name: 'workstation-tasks' })
+    }
+  } catch (e) {
+    const msg = (e as Error).message
+    if (msg.toLowerCase().includes('row-level security') || msg.toLowerCase().includes('permission denied')) {
+      newProjectError.value = "You don't have permission to create projects for this client."
+    } else {
+      newProjectError.value = msg
+    }
+  } finally {
+    newProjectSaving.value = false
+  }
+}
+
 type NavItem = { to: string; label: string; icon: FunctionalComponent; exact?: boolean }
 
 const topNavItems = computed<NavItem[]>(() => {
@@ -106,11 +163,8 @@ const bottomNavItems = computed<NavItem[]>(() => {
   if (auth.role === 'pm' || auth.isAdmin) {
     items.push({ to: '/app/team', label: 'Team', icon: UsersRound })
   }
-  items.push(
-    { to: '/app/comms', label: 'Comms', icon: MessageSquare },
-    { to: '/app/playbook', label: 'Playbook', icon: BookOpen },
-    { to: '/app/eod', label: 'EOD Report', icon: FileText }
-  )
+  // Comms / Playbook / EOD Report are roadmap modules — re-add to the nav
+  // once their views exist. For now they 404, so they're hidden.
   if (auth.isAdmin) {
     items.push({ to: '/app/tickets', label: 'Tickets', icon: Bug })
   }
@@ -208,23 +262,34 @@ async function handleSignOut() {
           </div>
           <div v-if="effectiveOpen" class="space-y-0.5">
             <template v-for="c in clients.clients" :key="c.id">
-              <button
-                type="button"
-                class="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm hover:bg-base-200 transition-colors text-left"
-                :class="clients.currentClientId === c.id && 'text-base-content font-medium'"
-                @click="toggleClientOpen(c.id)"
-              >
-                <span
-                  class="w-3 h-3 inline-flex items-center justify-center text-[0.7rem] text-base-content/50 transition-transform"
-                  :class="openClients.has(c.id) && 'rotate-90'"
+              <div class="group/client flex items-center">
+                <button
+                  type="button"
+                  class="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md text-sm hover:bg-base-200 transition-colors text-left min-w-0"
+                  :class="clients.currentClientId === c.id && 'text-base-content font-medium'"
+                  @click="toggleClientOpen(c.id)"
                 >
-                  ▶
-                </span>
-                <span class="flex-1 truncate">{{ c.name }}</span>
-                <span class="text-[0.7rem] text-base-content/40 tabular-nums">
-                  {{ (projects.projectsByClient[c.id] ?? []).length }}
-                </span>
-              </button>
+                  <span
+                    class="w-3 h-3 inline-flex items-center justify-center text-[0.7rem] text-base-content/50 transition-transform shrink-0"
+                    :class="openClients.has(c.id) && 'rotate-90'"
+                  >
+                    ▶
+                  </span>
+                  <span class="flex-1 truncate">{{ c.name }}</span>
+                  <span class="text-[0.7rem] text-base-content/40 tabular-nums">
+                    {{ (projects.projectsByClient[c.id] ?? []).length }}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  class="opacity-0 group-hover/client:opacity-100 focus:opacity-100 w-6 h-6 rounded-md flex items-center justify-center text-base-content/50 hover:text-primary hover:bg-primary/10 transition-all shrink-0"
+                  title="New project for this client"
+                  aria-label="New project"
+                  @click="startNewProject(c.id, $event)"
+                >
+                  <Plus class="w-3.5 h-3.5" :stroke-width="2" />
+                </button>
+              </div>
               <ul
                 v-if="openClients.has(c.id)"
                 class="pl-4 space-y-0.5"
@@ -253,8 +318,30 @@ async function handleSignOut() {
                     <span class="truncate">{{ p.name }}</span>
                   </button>
                 </li>
+
+                <!-- Inline new-project input -->
+                <li v-if="newProjectFor === c.id" class="px-2 py-1">
+                  <input
+                    v-model="newProjectName"
+                    autofocus
+                    type="text"
+                    placeholder="Project name — Enter to create"
+                    class="w-full bg-base-100 border border-primary/40 rounded-md px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+                    :disabled="newProjectSaving"
+                    @keydown.enter.prevent="commitNewProject"
+                    @keydown.esc="cancelNewProject"
+                    @blur="newProjectName.trim() ? commitNewProject() : cancelNewProject()"
+                  />
+                  <p
+                    v-if="newProjectError"
+                    class="text-[0.65rem] text-error mt-1"
+                  >
+                    {{ newProjectError }}
+                  </p>
+                </li>
+
                 <li
-                  v-if="(projects.projectsByClient[c.id] ?? []).length === 0"
+                  v-else-if="(projects.projectsByClient[c.id] ?? []).length === 0"
                   class="px-2 py-1 text-xs text-base-content/40 italic"
                 >
                   No projects
@@ -341,16 +428,14 @@ async function handleSignOut() {
           <GlobalSearch />
         </div>
         <div class="flex items-center gap-2 shrink-0">
+          <RefreshButton />
           <NotificationBell />
           <TimerChip v-if="auth.role === 'va'" />
         </div>
       </header>
 
       <main
-        :class="[
-          'flex-1 overflow-y-auto pr-6 py-6 transition-[padding] duration-300 ease-in-out',
-          pinned ? 'pl-6' : 'pl-44'
-        ]"
+        class="flex-1 overflow-y-auto px-6 py-6"
       >
         <slot />
       </main>

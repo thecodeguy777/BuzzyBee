@@ -52,7 +52,10 @@ async function submitCreate() {
   }
 }
 
-const canManage = computed(() => auth.role === 'pm' || auth.isAdmin)
+// Creating / archiving / editing client *records* is an admin-only action —
+// PMs run accounts assigned to them by an admin, but they don't onboard
+// new accounts. PMs still edit per-client details inside ClientDrawer.
+const canManage = computed(() => auth.isAdmin)
 
 function rate(amount: number | null) {
   if (amount == null) return '—'
@@ -67,7 +70,7 @@ function statusBadge(status: string) {
 </script>
 
 <template>
-  <div class="max-w-4xl space-y-6">
+  <div class="space-y-6">
     <header class="flex items-end justify-between gap-4 flex-wrap">
       <div>
         <h1 class="font-display text-xl font-semibold">Clients</h1>

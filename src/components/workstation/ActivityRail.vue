@@ -53,6 +53,23 @@ const autoScope = computed<'workspace' | 'client'>(() => {
 const effectiveScope = computed<'workspace' | 'client'>(() =>
   scopeOverride.value === 'auto' ? autoScope.value : scopeOverride.value
 )
+// The chip that gives a meaningfully different feed than Smart.
+const oppositeScope = computed<'workspace' | 'client'>(() =>
+  autoScope.value === 'client' ? 'workspace' : 'client'
+)
+
+// Guard against stale localStorage: if a user previously selected a chip
+// that's now redundant with Smart on this route (e.g. picked 'client' on
+// Tasks before this fix shipped), treat it as Smart.
+watch(
+  [scopeOverride, autoScope],
+  ([s, a]) => {
+    if (s !== 'auto' && s === a) {
+      scopeOverride.value = 'auto'
+    }
+  },
+  { immediate: true }
+)
 
 // -----------------------------------------------------------------------------
 // Flatten task.activity_log into a feed.
@@ -218,32 +235,45 @@ async function openTask(it: FeedItem) {
         </button>
       </header>
 
-      <!-- Scope chips -->
+      <!--
+        Scope chips. Only two are shown:
+          1. Smart — follows the page's default (client on /app/tasks, workspace elsewhere)
+          2. The OPPOSITE of what Smart resolves to — the only manual override
+             that produces a different feed than Smart.
+        TKT-0003 fix: the previous third chip duplicated whichever option
+        Smart was already resolving to, so they produced identical output.
+      -->
       <div class="px-3 py-2 border-b border-base-300 flex items-center gap-1 shrink-0 text-xs">
         <button
-          v-for="opt in [
-            { v: 'auto', label: 'Smart' },
-            { v: 'workspace', label: 'Workspace' },
-            { v: 'client', label: 'This client' }
-          ]"
-          :key="opt.v"
           type="button"
-          class="px-2 py-1 rounded-md transition-colors"
+          class="px-2 py-1 rounded-md transition-colors flex items-center gap-1.5"
           :class="
-            scopeOverride === opt.v
+            scopeOverride === 'auto'
               ? 'bg-primary/10 text-primary font-medium'
               : 'text-base-content/60 hover:bg-base-200'
           "
-          @click="scopeOverride = opt.v as Scope"
+          @click="scopeOverride = 'auto'"
         >
-          {{ opt.label }}
+          Smart
+          <span
+            class="text-[0.6rem] uppercase tracking-wider"
+            :class="scopeOverride === 'auto' ? 'text-primary/60' : 'text-base-content/35'"
+          >
+            · {{ autoScope === 'client' ? 'client' : 'workspace' }}
+          </span>
         </button>
-        <span
-          v-if="scopeOverride === 'auto'"
-          class="ml-auto text-[0.65rem] uppercase tracking-wider text-base-content/40"
+        <button
+          type="button"
+          class="px-2 py-1 rounded-md transition-colors"
+          :class="
+            scopeOverride === oppositeScope
+              ? 'bg-primary/10 text-primary font-medium'
+              : 'text-base-content/60 hover:bg-base-200'
+          "
+          @click="scopeOverride = oppositeScope"
         >
-          {{ effectiveScope === 'client' ? 'client' : 'workspace' }}
-        </span>
+          {{ oppositeScope === 'client' ? 'This client' : 'Workspace' }}
+        </button>
       </div>
 
       <!-- Feed -->
