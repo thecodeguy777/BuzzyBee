@@ -1,41 +1,66 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter+Tight:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 @plugin "daisyui" {
   themes: light --default, dark;
 }
+
+/* ─────────────────────────────────────────────────────────────────
+   Honeycomb — warm paper neutrals + tamed amber
+   Tokens mapped from the Honeycomb design package:
+     paper    #FBF8F3   surface  #FFFFFF   hover   #F1E9DC
+     divider  #EBE2D2   ink      #1F1B16   ink2-5  warm grays
+     accent   #C8741A   accentSoft #F4E4CB  accentBg #FBF1E2
+   The amber is darker/redder than the previous honey-yellow primary;
+   the whole interface should now read as paper + ink with one warm
+   accent, instead of the previous yellow-dominant palette.
+   ───────────────────────────────────────────────────────────────── */
 @plugin "daisyui/theme" {
   name: "light";
   default: true;
   prefersdark: false;
   color-scheme: "light";
-  --color-base-100: oklch(98% 0.018 80);
-  --color-base-200: oklch(95% 0.028 80);
-  --color-base-300: oklch(91% 0.04 80);
-  --color-base-content: oklch(28% 0.05 340);
-  --color-primary: oklch(78% 0.17 85);
-  --color-primary-content: oklch(20% 0.05 85);
-  --color-secondary: oklch(82% 0.07 175);
-  --color-secondary-content: oklch(28% 0.05 340);
-  --color-accent: oklch(72% 0.17 20);
-  --color-accent-content: oklch(98% 0.02 20);
-  --color-neutral: oklch(14% 0.005 285.823);
-  --color-neutral-content: oklch(92% 0.004 286.32);
-  --color-info: oklch(74% 0.16 232.661);
-  --color-info-content: oklch(29% 0.066 243.157);
-  --color-success: oklch(76% 0.177 163.223);
-  --color-success-content: oklch(37% 0.077 168.94);
-  --color-warning: oklch(82% 0.189 84.429);
-  --color-warning-content: oklch(41% 0.112 45.904);
-  --color-error: oklch(71% 0.194 13.428);
-  --color-error-content: oklch(27% 0.105 12.094);
-  --radius-selector: 0.5rem;
-  --radius-field: 0.25rem;
-  --radius-box: 0.5rem;
+
+  /* Paper → ink scale (warm neutrals) */
+  --color-base-100: oklch(97.5% 0.012 80);   /* paper        #FBF8F3 */
+  --color-base-200: oklch(94% 0.022 80);     /* hover        #F1E9DC */
+  --color-base-300: oklch(90% 0.03 80);      /* divider      #EBE2D2 */
+  --color-base-content: oklch(20% 0.012 60); /* ink          #1F1B16 */
+
+  /* Amber accent — single primary */
+  --color-primary: oklch(60% 0.15 50);       /* accent       #C8741A */
+  --color-primary-content: oklch(98% 0.012 80);
+
+  /* Secondary tucked toward warm sage; rarely used */
+  --color-secondary: oklch(58% 0.09 145);    /* done green   #5C8A5A */
+  --color-secondary-content: oklch(98% 0.012 80);
+
+  /* Accent kept = primary so DaisyUI's accent components match brand */
+  --color-accent: oklch(60% 0.15 50);
+  --color-accent-content: oklch(98% 0.012 80);
+
+  /* Neutral = ink for foreground emphasis */
+  --color-neutral: oklch(20% 0.012 60);
+  --color-neutral-content: oklch(97.5% 0.012 80);
+
+  /* Status — used sparingly, mostly muted */
+  --color-info: oklch(60% 0.09 230);
+  --color-info-content: oklch(98% 0.012 80);
+  --color-success: oklch(58% 0.09 145);      /* done         #5C8A5A */
+  --color-success-content: oklch(98% 0.012 80);
+  --color-warning: oklch(60% 0.15 50);       /* progress     #C8741A */
+  --color-warning-content: oklch(98% 0.012 80);
+  --color-error: oklch(58% 0.16 25);         /* blocked      #B85450 */
+  --color-error-content: oklch(98% 0.012 80);
+
+  /* Radii — slightly larger than before for the soft/human feel */
+  --radius-selector: 0.625rem;  /* 10px */
+  --radius-field: 0.5rem;       /* 8px  */
+  --radius-box: 0.875rem;       /* 14px */
   --size-selector: 0.25rem;
   --size-field: 0.25rem;
   --border: 1px;
   --depth: 1;
-  --noise: 1;
+  --noise: 0;
 }
 
 @plugin "daisyui/theme" {
@@ -43,34 +68,70 @@
   default: false;
   prefersdark: false;
   color-scheme: "dark";
-  --color-base-100: oklch(14% 0.005 285.823);
-  --color-base-200: oklch(18% 0.006 285.885);
-  --color-base-300: oklch(22% 0.006 285.885);
-  --color-base-content: oklch(96% 0.004 286.32);
-  --color-primary: oklch(80% 0.18 85);
-  --color-primary-content: oklch(15% 0.04 85);
-  --color-neutral: oklch(92% 0.004 286.32);
-  --color-neutral-content: oklch(14% 0.005 285.823);
-  --radius-selector: 0.5rem;
-  --radius-field: 0.25rem;
-  --radius-box: 0.5rem;
+  --color-base-100: oklch(18% 0.012 60);
+  --color-base-200: oklch(22% 0.014 60);
+  --color-base-300: oklch(26% 0.016 60);
+  --color-base-content: oklch(94% 0.012 80);
+  --color-primary: oklch(70% 0.16 55);
+  --color-primary-content: oklch(18% 0.012 60);
+  --color-neutral: oklch(94% 0.012 80);
+  --color-neutral-content: oklch(18% 0.012 60);
+  --radius-selector: 0.625rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.875rem;
   --border: 1px;
+}
+
+/* ── Honeycomb token vars (raw access for components) ─────────── */
+:root {
+  --hc-paper: #FBF8F3;
+  --hc-surface: #FFFFFF;
+  --hc-surface-warm: #F5EFE6;
+  --hc-hover: #F1E9DC;
+  --hc-divider: #EBE2D2;
+  --hc-ink: #1F1B16;
+  --hc-ink-2: #3D352C;
+  --hc-ink-3: #6B6157;
+  --hc-ink-4: #9A9085;
+  --hc-ink-5: #C4B9AC;
+  --hc-accent: #C8741A;
+  --hc-accent-soft: #F4E4CB;
+  --hc-accent-bg: #FBF1E2;
+
+  --hc-shadow-1: 0 1px 2px rgba(31, 27, 22, 0.04), 0 1px 1px rgba(31, 27, 22, 0.03);
+  --hc-shadow-2: 0 4px 14px rgba(31, 27, 22, 0.06), 0 1px 2px rgba(31, 27, 22, 0.04);
+  --hc-shadow-3: 0 12px 32px rgba(31, 27, 22, 0.10), 0 2px 6px rgba(31, 27, 22, 0.06);
 }
 
 body {
   margin: 0;
-  font-family: 'DM Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Inter Tight', 'DM Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-.font-display {
-  font-family: 'Playfair Display', Georgia, serif;
+::selection {
+  background: var(--hc-accent-soft);
+  color: var(--hc-ink);
+}
+
+/* Display / serif — Fraunces, with optical sizing dialled for headlines */
+.font-display,
+.font-serif {
+  font-family: 'Fraunces', 'Source Serif Pro', Georgia, serif;
+  font-optical-sizing: auto;
+  letter-spacing: -0.02em;
 }
 
 .font-mono {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
 }
+
+/* Honeycomb shadow utilities */
+.shadow-hc-1 { box-shadow: var(--hc-shadow-1); }
+.shadow-hc-2 { box-shadow: var(--hc-shadow-2); }
+.shadow-hc-3 { box-shadow: var(--hc-shadow-3); }
 
 /* ── Scroll-reveal ───────────────────────────── */
 .reveal {
@@ -121,11 +182,11 @@ body {
   100% { background-position: 200% 0; }
 }
 
-/* Honeycomb pattern utility */
+/* Honeycomb hex-cluster ambient pattern (kept; warm tone now) */
 .bg-honeycomb {
   background-image:
-    radial-gradient(circle at 10% 20%, oklch(78% 0.17 85 / 0.08) 0, oklch(78% 0.17 85 / 0.08) 8px, transparent 8px),
-    radial-gradient(circle at 50% 60%, oklch(78% 0.17 85 / 0.08) 0, oklch(78% 0.17 85 / 0.08) 8px, transparent 8px),
-    radial-gradient(circle at 90% 20%, oklch(78% 0.17 85 / 0.08) 0, oklch(78% 0.17 85 / 0.08) 8px, transparent 8px);
+    radial-gradient(circle at 10% 20%, color-mix(in oklch, var(--hc-accent) 12%, transparent) 0, color-mix(in oklch, var(--hc-accent) 12%, transparent) 8px, transparent 8px),
+    radial-gradient(circle at 50% 60%, color-mix(in oklch, var(--hc-accent) 12%, transparent) 0, color-mix(in oklch, var(--hc-accent) 12%, transparent) 8px, transparent 8px),
+    radial-gradient(circle at 90% 20%, color-mix(in oklch, var(--hc-accent) 12%, transparent) 0, color-mix(in oklch, var(--hc-accent) 12%, transparent) 8px, transparent 8px);
   background-size: 120px 140px;
 }
