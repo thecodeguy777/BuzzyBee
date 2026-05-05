@@ -1,11 +1,17 @@
 import { createClient } from '@supabase/supabase-js'
 
 const url = import.meta.env.VITE_SUPABASE_URL
-const anon = import.meta.env.VITE_SUPABASE_ANON_KEY
+// Supabase renamed "anon key" → "publishable key" in 2025. Both are the same
+// public client-side credential, just different prefixes (eyJ… vs sb_publishable_…).
+// Accept either env-var name so the app works regardless of which naming the
+// project's Supabase dashboard uses.
+const anon =
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
 
 if (!url || !anon) {
   throw new Error(
-    'Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. Copy .env.example to .env and fill them in.'
+    'Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY / VITE_SUPABASE_PUBLISHABLE_KEY. Copy .env.example to .env and fill them in.'
   )
 }
 
