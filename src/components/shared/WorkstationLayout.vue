@@ -165,9 +165,9 @@ const bottomNavItems = computed<NavItem[]>(() => {
   }
   // Comms / Playbook / EOD Report are roadmap modules — re-add to the nav
   // once their views exist. For now they 404, so they're hidden.
-  if (auth.isAdmin) {
-    items.push({ to: '/app/tickets', label: 'Tickets', icon: Bug })
-  }
+  // Tickets / bug triage is universal — anyone can file and view a bug
+  // report. RLS still scopes what each role sees inside the page.
+  items.push({ to: '/app/tickets', label: 'Tickets', icon: Bug })
   return items
 })
 

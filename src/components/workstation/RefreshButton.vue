@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { RefreshCw, Check } from 'lucide-vue-next'
-import { useAuthStore } from '@/stores/auth'
 import { useClientsStore } from '@/stores/clients'
 import { useProjectsStore } from '@/stores/projects'
 import { useProjectMembersStore } from '@/stores/projectMembers'
@@ -10,7 +9,6 @@ import { useTaskFieldsStore } from '@/stores/taskFields'
 import { useTeamStore } from '@/stores/team'
 import { useTicketsStore } from '@/stores/tickets'
 
-const auth = useAuthStore()
 const clients = useClientsStore()
 const projects = useProjectsStore()
 const members = useProjectMembersStore()
@@ -41,7 +39,9 @@ async function refreshAll() {
     taskFields.fetchAll(),
     team.fetchAssignments()
   ]
-  if (auth.isAdmin) jobs.push(tickets.fetchAll())
+  // Tickets / bug-triage is universal — RLS scopes what each role sees,
+  // so we can fetch for everyone without leaking data.
+  jobs.push(tickets.fetchAll())
 
   // Settle all — one failure shouldn't kill the others.
   await Promise.allSettled(jobs)
