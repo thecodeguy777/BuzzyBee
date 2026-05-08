@@ -1,77 +1,64 @@
 <script setup lang="ts">
-import rawBee from '@/assets/bee.svg?raw'
-import { prefixSvgIds } from '@/utils/svg'
-
-const beeSrc = prefixSvgIds(rawBee, 'cta-bee')
 </script>
 
 <template>
-  <section id="contact" class="relative bg-base-100 py-24 md:py-32 overflow-hidden">
-    <div class="relative max-w-6xl mx-auto px-6">
-      <div v-reveal class="relative rounded-[2rem] bg-primary/90 text-primary-content p-10 md:p-16 overflow-hidden shadow-xl shadow-primary/25">
-        <!-- Decorative bee tucked in the right side -->
-        <div class="absolute -right-10 -bottom-10 lg:-right-6 lg:bottom-0 w-64 lg:w-[22rem] h-64 lg:h-[22rem] opacity-95 pointer-events-none anim-bob">
-          <div class="w-full h-full" v-html="beeSrc" />
-        </div>
+  <section id="contact" class="relative py-24 md:py-32 border-t border-base-300 overflow-hidden">
+    <div class="max-w-6xl mx-auto px-6">
+      <div v-reveal class="relative border border-base-300 rounded-lg overflow-hidden">
+        <!-- Gradient background -->
+        <div class="relative p-10 md:p-16" style="background: linear-gradient(135deg, #1e40af 0%, #6366f1 50%, #a855f7 100%);">
+          <!-- Grid overlay -->
+          <div class="absolute inset-0 pointer-events-none opacity-10"
+            style="background-image: linear-gradient(to right, rgba(255,255,255,0.3) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.3) 1px, transparent 1px); background-size: 40px 40px;"
+          ></div>
 
-        <!-- Honeycomb pattern decoration -->
-        <div class="absolute -top-6 -left-6 opacity-15 pointer-events-none" aria-hidden="true">
-          <svg width="160" height="160" viewBox="0 0 160 160" fill="none">
-            <g stroke="currentColor" stroke-width="1.5" fill="none">
-              <polygon points="20,20 40,10 60,20 60,40 40,50 20,40" />
-              <polygon points="60,40 80,30 100,40 100,60 80,70 60,60" />
-              <polygon points="100,20 120,10 140,20 140,40 120,50 100,40" />
-              <polygon points="20,60 40,50 60,60 60,80 40,90 20,80" />
-              <polygon points="100,60 120,50 140,60 140,80 120,90 100,80" />
-            </g>
-          </svg>
-        </div>
+          <!-- Glow orb -->
+          <div class="absolute top-[-20%] right-[-10%] w-[50%] h-[80%] pointer-events-none opacity-30 blur-3xl"
+            style="background: radial-gradient(ellipse at center, #a855f7 0%, transparent 60%);"
+          ></div>
 
-        <div class="relative max-w-2xl">
-          <div class="inline-flex items-center gap-2 rounded-full bg-primary-content/10 backdrop-blur px-3 py-1 text-xs font-medium tracking-wide mb-5">
-            <span class="w-1.5 h-1.5 rounded-full bg-primary-content animate-pulse"></span>
-            <span>Book a discovery call</span>
-          </div>
-          <h2 class="font-display text-4xl md:text-5xl lg:text-6xl font-semibold tracking-tight leading-[1.05]">
-            Let’s give your business a
-            <span class="italic">hive</span>.
-          </h2>
-          <p class="mt-5 text-lg md:text-xl text-primary-content/85 leading-relaxed max-w-xl">
-            Twenty minutes. No commitment. You leave with a scoped role, a shortlist, and a plan for week one.
-          </p>
-          <div class="mt-10 flex flex-wrap items-center gap-4">
-            <a
-              href="mailto:hello@buzzybee.co"
-              class="btn bg-base-100 text-primary hover:bg-base-100/90 border-0 rounded-full px-7 shadow-md"
-            >
-              Book a discovery call
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M5 12h14M13 5l7 7-7 7" />
-              </svg>
-            </a>
-            <a href="#pricing" class="btn btn-ghost text-primary-content hover:bg-primary-content/10 rounded-full px-6">
-              See pricing
-            </a>
-          </div>
-          <div class="mt-8 flex items-center gap-6 text-sm text-primary-content/80">
-            <span class="flex items-center gap-2">
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M20 6L9 17l-5-5" />
-              </svg>
-              7-day ramp
-            </span>
-            <span class="flex items-center gap-2">
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M20 6L9 17l-5-5" />
-              </svg>
-              Month-to-month
-            </span>
-            <span class="flex items-center gap-2">
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M20 6L9 17l-5-5" />
-              </svg>
-              Swap guarantee
-            </span>
+          <div class="relative max-w-2xl">
+            <div class="text-[11px] font-medium uppercase tracking-wider text-white/50 mb-4">Free discovery call</div>
+            <h2 class="font-display text-3xl md:text-4xl lg:text-5xl tracking-tight leading-tight text-white">
+              Your next closing pays for a full year.
+            </h2>
+            <p class="mt-4 text-base text-white/70 leading-relaxed max-w-lg">
+              Twenty minutes on a call. You leave with a scoped role, a VA shortlist, and a plan for week one. No commitment, no pressure.
+            </p>
+            <div class="mt-8 flex flex-wrap items-center gap-3">
+              <a
+                href="mailto:hello@hivemind.co"
+                class="inline-flex items-center gap-2 bg-white text-gray-900 font-medium px-5 py-2.5 rounded-md hover:bg-white/90 transition-colors text-sm"
+              >
+                Book a discovery call
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M5 12h14M13 5l7 7-7 7" />
+                </svg>
+              </a>
+              <a href="#pricing" class="inline-flex items-center gap-2 text-white/70 font-medium px-5 py-2.5 rounded-md border border-white/20 hover:bg-white/10 transition-colors text-sm">
+                See pricing
+              </a>
+            </div>
+            <div class="mt-8 flex flex-wrap items-center gap-6 text-xs text-white/50">
+              <span class="flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+                VA working in 7 days
+              </span>
+              <span class="flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+                Cancel anytime after 3 months
+              </span>
+              <span class="flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+                Swap guarantee
+              </span>
+            </div>
           </div>
         </div>
       </div>

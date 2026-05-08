@@ -1,102 +1,69 @@
 <script setup lang="ts">
-import rawBeeFlying from '@/assets/bee-flying.svg?raw'
-import rawThoughtbubble from '@/assets/icons/thoughtbubble.svg?raw'
-import rawCheck from '@/assets/icons/check.svg?raw'
-import rawCalendar from '@/assets/icons/calendar.svg?raw'
-import rawHoney from '@/assets/icons/honey.svg?raw'
-import rawHoneycomb from '@/assets/icons/honeycomb.svg?raw'
-import { prefixSvgIds } from '@/utils/svg'
-
-const beeFlyingSrc = prefixSvgIds(rawBeeFlying, 'how-beefly')
-const thoughtbubbleSrc = prefixSvgIds(rawThoughtbubble, 'how-tb')
-const checkSrc = prefixSvgIds(rawCheck, 'how-ck')
-const calendarSrc = prefixSvgIds(rawCalendar, 'how-cal')
-const honeySrc = prefixSvgIds(rawHoney, 'how-hn')
-const honeycombSrc = prefixSvgIds(rawHoneycomb, 'how-hc')
+import FlowingGradient from './FlowingGradient.vue'
+import { Phone, Users, Rocket, Headphones, TrendingUp } from 'lucide-vue-next'
 
 const steps = [
-  { icon: thoughtbubbleSrc, num: '01', title: 'Discovery call', body: 'A 20-minute call to scope the role, your tools, and the outcomes you need.' },
-  { icon: checkSrc,          num: '02', title: 'Curated match', body: 'Within 72 hours we shortlist three pre-vetted VAs tailored to your brief.' },
-  { icon: calendarSrc,       num: '03', title: '7-day onboarding', body: 'Playbooks, SOPs, and a ramp plan so your VA ships value in week one.' },
-  { icon: honeySrc,          num: '04', title: 'Managed support', body: 'A project manager runs EOD reports, weekly check-ins, and quarterly reviews.' },
-  { icon: honeycombSrc,      num: '05', title: 'Scale the hive', body: 'Add VAs, upgrade tiers, or specialize as your business grows.' }
+  { num: '01', title: 'Discovery call', body: 'A 20-minute call to understand your business: team size, transaction volume, tools you use, and what\'s eating your time.', icon: Phone },
+  { num: '02', title: 'Curated match', body: 'Within 72 hours, we shortlist 3 pre-vetted VAs who know real estate workflows, your CRM, and your time zone.', icon: Users },
+  { num: '03', title: '7-day onboarding', body: 'Your VA learns your playbook, brokerage systems, and communication style. By day 7, they\'re handling tasks independently.', icon: Rocket },
+  { num: '04', title: 'Managed support', body: 'A project manager runs daily check-ins, weekly reports, and quarterly reviews. Problems get caught before you feel them.', icon: Headphones },
+  { num: '05', title: 'Scale your team', body: 'Add a transaction coordinator, a marketing VA, or a second admin as your production grows. One platform, unlimited growth.', icon: TrendingUp }
 ]
 </script>
 
 <template>
-  <section id="how" class="relative bg-base-100 py-24 md:py-32 overflow-hidden">
-    <!-- Background wash -->
-    <div
-      class="absolute inset-0 pointer-events-none"
-      style="background:
-        radial-gradient(ellipse 50% 40% at 10% 30%, oklch(88% 0.06 175 / 0.3) 0%, transparent 65%),
-        radial-gradient(ellipse 50% 40% at 95% 85%, oklch(90% 0.08 85 / 0.35) 0%, transparent 65%);"
-    ></div>
-
-    <!-- Decorative flying bee — top right, gently drifting -->
-    <div class="absolute -top-4 right-2 lg:right-6 w-72 lg:w-[26rem] h-72 lg:h-[26rem] pointer-events-none hidden lg:block anim-drift">
-      <div class="w-full h-full" v-html="beeFlyingSrc" />
+  <section id="how" class="relative py-24 md:py-32 border-t border-base-300 overflow-hidden">
+    <div class="absolute inset-0 pointer-events-none">
+      <FlowingGradient :opacity="0.08" :speed="0.6" tone="blue" />
     </div>
 
-    <div class="relative max-w-7xl mx-auto px-6">
+    <div class="relative max-w-6xl mx-auto px-6">
       <!-- Header -->
-      <div v-reveal class="max-w-2xl mb-16">
-        <div class="inline-flex items-center gap-2 rounded-full bg-secondary/40 px-3 py-1 text-xs font-medium tracking-wide mb-4">
-          <span class="text-base-content/80">How it works</span>
+      <div v-reveal class="max-w-2xl mb-14">
+        <div class="flex items-center gap-3 mb-3">
+          <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-purple-500"></div>
+          <span class="text-xs font-medium uppercase tracking-wider text-primary">How It Works</span>
         </div>
-        <h2 class="font-display text-4xl md:text-5xl font-semibold tracking-tight leading-tight">
-          From first call to a
-          <span class="italic text-primary">scaled team</span>
-          in seven days.
+        <h2 class="font-display text-3xl md:text-4xl tracking-tight leading-tight text-base-content">
+          From first call to a working VA in seven days.
         </h2>
-        <p class="mt-5 text-lg text-base-content/70 leading-relaxed">
-          No job boards, no resume stacks, no cold freelancers. Just a small, managed process that gets the right person working on your business fast.
+        <p class="mt-4 text-base text-base-content/60 leading-relaxed">
+          No job boards. No resume stacks. No training someone from scratch. We handle matching, onboarding, and ongoing management. You just delegate.
         </p>
       </div>
 
-      <!-- Steps: horizontal snap-scroll on mobile, grid on md+ -->
-      <ol class="relative flex md:grid gap-5 md:gap-6 md:grid-cols-5 overflow-x-auto md:overflow-visible snap-x snap-mandatory scroll-smooth -mx-6 px-6 md:mx-0 md:px-0 pb-4 md:pb-0">
-        <!-- Dotted connector line (desktop only) -->
-        <div
-          class="hidden md:block absolute top-10 left-[10%] right-[10%] h-px pointer-events-none"
-          style="background: repeating-linear-gradient(to right, oklch(70% 0.15 82) 0 6px, transparent 6px 14px);"
-        ></div>
+      <!-- Steps with connecting line -->
+      <div v-reveal="150" class="relative">
+        <!-- Gradient connecting line (desktop) -->
+        <div class="hidden md:block absolute top-8 left-[10%] right-[10%] h-px bg-gradient-to-r from-primary via-purple-500 to-primary/30"></div>
 
-        <li
-          v-for="(step, i) in steps"
-          :key="step.num"
-          v-reveal="i * 90"
-          class="relative snap-center shrink-0 w-[82%] md:w-auto flex flex-col items-start text-left group"
-        >
-          <!-- Icon bubble (centered in its column so the dotted line connects cleanly) -->
-          <div class="self-center relative w-20 h-20 rounded-full bg-base-100 border-2 border-primary/30 shadow-sm flex items-center justify-center mb-5 transition-transform duration-300 group-hover:-translate-y-1 group-hover:rotate-[-4deg] group-hover:shadow-md">
-            <div class="w-14 h-14 icon-wrap" v-html="step.icon" />
+        <div class="grid gap-6 md:grid-cols-5">
+          <div
+            v-for="step in steps"
+            :key="step.num"
+            class="relative text-center"
+          >
+            <!-- Step icon circle -->
+            <div class="relative mx-auto w-16 h-16 rounded-full border border-base-300 bg-base-100 flex items-center justify-center mb-4 hover:border-primary/40 hover:shadow-md hover:shadow-primary/10 transition-all duration-300">
+              <component :is="step.icon" class="w-6 h-6 text-primary" />
+            </div>
+            <div class="font-mono text-[10px] tracking-wider text-primary/60 mb-1">{{ step.num }}</div>
+            <h3 class="text-sm font-semibold text-base-content mb-2">{{ step.title }}</h3>
+            <p class="text-xs text-base-content/55 leading-relaxed">{{ step.body }}</p>
           </div>
+        </div>
+      </div>
 
-          <div class="font-mono text-xs tracking-[0.18em] text-primary mb-2">STEP {{ step.num }}</div>
-          <h3 class="font-display text-xl font-semibold mb-2 leading-snug">{{ step.title }}</h3>
-          <p class="text-sm text-base-content/70 leading-relaxed">{{ step.body }}</p>
-        </li>
-      </ol>
-
-      <!-- Footer CTA -->
-      <div class="mt-16 flex flex-wrap items-center gap-4">
-        <a href="#contact" class="btn btn-primary rounded-full px-6 shadow-md shadow-primary/20">
+      <!-- CTA -->
+      <div class="mt-12 flex flex-wrap items-center gap-4 justify-center">
+        <a href="#contact" class="inline-flex items-center gap-2 bg-primary text-primary-content font-medium px-5 py-2.5 rounded-md hover:opacity-90 transition-opacity text-sm">
           Start with a discovery call
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M5 12h14M13 5l7 7-7 7" />
           </svg>
         </a>
-        <span class="text-sm text-base-content/60">No commitment · 20 minutes · Free</span>
+        <span class="text-xs text-base-content/50">20 minutes · No commitment · Free</span>
       </div>
     </div>
   </section>
 </template>
-
-<style scoped>
-.icon-wrap :deep(svg) {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-</style>

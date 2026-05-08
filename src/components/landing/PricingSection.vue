@@ -1,143 +1,163 @@
 <script setup lang="ts">
-import rawHoneycomb from '@/assets/icons/honeycomb.svg?raw'
-import rawHoney from '@/assets/icons/honey.svg?raw'
-import rawFlower from '@/assets/icons/flower.svg?raw'
-import { prefixSvgIds } from '@/utils/svg'
-
-const honeycombSrc = prefixSvgIds(rawHoneycomb, 'pr-hc')
-const honeySrc = prefixSvgIds(rawHoney, 'pr-hn')
-const flowerSrc = prefixSvgIds(rawFlower, 'pr-fl')
+import { ref, computed } from 'vue'
+import FlowingGradient from './FlowingGradient.vue'
 
 const commonFeatures = [
   'Pre-vetted Filipino VA (top 3% of applicants)',
-  '7-day onboarding with SOPs and playbook',
+  '7-day onboarding with real estate playbook',
   'Managed PM support and weekly check-ins',
-  'Daily EOD reports in the BuzzyBee platform',
+  'Daily EOD reports in the HiveMind platform',
   'VA swap guarantee if the fit is off'
 ]
 
-const tiers = [
-  {
-    name: 'Starter',
-    icon: flowerSrc,
-    price: '$1,200',
-    cadence: '/ mo',
-    tagline: 'Admin horsepower for solo founders and lean teams.',
-    features: [
-      'Inbox, calendar, and scheduling',
-      'Data entry, research, light CRM',
-      'Document prep and formatting',
-      'Up to 160 hrs / month'
-    ],
-    cta: 'Start with Starter',
-    highlight: false
-  },
-  {
-    name: 'Professional',
-    icon: honeySrc,
-    price: '$1,600',
-    cadence: '/ mo',
-    tagline: 'Creative and ops support for growing SMBs.',
-    features: [
-      'Everything in Starter, plus:',
-      'Social media scheduling and light design',
-      'Bookkeeping assistance (Xero / QuickBooks)',
-      'Content production and light copy editing',
-      'Up to 160 hrs / month'
-    ],
-    cta: 'Hire a Professional',
-    highlight: true,
-    badge: 'Most popular'
-  },
-  {
-    name: 'Development',
-    icon: honeycombSrc,
-    price: '$2,200',
-    cadence: '/ mo',
-    tagline: 'Specialist support for product, marketing, and tech teams.',
-    features: [
-      'Everything in Professional, plus:',
-      'Dev support: QA, light front-end, tickets',
-      'Marketing ops: automations, campaigns, analytics',
-      'Project management with full stack tools',
-      'Up to 160 hrs / month'
-    ],
-    cta: 'Scope a Specialist',
-    highlight: false
-  }
+type BillingCycle = '3mo' | '6mo' | '1yr'
+
+const selectedCycle = ref<BillingCycle>('6mo')
+
+const cycles: { key: BillingCycle; label: string; discount: number; badge?: string }[] = [
+  { key: '3mo', label: '3 months', discount: 0 },
+  { key: '6mo', label: '6 months', discount: 10, badge: '-10%' },
+  { key: '1yr', label: '1 year', discount: 20, badge: '-20%' }
 ]
+
+const basePrices = [1200, 1600, 2200]
+
+const tiers = computed(() => {
+  const cycle = cycles.find(c => c.key === selectedCycle.value)!
+  const mult = (100 - cycle.discount) / 100
+
+  return [
+    {
+      name: 'Solo Agent',
+      price: Math.round(basePrices[0] * mult),
+      tagline: 'Admin horsepower for individual agents ready to scale.',
+      features: [
+        'Lead follow-up and CRM management',
+        'Calendar, email, and inbox triage',
+        'Listing data entry and updates',
+        'Basic social media scheduling',
+        'Up to 160 hrs / month (full-time)'
+      ],
+      cta: 'Start with Solo',
+      highlight: false
+    },
+    {
+      name: 'Top Producer',
+      price: Math.round(basePrices[1] * mult),
+      tagline: 'Transaction and marketing support for high-volume agents.',
+      features: [
+        'Everything in Solo, plus:',
+        'Transaction coordination (contract-to-close)',
+        'Marketing content creation (Canva, video)',
+        'Listing presentation and CMA prep',
+        'Up to 160 hrs / month (full-time)'
+      ],
+      cta: 'Go Top Producer',
+      highlight: true,
+      badge: 'Most popular'
+    },
+    {
+      name: 'Team Lead',
+      price: Math.round(basePrices[2] * mult),
+      tagline: 'Operations-level support for teams and brokerages.',
+      features: [
+        'Everything in Top Producer, plus:',
+        'Multi-agent calendar and pipeline management',
+        'Recruiting coordination and onboarding support',
+        'Advanced marketing ops and ad management',
+        'Up to 160 hrs / month (full-time)'
+      ],
+      cta: 'Scale Your Team',
+      highlight: false
+    }
+  ]
+})
+
+const currentDiscount = computed(() => cycles.find(c => c.key === selectedCycle.value)!.discount)
 </script>
 
 <template>
-  <section id="pricing" class="relative bg-base-100 py-24 md:py-32 overflow-hidden">
-    <!-- Honeycomb dot pattern -->
-    <div class="absolute inset-0 pointer-events-none bg-honeycomb opacity-60"></div>
-    <!-- Background wash -->
-    <div
-      class="absolute inset-0 pointer-events-none"
-      style="background:
-        radial-gradient(ellipse 50% 40% at 50% 0%, oklch(90% 0.08 85 / 0.45) 0%, transparent 60%),
-        radial-gradient(ellipse 40% 30% at 90% 100%, oklch(88% 0.06 175 / 0.35) 0%, transparent 65%);"
-    ></div>
+  <section id="pricing" class="relative py-24 md:py-32 border-t border-base-300 overflow-hidden">
+    <div class="absolute inset-0 pointer-events-none">
+      <FlowingGradient :opacity="0.08" :speed="0.5" tone="mixed" />
+    </div>
 
-    <div class="relative max-w-7xl mx-auto px-6">
+    <div class="relative max-w-6xl mx-auto px-6">
       <!-- Header -->
-      <div v-reveal class="text-center max-w-2xl mx-auto mb-16">
-        <div class="inline-flex items-center gap-2 rounded-full bg-primary/15 px-3 py-1 text-xs font-medium tracking-wide mb-4">
-          <span class="text-primary">Pricing</span>
+      <div class="text-center max-w-2xl mx-auto mb-10">
+        <div class="flex items-center gap-3 mb-3 justify-center">
+          <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-purple-500"></div>
+          <span class="text-xs font-medium uppercase tracking-wider text-primary">Pricing</span>
+          <div class="w-8 h-0.5 rounded-full bg-gradient-to-l from-primary to-purple-500"></div>
         </div>
-        <h2 class="font-display text-4xl md:text-5xl font-semibold tracking-tight leading-tight">
-          One VA, one flat rate,
-          <span class="italic text-primary">no surprises</span>.
+        <h2 class="font-display text-3xl md:text-4xl tracking-tight leading-tight text-base-content">
+          Less than one closing. Every month.
         </h2>
-        <p class="mt-5 text-lg text-base-content/70 leading-relaxed">
-          Full-time managed placement. Pick the tier that matches the work. Swap, scale, or cancel anytime.
+        <p class="mt-4 text-base text-base-content/60 leading-relaxed">
+          Full-time, managed VA placement. Pick the tier that matches your production level. Commit longer, pay less.
         </p>
       </div>
 
-      <!-- Tier cards -->
-      <div class="grid gap-6 lg:grid-cols-3">
-        <div
-          v-for="(tier, i) in tiers"
-          :key="tier.name"
-          v-reveal="i * 120"
-          class="relative rounded-3xl border bg-base-100 p-7 md:p-8 flex flex-col transition-all duration-300 hover:-translate-y-2 hover:shadow-xl"
-          :class="tier.highlight
-            ? 'border-primary/60 shadow-xl shadow-primary/25 ring-1 ring-primary/30 lg:-translate-y-3'
-            : 'border-base-300 shadow-sm hover:border-primary/40'"
-        >
-          <!-- Badge -->
-          <div
-            v-if="tier.badge"
-            class="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-content text-xs font-semibold tracking-wide uppercase px-3 py-1 rounded-full shadow-sm"
+      <!-- Billing toggle -->
+      <div class="flex justify-center mb-12">
+        <div class="inline-flex items-center gap-0 border border-base-300 rounded-md overflow-hidden bg-base-100">
+          <button
+            v-for="cycle in cycles"
+            :key="cycle.key"
+            class="relative px-4 py-2 text-xs font-medium transition-all duration-150 border-r border-base-300 last:border-r-0"
+            :class="selectedCycle === cycle.key
+              ? 'bg-gradient-to-r from-primary to-purple-600 text-white'
+              : 'text-base-content/60 hover:text-base-content hover:bg-base-200'"
+            @click="selectedCycle = cycle.key"
           >
-            {{ tier.badge }}
+            {{ cycle.label }}
+            <span
+              v-if="cycle.badge && selectedCycle !== cycle.key"
+              class="ml-1 text-[10px] font-semibold text-purple-500"
+            >{{ cycle.badge }}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Tier cards -->
+      <div class="grid gap-4 lg:grid-cols-3">
+        <div
+          v-for="tier in tiers"
+          :key="tier.name"
+          class="relative border rounded-lg p-8 flex flex-col transition-all duration-300"
+          :class="tier.highlight
+            ? 'border-primary/50 bg-base-100 shadow-md shadow-primary/5'
+            : 'border-base-300 bg-base-100 hover:border-primary/30'"
+        >
+          <!-- Gradient top border on highlighted -->
+          <div v-if="tier.highlight" class="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-primary via-purple-500 to-primary/30"></div>
+
+          <!-- Badge -->
+          <div v-if="tier.badge" class="mb-4">
+            <span class="text-[10px] font-semibold uppercase tracking-wider bg-gradient-to-r from-primary to-purple-500 text-white px-2 py-0.5 rounded">
+              {{ tier.badge }}
+            </span>
           </div>
 
-          <!-- Header: icon + name + tagline -->
-          <div class="flex items-start gap-4 mb-5">
-            <div
-              class="shrink-0 w-14 h-14 rounded-2xl border flex items-center justify-center"
-              :class="tier.highlight ? 'bg-primary/15 border-primary/30' : 'bg-secondary/30 border-secondary/60'"
-            >
-              <div class="w-10 h-10 icon-wrap" v-html="tier.icon" />
-            </div>
-            <div class="flex-1">
-              <h3 class="font-display text-2xl font-semibold leading-snug">{{ tier.name }}</h3>
-              <p class="text-sm text-base-content/70 leading-snug mt-1">{{ tier.tagline }}</p>
-            </div>
+          <!-- Header -->
+          <div class="mb-6">
+            <h3 class="text-lg font-semibold text-base-content">{{ tier.name }}</h3>
+            <p class="text-xs text-base-content/50 mt-1">{{ tier.tagline }}</p>
           </div>
 
           <!-- Price -->
-          <div class="flex items-baseline gap-2 mb-6 pb-6 border-b border-base-300">
-            <span class="font-display text-5xl font-semibold text-base-content">{{ tier.price }}</span>
-            <span class="text-base-content/60 text-sm">USD {{ tier.cadence }}</span>
+          <div class="mb-6 pb-6 border-b border-base-300">
+            <span class="text-4xl font-bold text-base-content tracking-tight">${{ tier.price.toLocaleString() }}</span>
+            <span class="text-sm text-base-content/50 ml-1">/ mo</span>
+            <div v-if="currentDiscount > 0" class="mt-2">
+              <span class="text-[11px] font-medium bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">{{ currentDiscount }}% off monthly rate</span>
+            </div>
           </div>
 
           <!-- Features -->
           <ul class="space-y-2.5 mb-8">
-            <li v-for="f in tier.features" :key="f" class="flex items-start gap-2.5 text-sm text-base-content/80">
-              <svg class="shrink-0 w-5 h-5 mt-0.5 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <li v-for="f in tier.features" :key="f" class="flex items-start gap-2 text-xs text-base-content/70">
+              <svg class="shrink-0 w-3.5 h-3.5 mt-0.5 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M20 6L9 17l-5-5" />
               </svg>
               <span>{{ f }}</span>
@@ -148,49 +168,37 @@ const tiers = [
           <div class="mt-auto">
             <a
               href="#contact"
-              class="btn w-full rounded-full"
-              :class="tier.highlight ? 'btn-primary shadow-md shadow-primary/20' : 'btn-outline btn-primary'"
+              class="block text-center text-sm font-medium py-2.5 rounded-md border transition-all duration-200"
+              :class="tier.highlight
+                ? 'bg-gradient-to-r from-primary to-purple-600 text-white border-transparent hover:opacity-90'
+                : 'border-base-300 text-base-content/70 hover:border-primary hover:text-primary'"
             >
               {{ tier.cta }}
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M5 12h14M13 5l7 7-7 7" />
-              </svg>
             </a>
           </div>
         </div>
       </div>
 
-      <!-- Common features row -->
-      <div class="mt-14 rounded-3xl bg-base-200 border border-base-300 p-7 md:p-8">
-        <div class="flex items-center gap-3 mb-4">
-          <span class="font-display text-xl font-semibold">Included in every plan</span>
-          <span class="h-px flex-1 bg-base-300"></span>
-        </div>
-        <ul class="grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          <li v-for="f in commonFeatures" :key="f" class="flex items-start gap-2 text-sm text-base-content/75">
-            <svg class="shrink-0 w-4 h-4 mt-0.5 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <!-- Common features -->
+      <div class="mt-10 border border-base-300 rounded-lg p-6">
+        <div class="text-xs font-medium uppercase tracking-wider text-base-content/50 mb-4">Included in every plan</div>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div v-for="f in commonFeatures" :key="f" class="flex items-start gap-2 text-xs text-base-content/60">
+            <svg class="shrink-0 w-3.5 h-3.5 mt-0.5 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M20 6L9 17l-5-5" />
             </svg>
             <span>{{ f }}</span>
-          </li>
-        </ul>
+          </div>
+        </div>
       </div>
 
-      <!-- Enterprise / custom line -->
-      <div class="mt-10 text-center">
-        <p class="text-base-content/70">
-          Need more than one VA, or a dedicated team?
-          <a href="#contact" class="text-primary font-medium hover:underline">Talk to us about custom hives</a>.
+      <!-- Custom -->
+      <div class="mt-8 text-center">
+        <p class="text-sm text-base-content/50">
+          Running a team of 5+ agents?
+          <a href="#contact" class="text-primary font-medium hover:underline">Let's build a custom package</a>.
         </p>
       </div>
     </div>
   </section>
 </template>
-
-<style scoped>
-.icon-wrap :deep(svg) {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-</style>

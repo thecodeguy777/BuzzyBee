@@ -21,9 +21,11 @@
     "@tiptap/starter-kit": "^3.22.5",
     "@tiptap/vue-3": "^3.22.5",
     "@types/sortablejs": "^1.15.9",
+    "@types/three": "^0.184.1",
     "lucide-vue-next": "^1.0.0",
     "pinia": "^3.0.4",
     "sortablejs": "^1.15.7",
+    "three": "^0.184.0",
     "vue": "^3.5.30",
     "vue-router": "^4.6.4"
   },

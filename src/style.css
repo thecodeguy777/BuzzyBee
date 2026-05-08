@@ -1,18 +1,13 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter+Tight:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 @plugin "daisyui" {
   themes: light --default, dark;
 }
 
 /* ─────────────────────────────────────────────────────────────────
-   Honeycomb — warm paper neutrals + tamed amber
-   Tokens mapped from the Honeycomb design package:
-     paper    #FBF8F3   surface  #FFFFFF   hover   #F1E9DC
-     divider  #EBE2D2   ink      #1F1B16   ink2-5  warm grays
-     accent   #C8741A   accentSoft #F4E4CB  accentBg #FBF1E2
-   The amber is darker/redder than the previous honey-yellow primary;
-   the whole interface should now read as paper + ink with one warm
-   accent, instead of the previous yellow-dominant palette.
+   HiveMind — Royal Blue + Coral Red
+   Stripe meets Keller Williams: structured, techy, precise.
+   Thin borders, generous whitespace, clean geometry.
    ───────────────────────────────────────────────────────────────── */
 @plugin "daisyui/theme" {
   name: "light";
@@ -20,42 +15,42 @@
   prefersdark: false;
   color-scheme: "light";
 
-  /* Paper → ink scale (warm neutrals) */
-  --color-base-100: oklch(97.5% 0.012 80);   /* paper        #FBF8F3 */
-  --color-base-200: oklch(94% 0.022 80);     /* hover        #F1E9DC */
-  --color-base-300: oklch(90% 0.03 80);      /* divider      #EBE2D2 */
-  --color-base-content: oklch(20% 0.012 60); /* ink          #1F1B16 */
+  /* Cool neutral scale */
+  --color-base-100: oklch(99% 0.005 250);      /* near-white with cool tint */
+  --color-base-200: oklch(96.5% 0.008 250);    /* light gray */
+  --color-base-300: oklch(92% 0.01 250);       /* border gray */
+  --color-base-content: oklch(15% 0.01 250);   /* near-black */
 
-  /* Amber accent — single primary */
-  --color-primary: oklch(60% 0.15 50);       /* accent       #C8741A */
-  --color-primary-content: oklch(98% 0.012 80);
+  /* Royal blue primary */
+  --color-primary: oklch(55% 0.22 260);        /* #2563eb */
+  --color-primary-content: oklch(99% 0.005 250);
 
-  /* Secondary tucked toward warm sage; rarely used */
-  --color-secondary: oklch(58% 0.09 145);    /* done green   #5C8A5A */
-  --color-secondary-content: oklch(98% 0.012 80);
+  /* Coral red accent */
+  --color-secondary: oklch(55% 0.2 25);        /* #ef4444 */
+  --color-secondary-content: oklch(99% 0.005 250);
 
-  /* Accent kept = primary so DaisyUI's accent components match brand */
-  --color-accent: oklch(60% 0.15 50);
-  --color-accent-content: oklch(98% 0.012 80);
+  /* Accent = secondary for DaisyUI compat */
+  --color-accent: oklch(55% 0.2 25);
+  --color-accent-content: oklch(99% 0.005 250);
 
-  /* Neutral = ink for foreground emphasis */
-  --color-neutral: oklch(20% 0.012 60);
-  --color-neutral-content: oklch(97.5% 0.012 80);
+  /* Neutral */
+  --color-neutral: oklch(20% 0.01 250);
+  --color-neutral-content: oklch(99% 0.005 250);
 
-  /* Status — used sparingly, mostly muted */
-  --color-info: oklch(60% 0.09 230);
-  --color-info-content: oklch(98% 0.012 80);
-  --color-success: oklch(58% 0.09 145);      /* done         #5C8A5A */
-  --color-success-content: oklch(98% 0.012 80);
-  --color-warning: oklch(60% 0.15 50);       /* progress     #C8741A */
-  --color-warning-content: oklch(98% 0.012 80);
-  --color-error: oklch(58% 0.16 25);         /* blocked      #B85450 */
-  --color-error-content: oklch(98% 0.012 80);
+  /* Status colors */
+  --color-info: oklch(60% 0.15 250);
+  --color-info-content: oklch(99% 0.005 250);
+  --color-success: oklch(55% 0.14 155);
+  --color-success-content: oklch(99% 0.005 250);
+  --color-warning: oklch(70% 0.16 80);
+  --color-warning-content: oklch(20% 0.01 250);
+  --color-error: oklch(55% 0.2 25);
+  --color-error-content: oklch(99% 0.005 250);
 
-  /* Radii — slightly larger than before for the soft/human feel */
-  --radius-selector: 0.625rem;  /* 10px */
-  --radius-field: 0.5rem;       /* 8px  */
-  --radius-box: 0.875rem;       /* 14px */
+  /* Tight radii for structured feel */
+  --radius-selector: 0.375rem;   /* 6px */
+  --radius-field: 0.375rem;      /* 6px */
+  --radius-box: 0.5rem;          /* 8px */
   --size-selector: 0.25rem;
   --size-field: 0.25rem;
   --border: 1px;
@@ -68,82 +63,84 @@
   default: false;
   prefersdark: false;
   color-scheme: "dark";
-  --color-base-100: oklch(18% 0.012 60);
-  --color-base-200: oklch(22% 0.014 60);
-  --color-base-300: oklch(26% 0.016 60);
-  --color-base-content: oklch(94% 0.012 80);
-  --color-primary: oklch(70% 0.16 55);
-  --color-primary-content: oklch(18% 0.012 60);
-  --color-neutral: oklch(94% 0.012 80);
-  --color-neutral-content: oklch(18% 0.012 60);
-  --radius-selector: 0.625rem;
-  --radius-field: 0.5rem;
-  --radius-box: 0.875rem;
+  --color-base-100: oklch(15% 0.015 250);
+  --color-base-200: oklch(19% 0.015 250);
+  --color-base-300: oklch(24% 0.015 250);
+  --color-base-content: oklch(95% 0.005 250);
+  --color-primary: oklch(65% 0.2 260);
+  --color-primary-content: oklch(15% 0.015 250);
+  --color-neutral: oklch(95% 0.005 250);
+  --color-neutral-content: oklch(15% 0.015 250);
+  --radius-selector: 0.375rem;
+  --radius-field: 0.375rem;
+  --radius-box: 0.5rem;
   --border: 1px;
 }
 
-/* ── Honeycomb token vars (raw access for components) ─────────── */
+/* ── Design tokens (raw access) ──────────────────────────────── */
 :root {
-  --hc-paper: #FBF8F3;
-  --hc-surface: #FFFFFF;
-  --hc-surface-warm: #F5EFE6;
-  --hc-hover: #F1E9DC;
-  --hc-divider: #EBE2D2;
-  --hc-ink: #1F1B16;
-  --hc-ink-2: #3D352C;
-  --hc-ink-3: #6B6157;
-  --hc-ink-4: #9A9085;
-  --hc-ink-5: #C4B9AC;
-  --hc-accent: #C8741A;
-  --hc-accent-soft: #F4E4CB;
-  --hc-accent-bg: #FBF1E2;
+  --hm-white: #ffffff;
+  --hm-gray-50: #f8fafc;
+  --hm-gray-100: #f1f5f9;
+  --hm-gray-200: #e2e8f0;
+  --hm-gray-300: #cbd5e1;
+  --hm-gray-400: #94a3b8;
+  --hm-gray-500: #64748b;
+  --hm-gray-600: #475569;
+  --hm-gray-700: #334155;
+  --hm-gray-800: #1e293b;
+  --hm-gray-900: #0f172a;
+  --hm-blue: #2563eb;
+  --hm-blue-light: #eff6ff;
+  --hm-red: #ef4444;
+  --hm-red-light: #fef2f2;
 
-  --hc-shadow-1: 0 1px 2px rgba(31, 27, 22, 0.04), 0 1px 1px rgba(31, 27, 22, 0.03);
-  --hc-shadow-2: 0 4px 14px rgba(31, 27, 22, 0.06), 0 1px 2px rgba(31, 27, 22, 0.04);
-  --hc-shadow-3: 0 12px 32px rgba(31, 27, 22, 0.10), 0 2px 6px rgba(31, 27, 22, 0.06);
+  --hm-shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --hm-shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --hm-shadow-md: 0 4px 6px rgba(15, 23, 42, 0.05), 0 2px 4px rgba(15, 23, 42, 0.03);
 }
 
 body {
   margin: 0;
-  font-family: 'Inter Tight', 'DM Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   font-feature-settings: 'cv11', 'ss01';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 ::selection {
-  background: var(--hc-accent-soft);
-  color: var(--hc-ink);
+  background: oklch(90% 0.1 260);
+  color: var(--hm-gray-900);
 }
 
-/* Display / serif — Fraunces, with optical sizing dialled for headlines */
+/* Display font — Inter bold for headlines (no serif, pure tech) */
 .font-display,
 .font-serif {
-  font-family: 'Fraunces', 'Source Serif Pro', Georgia, serif;
-  font-optical-sizing: auto;
-  letter-spacing: -0.02em;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.03em;
 }
 
 .font-mono {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
 }
 
-/* Honeycomb shadow utilities */
-.shadow-hc-1 { box-shadow: var(--hc-shadow-1); }
-.shadow-hc-2 { box-shadow: var(--hc-shadow-2); }
-.shadow-hc-3 { box-shadow: var(--hc-shadow-3); }
+/* Shadow utilities */
+.shadow-hm-xs { box-shadow: var(--hm-shadow-xs); }
+.shadow-hm-sm { box-shadow: var(--hm-shadow-sm); }
+.shadow-hm-md { box-shadow: var(--hm-shadow-md); }
 
 /* ── Scroll-reveal ───────────────────────────── */
 .reveal {
   opacity: 0;
-  transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-              transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
   will-change: opacity, transform;
 }
-.reveal-up    { transform: translateY(22px); }
-.reveal-down  { transform: translateY(-22px); }
-.reveal-left  { transform: translateX(22px); }
-.reveal-right { transform: translateX(-22px); }
+.reveal-up    { transform: translateY(24px); }
+.reveal-down  { transform: translateY(-24px); }
+.reveal-left  { transform: translateX(24px); }
+.reveal-right { transform: translateX(-24px); }
 .reveal.revealed {
   opacity: 1;
   transform: translate(0, 0);
@@ -152,41 +149,74 @@ body {
   .reveal { opacity: 1; transform: none; transition: none; }
 }
 
-/* ── Ambient decorative animations ─────────── */
-@keyframes drift {
-  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
-  50%      { transform: translate3d(-6px, -10px, 0) rotate(-2deg); }
-}
-.anim-drift { animation: drift 7s ease-in-out infinite; }
+/* ── Premium animations ──────────────────────── */
 
-@keyframes drift-rev {
-  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
-  50%      { transform: translate3d(8px, -12px, 0) rotate(2deg); }
+/* Gradient shimmer on borders */
+@keyframes gradient-x {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
 }
-.anim-drift-rev { animation: drift-rev 8s ease-in-out infinite; }
+.animate-gradient-x {
+  background-size: 200% 200%;
+  animation: gradient-x 3s ease infinite;
+}
 
-@keyframes bob {
+/* Floating element */
+@keyframes float {
   0%, 100% { transform: translateY(0); }
-  50%      { transform: translateY(-6px); }
+  50% { transform: translateY(-8px); }
 }
-.anim-bob { animation: bob 4s ease-in-out infinite; }
-
-@keyframes twinkle {
-  0%, 100% { opacity: 0.2; transform: scale(0.85); }
-  50%      { opacity: 1;   transform: scale(1.1); }
+.animate-float {
+  animation: float 4s ease-in-out infinite;
 }
-.anim-twinkle { animation: twinkle 3.5s ease-in-out infinite; }
 
-@keyframes shimmer {
-  0%   { background-position: -200% 0; }
+/* Slow spin */
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.animate-spin-slow {
+  animation: spin-slow 20s linear infinite;
+}
+
+/* Pulse glow */
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.05); }
+}
+.animate-pulse-glow {
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+/* Gradient text shimmer */
+@keyframes text-shimmer {
+  0% { background-position: -100% 0; }
   100% { background-position: 200% 0; }
 }
-
-/* Honeycomb hex-cluster ambient pattern (kept; warm tone now) */
-.bg-honeycomb {
-  background-image:
-    radial-gradient(circle at 10% 20%, color-mix(in oklch, var(--hc-accent) 12%, transparent) 0, color-mix(in oklch, var(--hc-accent) 12%, transparent) 8px, transparent 8px),
-    radial-gradient(circle at 50% 60%, color-mix(in oklch, var(--hc-accent) 12%, transparent) 0, color-mix(in oklch, var(--hc-accent) 12%, transparent) 8px, transparent 8px),
-    radial-gradient(circle at 90% 20%, color-mix(in oklch, var(--hc-accent) 12%, transparent) 0, color-mix(in oklch, var(--hc-accent) 12%, transparent) 8px, transparent 8px);
-  background-size: 120px 140px;
+.animate-text-shimmer {
+  background-size: 200% auto;
+  animation: text-shimmer 4s linear infinite;
 }
+
+/* Border glow pulse */
+@keyframes border-pulse {
+  0%, 100% { border-color: rgba(37, 99, 235, 0.2); }
+  50% { border-color: rgba(168, 85, 247, 0.4); }
+}
+.animate-border-pulse {
+  animation: border-pulse 3s ease-in-out infinite;
+}
+
+/* Stagger children reveal helper */
+.stagger-children > * {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.stagger-children.revealed > *:nth-child(1) { transition-delay: 0ms; opacity: 1; transform: none; }
+.stagger-children.revealed > *:nth-child(2) { transition-delay: 80ms; opacity: 1; transform: none; }
+.stagger-children.revealed > *:nth-child(3) { transition-delay: 160ms; opacity: 1; transform: none; }
+.stagger-children.revealed > *:nth-child(4) { transition-delay: 240ms; opacity: 1; transform: none; }
+.stagger-children.revealed > *:nth-child(5) { transition-delay: 320ms; opacity: 1; transform: none; }
+.stagger-children.revealed > *:nth-child(6) { transition-delay: 400ms; opacity: 1; transform: none; }

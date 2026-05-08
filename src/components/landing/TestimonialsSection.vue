@@ -1,132 +1,96 @@
 <script setup lang="ts">
-import rawGranny from '@/assets/avatars/granny.svg?raw'
-import rawHippie from '@/assets/avatars/hippie.svg?raw'
-import rawBrownDude from '@/assets/avatars/brown-dude.svg?raw'
-import rawBrownLady from '@/assets/avatars/brown-lady.svg?raw'
-import rawBeardGuy from '@/assets/avatars/beard-guy.svg?raw'
-import { prefixSvgIds } from '@/utils/svg'
+import FlowingGradient from './FlowingGradient.vue'
 
 const testimonials = [
   {
-    avatar: prefixSvgIds(rawBrownLady, 'tm-bl'),
-    quote: 'Our VA took over inbox triage and listing research in week one. Two months in, my close rate is up and I\'m finally home for dinner.',
+    quote: 'My VA took over lead follow-up and transaction coordination in week one. Two months in, I closed 3 extra deals because I wasn\'t buried in paperwork. I\'m finally home for dinner.',
     name: 'Alana J.',
     role: 'Real Estate Broker, Austin TX'
   },
   {
-    avatar: prefixSvgIds(rawBeardGuy, 'tm-bg'),
-    quote: 'I was paying three U.S. contractors to half-do what one BuzzyBee VA now owns end-to-end. The EOD reports alone are a revelation.',
+    quote: 'I was paying a part-time TC $25/hour to do half of what my HiveMind VA now handles full-time. The EOD reports alone keep me more organized than I\'ve ever been.',
     name: 'Marcus T.',
-    role: 'Founder, Ecom DTC Brand'
+    role: 'Team Lead, Phoenix AZ'
   },
   {
-    avatar: prefixSvgIds(rawBrownDude, 'tm-bd'),
-    quote: 'The vetting is real. The first match nailed our brand voice by call two. I keep recommending BuzzyBee to every founder I know.',
-    name: 'Dev P.',
-    role: 'Agency Owner, New York'
+    quote: 'She knew Dotloop and Follow Up Boss on day one. I didn\'t have to explain what a listing agreement was. That\'s the difference between this and hiring off Fiverr.',
+    name: 'Sarah K.',
+    role: 'Solo Agent, Charlotte NC'
   },
   {
-    avatar: prefixSvgIds(rawGranny, 'tm-gr'),
-    quote: 'I\'m not a tech person. The dashboard just works. Time tracking, reports, and invoices are all in one place and I finally stopped missing things.',
-    name: 'Joan W.',
-    role: 'CPA, Solo Practice'
+    quote: 'We brought on two VAs for our 6-agent team. They handle all the CRM, social media, and transaction files. My agents are producing 30% more because they only do dollar-productive work now.',
+    name: 'David R.',
+    role: 'Brokerage Owner, Denver CO'
   },
   {
-    avatar: prefixSvgIds(rawHippie, 'tm-hp'),
-    quote: 'They pair you with someone who actually lives in your workflow. Ours is a Notion and ClickUp wizard. Huge upgrade over the marketplace route.',
-    name: 'Riley M.',
-    role: 'Ops Lead, SaaS Startup'
+    quote: 'The speed-to-lead difference is insane. My VA responds to every new inquiry within 3 minutes. My conversion rate from lead to appointment doubled in the first month.',
+    name: 'Jennifer M.',
+    role: 'Luxury Agent, Miami FL'
   }
 ]
 </script>
 
 <template>
-  <section
-    id="testimonials"
-    class="relative py-24 md:py-32 overflow-hidden"
-    style="background: linear-gradient(180deg, oklch(93% 0.05 175 / 0.5) 0%, oklch(95% 0.028 80) 100%);"
-  >
-    <!-- Background wash -->
-    <div
-      class="absolute inset-0 pointer-events-none"
-      style="background:
-        radial-gradient(ellipse 40% 30% at 15% 20%, oklch(90% 0.08 85 / 0.35) 0%, transparent 60%),
-        radial-gradient(ellipse 40% 30% at 85% 80%, oklch(88% 0.1 175 / 0.4) 0%, transparent 65%);"
-    ></div>
+  <section id="testimonials" class="relative py-24 md:py-32 border-t border-base-300 bg-base-200 overflow-hidden">
+    <div class="absolute inset-0 pointer-events-none">
+      <FlowingGradient :opacity="0.07" :speed="0.4" tone="purple" />
+    </div>
 
-    <div class="relative max-w-7xl mx-auto px-6">
+    <div class="relative max-w-6xl mx-auto px-6">
       <!-- Header -->
-      <div v-reveal class="max-w-2xl mb-16">
-        <div class="inline-flex items-center gap-2 rounded-full bg-secondary/40 px-3 py-1 text-xs font-medium tracking-wide mb-4">
-          <span class="text-base-content/80">Testimonials</span>
+      <div v-reveal class="max-w-2xl mb-14">
+        <div class="flex items-center gap-3 mb-3">
+          <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-purple-500"></div>
+          <span class="text-xs font-medium uppercase tracking-wider text-primary">Results</span>
         </div>
-        <h2 class="font-display text-4xl md:text-5xl font-semibold tracking-tight leading-tight">
-          Founders who got their
-          <span class="italic text-primary">evenings back</span>.
+        <h2 class="font-display text-3xl md:text-4xl tracking-tight leading-tight text-base-content">
+          Agents who got their weekends back.
         </h2>
-        <p class="mt-5 text-lg text-base-content/70 leading-relaxed">
-          What real operators say after their first 60 days on the platform.
+        <p class="mt-4 text-base text-base-content/60 leading-relaxed">
+          What real estate professionals say after their first 60 days.
         </p>
       </div>
 
-      <!-- Masonry-ish grid: 1 featured + 4 standard -->
-      <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-        <!-- Featured card spans 2 cols on lg -->
-        <article v-reveal class="relative rounded-3xl bg-base-100 border border-base-300 p-7 md:p-8 lg:col-span-2 shadow-sm hover:shadow-lg transition-shadow flex flex-col">
-          <div class="flex items-center justify-between mb-5">
-            <svg class="w-10 h-10 text-primary" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M7 7h4v4H7c0 3 2 4 2 4H5s-2-1-2-4V7c0-2 2-2 2-2h2v2zm10 0h4v4h-4c0 3 2 4 2 4h-4s-2-1-2-4V7c0-2 2-2 2-2h2v2z" opacity="0.25" />
-              <path d="M3 11c0-3.5 2.5-6 6-6v3c-2 0-3 1.5-3 3v1h4v6H3zm12 0c0-3.5 2.5-6 6-6v3c-2 0-3 1.5-3 3v1h4v6h-7z" />
-            </svg>
-            <div class="flex gap-0.5">
-              <svg v-for="n in 5" :key="n" class="w-5 h-5 text-primary" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M12 2l2.9 6.9L22 10l-5.5 4.8L18 22l-6-3.6L6 22l1.5-7.2L2 10l7.1-1.1z" />
-              </svg>
-            </div>
-          </div>
-          <p class="font-display text-2xl md:text-3xl leading-snug text-base-content/90 mb-7">
+      <!-- Testimonial grid -->
+      <div v-reveal="100" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <!-- Featured -->
+        <div class="relative border border-base-300 rounded-lg p-8 bg-base-100 lg:col-span-2 flex flex-col">
+          <div class="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-primary via-purple-500 to-transparent"></div>
+          <svg class="w-6 h-6 text-primary/30 mb-4" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 11c0-3.5 2.5-6 6-6v3c-2 0-3 1.5-3 3v1h4v6H3zm12 0c0-3.5 2.5-6 6-6v3c-2 0-3 1.5-3 3v1h4v6h-7z" />
+          </svg>
+          <p class="text-lg font-medium leading-relaxed text-base-content/90 mb-6">
             {{ testimonials[0].quote }}
           </p>
-          <div class="mt-auto flex items-center gap-4">
-            <div class="w-14 h-14 rounded-full overflow-hidden ring-2 ring-primary/20 transition-transform duration-300 hover:scale-110" v-html="testimonials[0].avatar" />
+          <div class="mt-auto flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-purple-500 flex items-center justify-center">
+              <span class="text-xs font-semibold text-white">{{ testimonials[0].name[0] }}</span>
+            </div>
             <div>
-              <div class="font-semibold text-base-content">{{ testimonials[0].name }}</div>
-              <div class="text-sm text-base-content/60">{{ testimonials[0].role }}</div>
+              <div class="text-sm font-medium text-base-content">{{ testimonials[0].name }}</div>
+              <div class="text-xs text-base-content/50">{{ testimonials[0].role }}</div>
             </div>
           </div>
-        </article>
+        </div>
 
         <!-- Standard cards -->
-        <article
-          v-for="(t, i) in testimonials.slice(1)"
+        <div
+          v-for="t in testimonials.slice(1)"
           :key="t.name"
-          v-reveal="(i + 1) * 80"
-          class="relative rounded-3xl bg-base-100 border border-base-300 p-6 md:p-7 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col"
+          class="relative border border-base-300 rounded-lg p-6 bg-base-100 flex flex-col hover:border-primary/20 transition-colors"
         >
-          <!-- 5-star row -->
-          <div class="flex gap-0.5 mb-4">
-            <svg v-for="n in 5" :key="n" class="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M12 2l2.9 6.9L22 10l-5.5 4.8L18 22l-6-3.6L6 22l1.5-7.2L2 10l7.1-1.1z" />
-            </svg>
-          </div>
-          <p class="text-base-content/80 leading-relaxed mb-6">{{ t.quote }}</p>
-          <div class="mt-auto flex items-center gap-3 pt-5 border-t border-base-300">
-            <div class="w-11 h-11 rounded-full overflow-hidden ring-2 ring-secondary/40" v-html="t.avatar" />
+          <p class="text-sm text-base-content/70 leading-relaxed mb-5">{{ t.quote }}</p>
+          <div class="mt-auto flex items-center gap-3 pt-4 border-t border-base-300">
+            <div class="w-7 h-7 rounded-full bg-gradient-to-br from-primary/80 to-purple-500/80 flex items-center justify-center">
+              <span class="text-[10px] font-semibold text-white">{{ t.name[0] }}</span>
+            </div>
             <div>
-              <div class="font-semibold text-sm">{{ t.name }}</div>
-              <div class="text-xs text-base-content/60">{{ t.role }}</div>
+              <div class="text-xs font-medium text-base-content">{{ t.name }}</div>
+              <div class="text-[11px] text-base-content/50">{{ t.role }}</div>
             </div>
           </div>
-        </article>
+        </div>
       </div>
     </div>
   </section>
 </template>
-
-<style scoped>
-.rounded-full :deep(svg) {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-</style>
