@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import hivemindMark from '@/assets/landing/hivemind-mark.svg'
 
 const mobileOpen = ref(false)
 </script>
@@ -8,18 +9,17 @@ const mobileOpen = ref(false)
   <header class="fixed top-0 left-0 right-0 z-50 bg-base-100/90 backdrop-blur-md border-b border-base-300">
     <div class="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
       <a href="/" class="flex items-center gap-2">
-        <div class="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-          </svg>
-        </div>
+        <img :src="hivemindMark" alt="HiveMind" class="w-7 h-auto" />
         <span class="text-base font-semibold tracking-tight">HiveMind</span>
       </a>
 
       <nav class="hidden md:flex items-center gap-7 text-[13px]">
-        <a href="#pain" class="text-base-content/60 hover:text-base-content transition-colors">Problem</a>
         <a href="#how" class="text-base-content/60 hover:text-base-content transition-colors">How It Works</a>
-        <a href="#services" class="text-base-content/60 hover:text-base-content transition-colors">Services</a>
+        <a href="#platform" class="text-base-content/60 hover:text-base-content transition-colors">Platform</a>
+        <a href="#hivemind-ai" class="text-base-content/60 hover:text-base-content transition-colors inline-flex items-center gap-1">
+          HiveMind AI
+          <span class="text-[8px] font-bold uppercase tracking-wider bg-gradient-to-r from-primary to-purple-500 text-white px-1 py-0.5 rounded">New</span>
+        </a>
         <a href="#pricing" class="text-base-content/60 hover:text-base-content transition-colors">Pricing</a>
         <a href="#faq" class="text-base-content/60 hover:text-base-content transition-colors">FAQ</a>
       </nav>

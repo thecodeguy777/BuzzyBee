@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import FlowingGradient from './FlowingGradient.vue'
 import { Phone, Users, Rocket, Headphones, TrendingUp } from 'lucide-vue-next'
+import discoveryImg from '@/assets/landing/how-discovery-call.png'
+import managedImg from '@/assets/landing/how-managed-call.png'
+import teamImg from '@/assets/landing/how-team-call.png'
 
 const steps = [
   { num: '01', title: 'Discovery call', body: 'A 20-minute call to understand your business: team size, transaction volume, tools you use, and what\'s eating your time.', icon: Phone },
@@ -50,6 +53,34 @@ const steps = [
             <div class="font-mono text-[10px] tracking-wider text-primary/60 mb-1">{{ step.num }}</div>
             <h3 class="text-sm font-semibold text-base-content mb-2">{{ step.title }}</h3>
             <p class="text-xs text-base-content/55 leading-relaxed">{{ step.body }}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Three supporting visuals: discovery, managed, scale -->
+      <div v-reveal="200" class="mt-14 grid md:grid-cols-3 gap-5">
+        <div class="relative rounded-xl overflow-hidden border border-base-300 shadow-sm aspect-[4/3] group">
+          <img :src="discoveryImg" alt="Discovery call" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          <div class="absolute inset-0 bg-gradient-to-t from-base-content/70 to-transparent"></div>
+          <div class="absolute bottom-0 left-0 right-0 p-4">
+            <div class="text-[10px] uppercase tracking-wider text-white/70 mb-1">Step 01</div>
+            <div class="text-sm font-semibold text-white">Discovery Call</div>
+          </div>
+        </div>
+        <div class="relative rounded-xl overflow-hidden border border-base-300 shadow-sm aspect-[4/3] group">
+          <img :src="managedImg" alt="Managed support video call" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          <div class="absolute inset-0 bg-gradient-to-t from-base-content/70 to-transparent"></div>
+          <div class="absolute bottom-0 left-0 right-0 p-4">
+            <div class="text-[10px] uppercase tracking-wider text-white/70 mb-1">Step 04</div>
+            <div class="text-sm font-semibold text-white">Managed Support</div>
+          </div>
+        </div>
+        <div class="relative rounded-xl overflow-hidden border border-base-300 shadow-sm aspect-[4/3] group">
+          <img :src="teamImg" alt="Scaled team meeting" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          <div class="absolute inset-0 bg-gradient-to-t from-base-content/70 to-transparent"></div>
+          <div class="absolute bottom-0 left-0 right-0 p-4">
+            <div class="text-[10px] uppercase tracking-wider text-white/70 mb-1">Step 05</div>
+            <div class="text-sm font-semibold text-white">Scale Your Team</div>
           </div>
         </div>
       </div>

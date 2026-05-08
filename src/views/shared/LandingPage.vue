@@ -4,6 +4,7 @@ import HeroSection from '@/components/landing/HeroSection.vue'
 import PainPointsSection from '@/components/landing/PainPointsSection.vue'
 import HowItWorksSection from '@/components/landing/HowItWorksSection.vue'
 import PlatformSection from '@/components/landing/PlatformSection.vue'
+import HiveMindAISection from '@/components/landing/HiveMindAISection.vue'
 import ServicesSection from '@/components/landing/ServicesSection.vue'
 import WhyUsSection from '@/components/landing/WhyUsSection.vue'
 import PricingSection from '@/components/landing/PricingSection.vue'
@@ -20,6 +21,7 @@ import SiteFooter from '@/components/landing/SiteFooter.vue'
     <PainPointsSection />
     <HowItWorksSection />
     <PlatformSection />
+    <HiveMindAISection />
     <ServicesSection />
     <WhyUsSection />
     <PricingSection />

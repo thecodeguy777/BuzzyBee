@@ -19,7 +19,6 @@ const services = [
     icon: FileStack,
     tasks: [
       'Contract-to-close file management',
-      'Coordinate inspections, appraisals, and title',
       'Deadline tracking and compliance checklists',
       'Communication with all parties (lenders, attorneys, agents)',
       'Dotloop, SkySlope, and DocuSign management'

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import hivemindMark from '@/assets/landing/hivemind-mark.svg'
+
 const year = new Date().getFullYear()
 
 const columns = [
@@ -37,11 +39,7 @@ const columns = [
         <!-- Brand -->
         <div class="sm:col-span-4 md:col-span-1">
           <a href="/" class="flex items-center gap-2 mb-3">
-            <div class="w-6 h-6 rounded bg-primary flex items-center justify-center">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-              </svg>
-            </div>
+            <img :src="hivemindMark" alt="HiveMind" class="w-6 h-auto" />
             <span class="text-sm font-semibold tracking-tight">HiveMind</span>
           </a>
           <p class="text-xs text-base-content/50 leading-relaxed max-w-xs">
@@ -62,7 +60,10 @@ const columns = [
 
       <!-- Bottom row -->
       <div class="mt-8 pt-5 border-t border-base-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-[11px] text-base-content/40">
-        <div>&copy; {{ year }} HiveMind. All rights reserved.</div>
+        <div class="flex items-center gap-2.5">
+          <img :src="hivemindMark" alt="HiveMind" class="w-5 h-auto opacity-80" />
+          <span>&copy; {{ year }} HiveMind. All rights reserved.</span>
+        </div>
         <div class="flex items-center gap-4">
           <a href="#" class="hover:text-primary transition-colors">Privacy</a>
           <a href="#" class="hover:text-primary transition-colors">Terms</a>

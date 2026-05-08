@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import FlowingGradient from './FlowingGradient.vue'
 import { PhoneMissed, Clock, DollarSign } from 'lucide-vue-next'
+import painImg from '@/assets/landing/pain-laptop-paperwork.png'
 
 const painPoints = [
   {
@@ -44,6 +45,17 @@ const painPoints = [
         <p class="mt-4 text-base text-base-content/60 leading-relaxed">
           The average top-producing realtor spends more time on coordination than actual selling. Meanwhile, leads are going cold and deals are slipping through the cracks.
         </p>
+      </div>
+
+      <!-- Banner image: paperwork drowning the realtor -->
+      <div v-reveal="50" class="mb-10 rounded-2xl overflow-hidden border border-base-300 shadow-md aspect-[2.5/1] relative">
+        <img :src="painImg" alt="Realtor buried in paperwork at laptop" class="w-full h-full object-cover" />
+        <div class="absolute inset-0 bg-gradient-to-r from-base-100/80 via-base-100/0 to-base-100/0"></div>
+        <div class="absolute inset-0 flex items-center px-8 md:px-12">
+          <p class="text-base md:text-xl font-display font-medium text-base-content/85 max-w-md">
+            Every contract, every signature, every chase. <em class="text-secondary">Time you'll never get back.</em>
+          </p>
+        </div>
       </div>
 
       <!-- Pain point cards -->

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import FlowingGradient from './FlowingGradient.vue'
 import { GraduationCap, Monitor, Heart, Zap } from 'lucide-vue-next'
+import teamNetworkImg from '@/assets/landing/why-team-network.png'
 
 const pillars = [
   {
@@ -41,8 +42,9 @@ const pillars = [
     </div>
 
     <div class="relative max-w-6xl mx-auto px-6">
-      <!-- Header -->
-      <div v-reveal class="max-w-2xl mb-14">
+      <!-- Header with side-by-side visual -->
+      <div class="grid lg:grid-cols-[1fr_minmax(0,360px)] gap-10 items-center mb-14">
+        <div v-reveal class="max-w-2xl">
         <div class="flex items-center gap-3 mb-3">
           <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-purple-500"></div>
           <span class="text-xs font-medium uppercase tracking-wider text-primary">Why HiveMind</span>
@@ -53,6 +55,13 @@ const pillars = [
         <p class="mt-4 text-base text-base-content/60 leading-relaxed">
           Most VA services give you a generic admin who needs 3 months to learn your industry. We give you someone who already knows it, managed by people who've run the playbook inside leading agencies.
         </p>
+        </div>
+
+        <!-- Team network visual -->
+        <div v-reveal="100" class="hidden lg:block relative aspect-[4/3] rounded-2xl overflow-hidden border border-base-300 shadow-lg">
+          <img :src="teamNetworkImg" alt="VA connected to a team network" class="w-full h-full object-cover" />
+          <div class="absolute inset-0 bg-gradient-to-tr from-primary/15 via-transparent to-purple-500/10 pointer-events-none"></div>
+        </div>
       </div>
 
       <!-- Pillar cards -->

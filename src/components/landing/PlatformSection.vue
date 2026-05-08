@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import FlowingGradient from './FlowingGradient.vue'
+import PlatformDashboardMock from './PlatformDashboardMock.vue'
 import { Clock, LayoutList, MessageCircle, FileText, BookOpen, BarChart3 } from 'lucide-vue-next'
 
 const tools = [
@@ -121,47 +122,9 @@ const tools = [
         </div>
       </div>
 
-      <!-- Dashboard mockup -->
-      <div v-reveal="200" class="mt-12 border border-base-300 rounded-lg overflow-hidden bg-base-100 shadow-md">
-        <!-- Browser chrome -->
-        <div class="flex items-center gap-2 px-4 py-2.5 bg-base-200 border-b border-base-300">
-          <div class="flex gap-1.5">
-            <div class="w-2.5 h-2.5 rounded-full bg-red-400"></div>
-            <div class="w-2.5 h-2.5 rounded-full bg-yellow-400"></div>
-            <div class="w-2.5 h-2.5 rounded-full bg-green-400"></div>
-          </div>
-          <div class="flex-1 mx-4">
-            <div class="bg-base-100 border border-base-300 rounded px-3 py-1 text-[10px] text-base-content/40 text-center">app.hivemind.co/dashboard</div>
-          </div>
-        </div>
-        <!-- Dashboard content mockup -->
-        <div class="p-6 grid grid-cols-12 gap-4">
-          <!-- Sidebar -->
-          <div class="col-span-2 space-y-2 hidden md:block">
-            <div class="h-6 bg-primary/10 rounded w-full"></div>
-            <div class="h-4 bg-base-200 rounded w-3/4"></div>
-            <div class="h-4 bg-base-200 rounded w-full"></div>
-            <div class="h-4 bg-base-200 rounded w-5/6"></div>
-            <div class="h-4 bg-base-200 rounded w-2/3"></div>
-            <div class="h-4 bg-base-200 rounded w-full"></div>
-          </div>
-          <!-- Main area -->
-          <div class="col-span-12 md:col-span-7 space-y-3">
-            <div class="flex gap-3">
-              <div class="h-20 flex-1 bg-gradient-to-br from-primary/10 to-purple-500/10 border border-primary/15 rounded-lg"></div>
-              <div class="h-20 flex-1 bg-gradient-to-br from-primary/10 to-purple-500/10 border border-primary/15 rounded-lg"></div>
-              <div class="h-20 flex-1 bg-gradient-to-br from-primary/10 to-purple-500/10 border border-primary/15 rounded-lg"></div>
-            </div>
-            <div class="h-32 bg-base-200 rounded-lg border border-base-300"></div>
-            <div class="h-24 bg-base-200 rounded-lg border border-base-300"></div>
-          </div>
-          <!-- Right panel -->
-          <div class="col-span-3 space-y-3 hidden md:block">
-            <div class="h-16 bg-base-200 rounded-lg border border-base-300"></div>
-            <div class="h-28 bg-base-200 rounded-lg border border-base-300"></div>
-            <div class="h-16 bg-gradient-to-br from-primary/5 to-purple-500/5 border border-primary/10 rounded-lg"></div>
-          </div>
-        </div>
+      <!-- Live Dashboard Mockup — actual HiveFlow Kanban with realistic real-estate tasks -->
+      <div v-reveal="200" class="mt-12">
+        <PlatformDashboardMock />
       </div>
 
       <!-- Bottom note -->
