@@ -9,3 +9,9 @@ dist-landing
 node_modules/.tmp
 *.log
 .claude/
+
+# Electron build outputs
+electron/dist-main/
+electron/dist-renderer/
+electron/release/
+electron/node_modules/
