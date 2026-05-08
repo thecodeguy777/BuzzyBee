@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import FlowingGradient from './FlowingGradient.vue'
+import AmbientGradient from './AmbientGradient.vue'
 import { Mic, Sparkles, Shield, Search, Zap, ListChecks, Layers, X, MousePointerClick, Bookmark } from 'lucide-vue-next'
 </script>
 
@@ -7,7 +7,7 @@ import { Mic, Sparkles, Shield, Search, Zap, ListChecks, Layers, X, MousePointer
   <section id="hivemind-ai" class="relative py-24 md:py-32 border-t border-base-300 overflow-hidden bg-base-100">
     <!-- Ambient gradient -->
     <div class="absolute inset-0 pointer-events-none">
-      <FlowingGradient :opacity="0.08" :speed="0.7" tone="purple" />
+      <AmbientGradient :opacity="0.12" tone="purple" />
     </div>
 
     <div class="relative max-w-6xl mx-auto px-6">

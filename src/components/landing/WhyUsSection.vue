@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import FlowingGradient from './FlowingGradient.vue'
+import AmbientGradient from './AmbientGradient.vue'
 import { GraduationCap, Monitor, Heart, Zap } from 'lucide-vue-next'
-import teamNetworkImg from '@/assets/landing/why-team-network.png'
+import teamNetworkImg from '@/assets/landing/why-team-network.webp'
 
 const pillars = [
   {
@@ -38,7 +38,7 @@ const pillars = [
 <template>
   <section id="why" class="relative py-24 md:py-32 border-t border-base-300 bg-base-200 overflow-hidden">
     <div class="absolute inset-0 pointer-events-none">
-      <FlowingGradient :opacity="0.09" :speed="0.6" tone="purple" />
+      <AmbientGradient :opacity="0.13" tone="purple" />
     </div>
 
     <div class="relative max-w-6xl mx-auto px-6">
@@ -59,7 +59,7 @@ const pillars = [
 
         <!-- Team network visual -->
         <div v-reveal="100" class="hidden lg:block relative aspect-[4/3] rounded-2xl overflow-hidden border border-base-300 shadow-lg">
-          <img :src="teamNetworkImg" alt="VA connected to a team network" class="w-full h-full object-cover" />
+          <img :src="teamNetworkImg" alt="VA connected to a team network" class="w-full h-full object-cover" loading="lazy" decoding="async" />
           <div class="absolute inset-0 bg-gradient-to-tr from-primary/15 via-transparent to-purple-500/10 pointer-events-none"></div>
         </div>
       </div>

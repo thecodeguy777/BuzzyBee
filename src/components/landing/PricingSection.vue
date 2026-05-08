@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import FlowingGradient from './FlowingGradient.vue'
+import AmbientGradient from './AmbientGradient.vue'
 
 const commonFeatures = [
   'Pre-vetted Filipino VA (top 3% of applicants)',
@@ -79,7 +79,7 @@ const currentDiscount = computed(() => cycles.find(c => c.key === selectedCycle.
 <template>
   <section id="pricing" class="relative py-24 md:py-32 border-t border-base-300 overflow-hidden">
     <div class="absolute inset-0 pointer-events-none">
-      <FlowingGradient :opacity="0.08" :speed="0.5" tone="mixed" />
+      <AmbientGradient :opacity="0.12" tone="mixed" />
     </div>
 
     <div class="relative max-w-6xl mx-auto px-6">

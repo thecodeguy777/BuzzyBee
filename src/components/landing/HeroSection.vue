@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import FlowingGradient from './FlowingGradient.vue'
-import realtorImg from '@/assets/landing/hero-realtor-home.png'
-import vaImg from '@/assets/landing/hero-va-call.png'
+import realtorImg from '@/assets/landing/hero-realtor-home.webp'
+import vaImg from '@/assets/landing/hero-va-call.webp'
 </script>
 
 <template>
@@ -73,14 +73,14 @@ import vaImg from '@/assets/landing/hero-va-call.png'
         <div class="hidden lg:block relative h-[480px]">
           <!-- Main realtor portrait -->
           <div class="absolute top-0 right-0 w-[78%] aspect-[4/5] rounded-2xl overflow-hidden shadow-2xl shadow-primary/20 border border-white/40">
-            <img :src="realtorImg" alt="Real estate professional" class="w-full h-full object-cover" />
+            <img :src="realtorImg" alt="Real estate professional" class="w-full h-full object-cover" decoding="async" fetchpriority="high" />
             <!-- Subtle gradient overlay -->
             <div class="absolute inset-0 bg-gradient-to-t from-primary/15 to-transparent pointer-events-none"></div>
           </div>
 
           <!-- Floating VA card overlapping bottom-left -->
           <div class="absolute bottom-0 left-0 w-[58%] aspect-[4/3] rounded-2xl overflow-hidden shadow-2xl shadow-purple-500/20 border-2 border-white/80">
-            <img :src="vaImg" alt="Virtual assistant on call" class="w-full h-full object-cover" />
+            <img :src="vaImg" alt="Virtual assistant on call" class="w-full h-full object-cover" decoding="async" />
             <div class="absolute inset-0 bg-gradient-to-t from-purple-500/10 to-transparent pointer-events-none"></div>
           </div>
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import FlowingGradient from './FlowingGradient.vue'
+import AmbientGradient from './AmbientGradient.vue'
 import { PhoneMissed, Clock, DollarSign } from 'lucide-vue-next'
-import painImg from '@/assets/landing/pain-laptop-paperwork.png'
+import painImg from '@/assets/landing/pain-laptop-paperwork.webp'
 
 const painPoints = [
   {
@@ -29,7 +29,7 @@ const painPoints = [
   <section id="pain" class="relative py-24 md:py-32 border-t border-base-300 overflow-hidden">
     <!-- Flowing gradient bg -->
     <div class="absolute inset-0 pointer-events-none">
-      <FlowingGradient :opacity="0.12" :speed="0.7" tone="purple" />
+      <AmbientGradient :opacity="0.18" tone="purple" />
     </div>
 
     <div class="relative max-w-6xl mx-auto px-6">
@@ -49,7 +49,7 @@ const painPoints = [
 
       <!-- Banner image: paperwork drowning the realtor -->
       <div v-reveal="50" class="mb-10 rounded-2xl overflow-hidden border border-base-300 shadow-md aspect-[2.5/1] relative">
-        <img :src="painImg" alt="Realtor buried in paperwork at laptop" class="w-full h-full object-cover" />
+        <img :src="painImg" alt="Realtor buried in paperwork at laptop" class="w-full h-full object-cover" loading="lazy" decoding="async" />
         <div class="absolute inset-0 bg-gradient-to-r from-base-100/80 via-base-100/0 to-base-100/0"></div>
         <div class="absolute inset-0 flex items-center px-8 md:px-12">
           <p class="text-base md:text-xl font-display font-medium text-base-content/85 max-w-md">

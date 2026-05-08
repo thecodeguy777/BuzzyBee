@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import FlowingGradient from './FlowingGradient.vue'
+import AmbientGradient from './AmbientGradient.vue'
 import PlatformDashboardMock from './PlatformDashboardMock.vue'
 import { Clock, LayoutList, MessageCircle, FileText, BookOpen, BarChart3 } from 'lucide-vue-next'
 
@@ -52,7 +52,7 @@ const tools = [
 <template>
   <section id="platform" class="relative py-24 md:py-32 border-t border-base-300 bg-base-200 overflow-hidden">
     <div class="absolute inset-0 pointer-events-none">
-      <FlowingGradient :opacity="0.1" :speed="0.8" tone="mixed" />
+      <AmbientGradient :opacity="0.15" tone="mixed" />
     </div>
 
     <!-- Floating geometric accents -->

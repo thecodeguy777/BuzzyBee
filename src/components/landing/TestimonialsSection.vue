@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import FlowingGradient from './FlowingGradient.vue'
+import AmbientGradient from './AmbientGradient.vue'
 
 const testimonials = [
   {
@@ -33,7 +33,7 @@ const testimonials = [
 <template>
   <section id="testimonials" class="relative py-24 md:py-32 border-t border-base-300 bg-base-200 overflow-hidden">
     <div class="absolute inset-0 pointer-events-none">
-      <FlowingGradient :opacity="0.07" :speed="0.4" tone="purple" />
+      <AmbientGradient :opacity="0.1" tone="purple" />
     </div>
 
     <div class="relative max-w-6xl mx-auto px-6">

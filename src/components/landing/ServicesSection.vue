@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import FlowingGradient from './FlowingGradient.vue'
+import AmbientGradient from './AmbientGradient.vue'
 import { UserCheck, FileStack, Home, Megaphone, Settings, Search } from 'lucide-vue-next'
 
 const services = [
@@ -74,7 +74,7 @@ const services = [
 <template>
   <section id="services" class="relative py-24 md:py-32 border-t border-base-300 overflow-hidden">
     <div class="absolute inset-0 pointer-events-none">
-      <FlowingGradient :opacity="0.07" :speed="0.5" tone="blue" />
+      <AmbientGradient :opacity="0.1" tone="blue" />
     </div>
 
     <div class="relative max-w-6xl mx-auto px-6">
