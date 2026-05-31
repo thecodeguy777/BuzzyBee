@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HiveMind · Feasibility Study & Technical Memo (v5)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --blue:#2563eb; --blue-dark:#1d4ed8; --blue-light:#eff6ff;
+  --red:#ef4444; --red-light:#fef2f2;
+  --ink:#0f172a; --paper:#fff;
+  --g50:#f8fafc; --g100:#f1f5f9; --g200:#e2e8f0; --g300:#cbd5e1;
+  --g400:#94a3b8; --g500:#64748b; --g600:#475569; --g700:#334155; --g800:#1e293b;
+  --success:#16a34a; --danger:#c0392b;
+  --border:#e2e8f0;
+}
+*,*::before,*::after{ box-sizing:border-box; margin:0; padding:0; }
+
+@page{ size:A4; margin:1in 0.85in; }
+@media print{
+  body{ font-size:10pt; }
+  .page-break{ page-break-before:always; }
+  .no-print{ display:none !important; }
+  section{ page-break-inside:avoid; }
+  h2{ page-break-after:avoid; }
+  table{ page-break-inside:avoid; }
+  .cover{ page-break-after:always; min-height:96vh; }
+  .appwin, .callout, .stat-grid, .tool-grid{ page-break-inside:avoid; }
+}
+
+body{
+  font-family:'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-feature-settings:'cv11','ss01';
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+  color:var(--ink); background:var(--paper);
+  line-height:1.62; max-width:840px; margin:0 auto; padding:0 2rem;
+}
+.font-mono{ font-family:'JetBrains Mono', ui-monospace, monospace; }
+.grad-text{ background:linear-gradient(90deg,var(--blue),#a855f7); -webkit-background-clip:text; background-clip:text; color:transparent; }
+
+/* ── COVER ── */
+.cover{ min-height:100vh; display:flex; flex-direction:column; justify-content:center; padding:3rem 0; position:relative; }
+.cover-grid{
+  position:absolute; inset:0; opacity:.6; pointer-events:none; z-index:0;
+  background-image:linear-gradient(to right,var(--g100) 1px,transparent 1px),linear-gradient(to bottom,var(--g100) 1px,transparent 1px);
+  background-size:48px 48px;
+  -webkit-mask-image:radial-gradient(ellipse 75% 60% at 25% 40%,#000 30%,transparent 75%);
+          mask-image:radial-gradient(ellipse 75% 60% at 25% 40%,#000 30%,transparent 75%);
+}
+.cover > *{ position:relative; z-index:1; }
+.eyebrow{ display:inline-flex; align-items:center; gap:.5rem; font-size:.72rem; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--blue); margin-bottom:1.8rem; }
+.eyebrow .dot{ width:6px; height:6px; border-radius:50%; background:var(--blue); }
+.brand-row{ display:flex; align-items:center; gap:1rem; margin-bottom:1.1rem; }
+.hex{ width:44px; height:54px; color:#1e293b; }
+.brand-name{ font-size:3.6rem; font-weight:800; letter-spacing:-.045em; line-height:.95; }
+.brand-name .mind{ color:var(--blue); }
+.cover .subtitle{ font-size:1.18rem; color:var(--g600); max-width:54ch; line-height:1.55; margin-bottom:2.4rem; }
+.cover-meta{ display:grid; grid-template-columns:1fr 1fr; gap:1rem 2.5rem; border-top:1px solid var(--border); padding-top:1.6rem; max-width:560px; }
+.cover-meta dt{ font-size:.66rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--g400); }
+.cover-meta dd{ font-size:.92rem; font-weight:600; margin-top:.25rem; }
+.confidential{ position:absolute; bottom:2.5rem; left:0; font-size:.66rem; letter-spacing:.12em; text-transform:uppercase; color:var(--g400); border:1px solid var(--border); padding:.4rem .8rem; border-radius:5px; z-index:1; }
+
+/* ── HEADINGS ── */
+h2{ font-size:1.55rem; font-weight:800; letter-spacing:-.03em; color:var(--ink); margin:2.6rem 0 .4rem; padding-bottom:.5rem; border-bottom:2px solid var(--blue); display:inline-block; }
+h2 .n{ color:var(--blue); font-family:'JetBrains Mono',monospace; font-size:1rem; font-weight:600; margin-right:.5rem; vertical-align:.08em; }
+h3{ font-size:1.08rem; font-weight:700; letter-spacing:-.01em; color:var(--ink); margin:1.7rem 0 .5rem; }
+h4{ font-size:.78rem; font-weight:600; text-transform:uppercase; letter-spacing:.07em; color:var(--g400); margin:1.4rem 0 .5rem; }
+p{ margin-bottom:.85rem; color:var(--g700); }
+strong{ font-weight:600; color:var(--ink); }
+a{ color:var(--blue); }
+
+/* ── TABLES ── */
+table{ width:100%; border-collapse:collapse; margin:1.1rem 0 1.6rem; font-size:.88rem; }
+thead th{ background:var(--ink); color:#fff; font-weight:600; font-size:.7rem; letter-spacing:.04em; text-transform:uppercase; padding:.65rem .8rem; text-align:left; }
+thead th:first-child{ border-radius:7px 0 0 0; } thead th:last-child{ border-radius:0 7px 0 0; }
+tbody td{ padding:.6rem .8rem; border-bottom:1px solid var(--border); vertical-align:top; color:var(--g700); }
+tbody td strong{ color:var(--ink); }
+tbody tr:nth-child(even){ background:var(--g50); }
+tbody tr.hl{ background:var(--blue-light); }
+tbody tr.hl td{ color:var(--ink); }
+.tr-r{ text-align:right; } .tr-c{ text-align:center; }
+.pill{ display:inline-block; padding:.12rem .5rem; border-radius:99px; font-size:.7rem; font-weight:600; }
+.pill.g{ background:#dcfce7; color:#15803d; } .pill.b{ background:var(--blue-light); color:var(--blue-dark); }
+.pill.r{ background:var(--red-light); color:#b91c1c; } .pill.y{ background:#fef9c3; color:#a16207; }
+
+/* ── CALLOUTS ── */
+.callout{ background:var(--blue-light); border-left:3px solid var(--blue); padding:.9rem 1.15rem; margin:1.3rem 0; border-radius:0 8px 8px 0; font-size:.92rem; }
+.callout.red{ background:var(--red-light); border-left-color:var(--red); }
+.callout.green{ background:#ecfdf5; border-left-color:var(--success); }
+.callout strong{ display:block; margin-bottom:.2rem; }
+.callout p{ margin:0; color:var(--g600); font-size:.9rem; }
+
+/* ── STAT GRID ── */
+.stat-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--border); border:1px solid var(--border); border-radius:10px; overflow:hidden; margin:1.4rem 0; }
+.stat-grid.c4{ grid-template-columns:repeat(4,1fr); }
+.stat-card{ background:var(--paper); padding:1.1rem; text-align:center; }
+.stat-card .number{ font-size:1.7rem; font-weight:800; letter-spacing:-.03em; color:var(--blue); display:block; line-height:1; }
+.stat-card .number.ink{ color:var(--ink); }
+.stat-card .unit{ font-size:.68rem; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--g400); margin-top:.5rem; display:block; }
+
+/* ── TOC ── */
+.toc{ margin:1.5rem 0; }
+.toc-item{ display:flex; align-items:baseline; padding:.45rem 0; border-bottom:1px dotted var(--g300); font-size:.95rem; }
+.toc-num{ font-family:'JetBrains Mono',monospace; font-size:.78rem; color:var(--blue); margin-right:.9rem; min-width:1.8rem; }
+
+/* ── TWO COL ── */
+.two-col{ display:grid; grid-template-columns:1fr 1fr; gap:1.1rem; margin:1.1rem 0; }
+.two-col > div{ background:var(--g50); border:1px solid var(--border); border-radius:9px; padding:1.1rem 1.2rem; }
+.two-col h4{ margin-top:0; }
+.two-col ul{ margin:0; padding-left:1.1rem; }
+.two-col li{ font-size:.88rem; margin-bottom:.35rem; color:var(--g600); }
+
+/* ── PRODUCT / TOOL CARDS ── */
+.tool-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:.8rem; margin:1.2rem 0 1.6rem; }
+.tool{ border:1px solid var(--border); border-radius:10px; background:var(--paper); padding:.9rem 1rem; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+.tool .tn{ font-size:1rem; font-weight:700; letter-spacing:-.01em; display:inline-block; }
+.tool .tt{ font-size:.64rem; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:var(--g400); margin:.05rem 0 .4rem; }
+.tool p{ font-size:.82rem; line-height:1.45; color:var(--g600); margin-bottom:.5rem; }
+.tool .rep{ font-size:.7rem; color:var(--g400); border-top:1px solid var(--g100); padding-top:.4rem; }
+.tool .rep b{ color:var(--g600); font-weight:600; }
+
+/* ── ARCH DIAGRAM ── */
+.arch{ border:1px solid var(--border); border-radius:10px; overflow:hidden; margin:1.3rem 0; background:var(--g50); }
+.arch-row{ display:grid; grid-template-columns:130px 1fr; border-bottom:1px solid var(--border); }
+.arch-row:last-child{ border-bottom:none; }
+.arch-label{ background:var(--ink); color:#fff; font-size:.7rem; font-weight:600; letter-spacing:.04em; text-transform:uppercase; padding:.7rem .8rem; display:flex; align-items:center; }
+.arch-cells{ display:flex; flex-wrap:wrap; gap:.45rem; padding:.7rem .8rem; background:var(--paper); }
+.arch-cell{ font-size:.78rem; border:1px solid var(--border); border-radius:6px; padding:.3rem .6rem; background:var(--g50); }
+.arch-cell b{ font-weight:600; color:var(--ink); }
+
+/* ── BADGE / STATUS ── */
+.status{ display:inline-flex; align-items:center; gap:.35rem; font-size:.72rem; font-weight:600; padding:.18rem .5rem; border-radius:5px; }
+.status.done{ background:#dcfce7; color:#15803d; }
+.status.prog{ background:var(--blue-light); color:var(--blue-dark); }
+.status.next{ background:var(--g100); color:var(--g500); }
+
+/* ── FOOTER ── */
+.doc-footer{ margin:3.5rem 0 2rem; padding-top:1.3rem; border-top:1px solid var(--border); font-size:.76rem; color:var(--g400); text-align:center; }
+
+@media (max-width:640px){
+  body{ padding:0 1.1rem; }
+  .stat-grid,.stat-grid.c4,.two-col,.tool-grid{ grid-template-columns:1fr; }
+  .brand-name{ font-size:2.4rem; }
+  .arch-row{ grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── LOGO MARK (recolored from BuzzyBee source · indigo gradient + navy) ── -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="hm-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#818cf8"/>
+      <stop offset="1" stop-color="#4f46e5"/>
+    </linearGradient>
+    <symbol id="hm-mark" viewBox="0 0 324 441.19">
+      <path fill="currentColor" d="M323.98,136.55c-.02-1.47-2.04-1.83-2.59-.46-2.8,7.03-7.85,13.08-14.55,17.09l-123.27,73.69-4.35,2.42c-4.73,2.63-9.91,4.08-15.13,4.37-.13,0-.25.01-.38.02-.47.02-.93.02-1.4.02-.47,0-.93,0-1.4-.02-.13,0-.25-.01-.38-.02-5.23-.28-10.41-1.73-15.13-4.37l-4.35-2.42L17.78,153.18c-6.7-4.01-11.75-10.06-14.55-17.09-.55-1.37-2.57-1.01-2.59.46l-.64,42.1c.7,11.48,7.01,21.96,16.98,27.92l96.77,57.85v.18l4.53,2.52,25.12,15.02c5.81,3.48,12.37,5.11,18.91,4.94,6.54.17,13.1-1.46,18.91-4.94l25.12-15.02,4.53-2.52v-.18l96.77-57.85c9.97-5.96,16.28-16.44,16.98-27.92l-.64-42.1Z"/>
+      <path fill="currentColor" d="M323.98,227.14c0-.17-.04-.31-.08-.45-.01-.03-.02-.06-.03-.08-.05-.13-.12-.24-.21-.34-.01-.02-.03-.03-.05-.04-.08-.08-.18-.16-.28-.21-.02-.01-.03-.02-.05-.03-.11-.06-.23-.1-.36-.12-.03,0-.05,0-.08-.01-.13-.02-.26-.03-.39,0-.13.02-.26.06-.38.12-.04.02-.07.04-.1.06-.09.05-.17.11-.24.19-.03.03-.06.06-.09.09-.1.11-.18.24-.24.39-2.8,7.03-7.85,13.08-14.55,17.09l-123.27,73.69s0,0,0,0l-4.35,2.42c-4.73,2.63-9.91,4.08-15.13,4.37-.13,0-.25.01-.38.02-.47.02-.93.02-1.4.02-.47,0-.93,0-1.4-.02-.13,0-.25-.01-.38-.02-5.23-.28-10.41-1.73-15.13-4.37l-4.35-2.42L17.78,243.77c-.84-.5-1.65-1.03-2.43-1.6-.71-.51-1.38-1.05-2.05-1.6-.2-.16-.39-.33-.58-.5-.48-.42-.95-.85-1.4-1.3-.18-.18-.36-.35-.54-.53-.6-.61-1.18-1.24-1.73-1.89-2.45-2.89-4.41-6.16-5.81-9.68-.14-.34-.37-.58-.63-.71-.13-.07-.28-.11-.42-.13h0c-.29-.04-.59.01-.85.15-.13.07-.25.16-.35.27-.2.22-.33.52-.34.88l-.32,21.05L0,269.24c.05.82.14,1.63.24,2.44.03.25.08.5.12.76.09.56.18,1.12.3,1.68.06.28.12.56.18.83.13.55.27,1.1.42,1.64.07.24.13.49.2.73.24.77.49,1.53.78,2.29.25.66.52,1.31.81,1.95.26.58.54,1.14.83,1.7.09.17.18.33.27.5.22.41.45.82.69,1.22.1.16.19.32.29.48.33.54.67,1.07,1.03,1.59.38.54.77,1.08,1.18,1.6.13.17.27.33.41.5.28.35.57.69.86,1.03.17.19.34.38.52.57.28.3.56.61.85.9.19.19.38.38.57.57.29.28.59.56.89.84.2.18.4.36.6.54.32.27.64.54.96.8.2.16.4.33.61.48.36.28.73.55,1.11.81.18.13.36.26.54.38.56.38,1.13.75,1.72,1.1l96.77,57.85v.18l4.53,2.52,1.35.8c14.07,8.41,26.15,19.75,35.44,33.25l3.65,5.31c1.73,2.52,5.45,2.52,7.18,0l3.65-5.3c9.29-13.5,21.38-24.84,35.44-33.25l1.35-.81,4.53-2.52v-.18l96.77-57.85c9.97-5.96,16.28-16.44,16.98-27.92l-.64-42.1Z"/>
+      <path fill="url(#hm-grad)" d="M300.35,104.93l-81.66-47.45c-34.96-20.31-78.12-20.33-113.08-.04L24.27,104.63c-5.18,3-5.23,10.46-.09,13.54l76.11,45.54c38.29,22.91,86.06,22.92,124.36.04l75.79-45.28c5.14-3.07,5.09-10.53-.08-13.54Z"/>
+    </symbol>
+  </defs>
+</svg>
+
+<!-- ═══════════════════ COVER ═══════════════════ -->
+<div class="cover">
+  <div class="cover-grid"></div>
+  <div class="eyebrow"><span class="dot"></span> Feasibility Study &amp; Technical Memo · v5 · Confidential</div>
+  <div class="brand-row">
+    <svg class="hex" viewBox="0 0 324 441.19"><use href="#hm-mark"/></svg>
+    <div class="brand-name">Hive<span class="mind">Mind</span></div>
+  </div>
+  <p class="subtitle">A tech-first managed staffing company placing pre-vetted Filipino virtual assistants with U.S. real estate professionals and SMBs, run on a proprietary platform we have already built.</p>
+  <dl class="cover-meta">
+    <div><dt>Prepared by</dt><dd>Jaymark, Rucela, Jayson &amp; Princess</dd></div>
+    <div><dt>Location</dt><dd>Manila, Philippines</dd></div>
+    <div><dt>Date</dt><dd>2026</dd></div>
+    <div><dt>Status</dt><dd>Draft v5</dd></div>
+  </dl>
+  <div class="confidential">Confidential · Do Not Distribute</div>
+</div>
+
+<!-- ═══════════════════ TOC ═══════════════════ -->
+<div class="page-break"></div>
+<h2>Table of Contents</h2>
+<div class="toc">
+  <div class="toc-item"><span class="toc-num">01</span><span>Executive Summary</span></div>
+  <div class="toc-item"><span class="toc-num">02</span><span>Market Opportunity</span></div>
+  <div class="toc-item"><span class="toc-num">03</span><span>Competitive Landscape</span></div>
+  <div class="toc-item"><span class="toc-num">04</span><span>Business Model &amp; Revenue Architecture</span></div>
+  <div class="toc-item"><span class="toc-num">05</span><span>Technology &amp; Platform <span style="color:var(--g400)">(technical core)</span></span></div>
+  <div class="toc-item"><span class="toc-num">06</span><span>Operations &amp; Service Delivery</span></div>
+  <div class="toc-item"><span class="toc-num">07</span><span>Financial Projections</span></div>
+  <div class="toc-item"><span class="toc-num">08</span><span>Go-to-Market Strategy</span></div>
+  <div class="toc-item"><span class="toc-num">09</span><span>Organization &amp; Work Distribution</span></div>
+  <div class="toc-item"><span class="toc-num">10</span><span>Risk Analysis &amp; Mitigation</span></div>
+  <div class="toc-item"><span class="toc-num">11</span><span>Conclusion &amp; Call to Action</span></div>
+</div>
+
+<!-- ═══════════════════ 01 EXEC SUMMARY ═══════════════════ -->
+<div class="page-break"></div>
+<h2><span class="n">01</span>Executive Summary</h2>
+
+<p>The Philippine IT-BPM sector generated roughly <strong>$40 billion</strong> in export revenue in 2025, with projections near <strong>$42 billion in 2026</strong> and a <strong>$59 billion target by 2028</strong>. Within it, the virtual-assistant segment is one of the fastest-growing: the global VA market sits around <strong>$19.6 billion in 2025</strong> with a compound annual growth rate above 20%.</p>
+
+<p>We are building <strong>HiveMind</strong>, a managed VA staffing company that places pre-vetted Filipino virtual assistants with U.S.-based small and medium businesses, with an initial focus on real estate. HiveMind competes with agencies like NexusPoint, Cyberbacker, and the fragmented mid-tier market.</p>
+
+<div class="callout">
+  <strong>The thesis in one line.</strong>
+  <p>Better VA pay produces better retention, which produces better client outcomes and higher lifetime value, and a proprietary platform turns that talent into measurably superior, consistent service that incumbents running on spreadsheets cannot match.</p>
+</div>
+
+<p>What separates HiveMind from a typical new entrant is that the technology is not a future promise. The platform exists. We have built a seven-tool operations suite, a real-estate CRM with an embedded power dialer, and <strong>HiveMind AI</strong>, a desktop call copilot that transcribes VA-client calls in real time and coaches the VA live. This document is the technical companion to our investor deck: it sets out the market case briefly and the platform in depth.</p>
+
+<div class="stat-grid c4">
+  <div class="stat-card"><span class="number">$42B</span><span class="unit">PH IT-BPM revenue 2026</span></div>
+  <div class="stat-card"><span class="number ink">70%</span><span class="unit">BPO clients in North America</span></div>
+  <div class="stat-card"><span class="number ink">50–80%</span><span class="unit">Cost savings vs. U.S. hiring</span></div>
+  <div class="stat-card"><span class="number">8</span><span class="unit">Products already built</span></div>
+</div>
+
+<!-- ═══════════════════ 02 MARKET ═══════════════════ -->
+<div class="page-break"></div>
+<h2><span class="n">02</span>Market Opportunity</h2>
+
+<h3>The Philippine advantage</h3>
+<p>The Philippines ranks <strong>#2 in Asia and #28 globally</strong> in English proficiency (EF EPI 2025, "High Proficiency"). With roughly <strong>1.9 million IT-BPM workers</strong> plus a large freelance and VA sector, the talent pool is deep and well-educated, and cultural alignment with American business practices gives it an edge over India and Latin America for client-facing roles. North America accounts for about 70% of Philippine BPO client revenue, an established corridor of trust.</p>
+
+<h3>Target market: U.S. SMBs, starting with real estate</h3>
+<p>Our primary target is U.S. businesses with 1 to 50 employees, led by real estate agents and brokerages, then e-commerce operators, digital marketing agencies, and professional-service firms. These businesses need help but cannot justify $45,000 to $65,000 a year for a U.S. admin or marketing hire.</p>
+
+<div class="callout">
+  <strong>The value proposition in one sentence.</strong>
+  <p>A full-time admin VA in the Philippines costs roughly $13,500 to $20,800 a year through agency placement, versus $45,000 to $65,000 for a U.S. equivalent.</p>
+</div>
+
+<h3>Industry tailwinds</h3>
+<ul style="padding-left:1.2rem; color:var(--g700);">
+  <li style="margin-bottom:.35rem;"><strong>Remote-work normalization.</strong> U.S. businesses are now far more comfortable managing offshore staff.</li>
+  <li style="margin-bottom:.35rem;"><strong>AI augmentation.</strong> VAs who leverage AI are more productive, not displaced; HiveMind builds that augmentation into the product.</li>
+  <li style="margin-bottom:.35rem;"><strong>Specialization.</strong> Around 40% of VAs now offer specialized services rather than generic admin.</li>
+  <li><strong>Policy support.</strong> IBPAP and the Philippine government target 2.5M IT-BPM workers by 2028.</li>
+</ul>
+
+<!-- ═══════════════════ 03 COMPETITION ═══════════════════ -->
+<div class="page-break"></div>
+<h2><span class="n">03</span>Competitive Landscape</h2>
+
+<table>
+  <thead><tr><th>Company</th><th>Model</th><th>Client / mo</th><th>VA take-home</th><th>Differentiator</th></tr></thead>
+  <tbody>
+    <tr><td><strong>NexusPoint</strong></td><td>Managed staffing + training</td><td>$1,500–2,500</td><td>~$500–700</td><td>Lifestyle Club, equipment provided</td></tr>
+    <tr><td><strong>Cyberbacker</strong></td><td>High-volume placement</td><td>$1,200–2,000</td><td>~$400–600</td><td>Scale, brand recognition in PH</td></tr>
+    <tr><td><strong>A Team Overseas</strong></td><td>Founder-led boutique</td><td>~$3,000</td><td>Higher</td><td>Premium, long-term EA focus</td></tr>
+    <tr><td><strong>OnlineJobs.ph</strong></td><td>Self-serve marketplace</td><td>$3–10/hr direct</td><td>100% to VA</td><td>Largest board, no management layer</td></tr>
+    <tr class="hl"><td><strong>HiveMind</strong></td><td>Tech-first managed staffing</td><td>$1,200–2,200</td><td><strong>$600–900</strong></td><td>Proprietary platform · higher pay · AI-augmented</td></tr>
+  </tbody>
+</table>
+
+<div class="two-col">
+  <div>
+    <h4>Where incumbents are strong</h4>
+    <ul>
+      <li>Established brands and client retention</li>
+      <li>Active relationship management</li>
+      <li>Continuous associate training</li>
+      <li>Professional online presence</li>
+    </ul>
+  </div>
+  <div>
+    <h4>Where they are vulnerable</h4>
+    <ul>
+      <li>Operations run on 5 to 8 off-the-shelf tools</li>
+      <li>No proprietary platform, hard to scale</li>
+      <li>Below-market VA pay drives churn</li>
+      <li>Manual, playbook-heavy onboarding</li>
+    </ul>
+  </div>
+</div>
+
+<div class="callout green">
+  <strong>Our unfair advantage.</strong>
+  <p>The founding team has worked as VAs inside leading U.S.-facing agencies, so we know firsthand what clients expect, how daily delivery actually runs, and where incumbents fall short. Combined with full-stack build capability in-house, that operator perspective is built into the product, not bolted on.</p>
+</div>
+
+<!-- ═══════════════════ 04 BUSINESS MODEL ═══════════════════ -->
+<div class="page-break"></div>
+<h2><span class="n">04</span>Business Model &amp; Revenue Architecture</h2>
+
+<p>HiveMind runs a <strong>monthly subscription staffing model</strong>: clients pay a fixed monthly rate per VA, and we retain the margin between the client price and the fully-loaded VA cost. This is the dominant industry model, with typical gross margins between 25% and 50%.</p>
+
+<table>
+  <thead><tr><th>Tier</th><th>VA type</th><th class="tr-r">Client / mo</th><th class="tr-r">VA earns / mo</th><th class="tr-r">Gross margin</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Starter</strong></td><td>General admin / data entry</td><td class="tr-r font-mono">$1,200</td><td class="tr-r font-mono">$600</td><td class="tr-r"><span class="pill g">~50%</span></td></tr>
+    <tr><td><strong>Professional</strong></td><td>Design / social / bookkeeping</td><td class="tr-r font-mono">$1,600</td><td class="tr-r font-mono">$750</td><td class="tr-r"><span class="pill g">~53%</span></td></tr>
+    <tr><td><strong>Specialist</strong></td><td>Dev support / marketing / PM</td><td class="tr-r font-mono">$2,200</td><td class="tr-r font-mono">$900</td><td class="tr-r"><span class="pill g">~59%</span></td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <strong>The fair-pay advantage.</strong>
+  <p>VAs earn $600 to $900 a month versus a ~$450 to $540 market average. Above-market pay converts directly into lower recruitment cost and lower client-facing churn, the metric clients actually feel.</p>
+</div>
+
+<h3>Additional revenue streams</h3>
+<ul style="padding-left:1.2rem; color:var(--g700);">
+  <li style="margin-bottom:.35rem;"><strong>Setup / onboarding fee.</strong> One-time $250 to $500 per placement, covering vetting, skills testing, and client matching.</li>
+  <li style="margin-bottom:.35rem;"><strong>Platform license (Phase 2).</strong> The platform is purpose-built and can be licensed to other agencies, a second, higher-margin revenue line.</li>
+  <li><strong>Training &amp; upskilling.</strong> Premium certifications (AI tools, industry workflows) clients can request.</li>
+</ul>
+
+<!-- ═══════════════════ 05 TECHNOLOGY ═══════════════════ -->
+<div class="page-break"></div>
+<h2><span class="n">05</span>Technology &amp; Platform</h2>
+
+<p>This is the core of the business and the section that matters most for a technical reader. While NexusPoint and most agencies stitch together five to eight SaaS tools, HiveMind runs the entire VA-client relationship on <strong>one platform we own and have already built</strong>. It is a unified web application plus a desktop AI copilot, built on a modern, real-time stack.</p>
+
+<h3>5.1 · The product suite</h3>
+<p>Seven integrated tools, included in every plan, replacing roughly $250 a month of third-party SaaS per seat.</p>
+
+<div class="tool-grid">
+  <div class="tool"><span class="tn grad-text">HiveTrack</span><div class="tt">Time &amp; Attendance</div><p>Automated clock-in/out, activity logging, and a real-time hours dashboard.</p><div class="rep">Replaces <b>Time Doctor, Hubstaff</b></div></div>
+  <div class="tool"><span class="tn grad-text">HiveFlow</span><div class="tt">Task Management</div><p>Kanban boards, priorities, deadlines, and recurring tasks with live status.</p><div class="rep">Replaces <b>Asana, Monday, ClickUp</b></div></div>
+  <div class="tool"><span class="tn grad-text">HiveChat</span><div class="tt">Team Messaging</div><p>Real-time VA, PM, and client messaging with threads, files, and search.</p><div class="rep">Replaces <b>Slack, Teams</b></div></div>
+  <div class="tool"><span class="tn grad-text">HiveReport</span><div class="tt">Daily EOD Reports</div><p>Auto end-of-day reports: wins, blockers, tomorrow's plan, AI-summarized.</p><div class="rep">Replaces <b>Google Forms, manual email</b></div></div>
+  <div class="tool"><span class="tn grad-text">HiveBook</span><div class="tt">Client Playbook</div><p>Living, versioned docs of client preferences, processes, and brand voice.</p><div class="rep">Replaces <b>Google Docs, Notion</b></div></div>
+  <div class="tool"><span class="tn grad-text">HiveReview</span><div class="tt">Performance Analytics</div><p>Quarterly reviews auto-generated from daily data: trends, metrics, insights.</p><div class="rep">Replaces <b>Spreadsheets, manual QPRs</b></div></div>
+  <div class="tool"><span class="tn grad-text">HiveCRM</span><div class="tt">CRM + Power Dialer</div><p>Sales pipeline, leads, deal value, tasks and timeline, with a click-to-call dialer and auto-logged outcomes. Scales to thousands of leads with server-side search.</p><div class="rep">Replaces <b>Follow Up Boss, KvCORE, LionDesk</b></div></div>
+  <div class="tool" style="border-color:rgba(37,99,235,.3); background:var(--blue-light);"><span class="tn grad-text">HiveMind AI</span><div class="tt">Desktop Call Copilot</div><p>A separate desktop app that joins VA-client calls. Detailed in 5.3.</p><div class="rep">Net-new capability · no incumbent equivalent</div></div>
+</div>
+
+<h3>5.2 · Architecture</h3>
+<p>The platform is a single-page web application backed by a managed Postgres stack, with real-time data flowing to every connected client. The desktop copilot is a native Electron app that talks to the same backend.</p>
+
+<div class="arch">
+  <div class="arch-row">
+    <div class="arch-label">Frontend</div>
+    <div class="arch-cells">
+      <span class="arch-cell"><b>Vue 3</b> + Vite + TypeScript</span>
+      <span class="arch-cell">Tailwind + daisyUI</span>
+      <span class="arch-cell">Pinia state</span>
+    </div>
+  </div>
+  <div class="arch-row">
+    <div class="arch-label">Desktop</div>
+    <div class="arch-cells">
+      <span class="arch-cell"><b>Electron</b> (HiveMind AI)</span>
+      <span class="arch-cell">System + mic audio capture</span>
+      <span class="arch-cell">Overlay coaching UI</span>
+    </div>
+  </div>
+  <div class="arch-row">
+    <div class="arch-label">Backend</div>
+    <div class="arch-cells">
+      <span class="arch-cell"><b>Supabase</b> · PostgreSQL</span>
+      <span class="arch-cell">Auth + Row-Level Security</span>
+      <span class="arch-cell">Realtime (CDC + broadcast)</span>
+      <span class="arch-cell">Edge Functions</span>
+    </div>
+  </div>
+  <div class="arch-row">
+    <div class="arch-label">AI</div>
+    <div class="arch-cells">
+      <span class="arch-cell"><b>Claude API</b> · coach agent</span>
+      <span class="arch-cell">Summary agent</span>
+      <span class="arch-cell">Action-items agent</span>
+      <span class="arch-cell">EOD synthesis</span>
+    </div>
+  </div>
+  <div class="arch-row">
+    <div class="arch-label">Voice</div>
+    <div class="arch-cells">
+      <span class="arch-cell"><b>Deepgram</b> · real-time STT</span>
+      <span class="arch-cell"><b>SIP.js</b> embedded softphone</span>
+      <span class="arch-cell">Call tones + dispositions</span>
+    </div>
+  </div>
+  <div class="arch-row">
+    <div class="arch-label">Infra</div>
+    <div class="arch-cells">
+      <span class="arch-cell">Vercel / Railway</span>
+      <span class="arch-cell">Supabase managed Postgres</span>
+      <span class="arch-cell">USD-denominated billing</span>
+    </div>
+  </div>
+</div>
+
+<div class="callout">
+  <strong>Why this stack matters.</strong>
+  <p>Supabase Realtime is the backbone of the operating model: presence, broadcast events, and live row updates let a U.S. rep and a Manila VA work the same lead at the same moment. Real-time coordination is not a feature, it is the architecture.</p>
+</div>
+
+<h3>5.3 · HiveMind AI: the desktop call copilot</h3>
+<p>HiveMind AI is a native desktop application that sits in on VA-client calls and makes a Filipino VA sound like a senior U.S. agent. It is the clearest demonstration that this is an engineering company, not a staffing shop with a website.</p>
+
+<div class="two-col">
+  <div>
+    <h4>What it does live</h4>
+    <ul>
+      <li><strong>Real-time transcription</strong> of both sides (mic + system audio), speaker-aware, ~300ms latency, on Zoom, Meet, and Teams</li>
+      <li><strong>AI Coach</strong>: when a client asks something hard, it generates three answers, Safe, Sharp, and Bold, in one click</li>
+      <li><strong>Live action items, decisions, and red flags</strong>, attributed VA vs. client</li>
+      <li><strong>Auto meeting summary</strong> at call end, pushed into HiveFlow tasks</li>
+    </ul>
+  </div>
+  <div>
+    <h4>How it is built</h4>
+    <ul>
+      <li><strong>Electron</strong> desktop shell with a low-footprint coaching overlay</li>
+      <li><strong>Deepgram</strong> streaming speech-to-text</li>
+      <li>Three <strong>Claude agents</strong>: coach, summary, and action-items, each tuned to a narrow job</li>
+      <li>Synced to Supabase so the CRM and task board update as the call happens</li>
+    </ul>
+  </div>
+</div>
+
+<h3>5.4 · Real-time coordination &amp; the power dialer</h3>
+<p>HiveMind's operating model has U.S. reps placing a small share of calls while Philippine operations handle the bulk, with both sides coordinating in real time. The platform makes that possible.</p>
+<ul style="padding-left:1.2rem; color:var(--g700);">
+  <li style="margin-bottom:.35rem;"><strong>Embedded softphone.</strong> HiveCRM includes a SIP.js-based power dialer with click-to-call, call tones, and one-click dispositions, validated end-to-end.</li>
+  <li style="margin-bottom:.35rem;"><strong>Event bus.</strong> Call lifecycle events (call start, call end, call dispositioned) broadcast over Supabase Realtime, so the CRM auto-opens the active lead and logs outcomes without manual entry.</li>
+  <li><strong>Presence.</strong> Reps and VAs see who is on a call and on which lead, the coordination layer incumbents simply do not have.</li>
+</ul>
+
+<h3>5.5 · Build status</h3>
+<table>
+  <thead><tr><th>Component</th><th>Status</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td><strong>HiveFlow Kanban + task engine</strong></td><td><span class="status done">Built</span></td><td>Drag-and-drop boards, live KPIs, recurring tasks</td></tr>
+    <tr><td><strong>HiveCRM + power dialer</strong></td><td><span class="status done">Built</span></td><td>Pipeline, leads, embedded SIP.js dialer, dispositions</td></tr>
+    <tr><td><strong>HiveMind AI copilot</strong></td><td><span class="status done">Built</span></td><td>Transcription, Safe/Sharp/Bold coaching, summaries</td></tr>
+    <tr><td><strong>Realtime coordination layer</strong></td><td><span class="status prog">In progress</span></td><td>6-phase Supabase Realtime migration; foundation phase complete</td></tr>
+    <tr><td><strong>HiveTrack / HiveReport / HiveBook / HiveReview</strong></td><td><span class="status prog">In progress</span></td><td>Data model and core flows in place, hardening for scale</td></tr>
+    <tr><td><strong>Platform licensing (multi-tenant)</strong></td><td><span class="status next">Phase 2</span></td><td>Productize for sale to other agencies</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <strong>Phase 2: the platform as a product.</strong>
+  <p>Once validated internally, the platform can be licensed to other VA agencies. The industry runs on spreadsheets; purpose-built software has clear product-market fit and a higher margin than staffing.</p>
+</div>
+
+<!-- ═══════════════════ 06 OPERATIONS ═══════════════════ -->
+<div class="page-break"></div>
+<h2><span class="n">06</span>Operations &amp; Service Delivery</h2>
+
+<h3>Client lifecycle</h3>
+<p>Every client runs the same disciplined path: <strong>Discovery</strong> (needs assessment and role scoping), <strong>Matching</strong> (a curated top-3 VA shortlist), <strong>Onboarding</strong> (a 7-day ramp with a tailored playbook), <strong>Managed support</strong> (PM check-ins, daily EOD reports, quarterly reviews), and <strong>Scale</strong> (add VAs or upgrade tiers).</p>
+
+<h3>VA recruitment funnel</h3>
+<p>We maintain a standing talent pool through job boards (OnlineJobs.ph, Kalibrr), social recruiting, university networks, and referrals. Vetting mirrors industry best practice with an added focus on AI-tool proficiency:</p>
+<ol style="padding-left:1.2rem; color:var(--g700);">
+  <li style="margin-bottom:.3rem;"><strong>Application screening</strong>: English, equipment, internet-speed verification</li>
+  <li style="margin-bottom:.3rem;"><strong>Skills assessment</strong>: role-specific testing</li>
+  <li style="margin-bottom:.3rem;"><strong>Paid work trial</strong>: a 2-hour simulation matching real client workflows</li>
+  <li style="margin-bottom:.3rem;"><strong>Culture &amp; communication interview</strong>: soft skills and fit</li>
+  <li><strong>Onboarding &amp; training</strong>: 5 days on our platform, protocols, and AI tools</li>
+</ol>
+
+<div class="callout">
+  <strong>5-point EOD discipline, every day.</strong>
+  <p>Accomplishments, in-progress, tomorrow's plan, blockers, and hours logged, generated in HiveReport and auto-delivered to the client, PM, and training team.</p>
+</div>
+
+<!-- ═══════════════════ 07 FINANCIALS ═══════════════════ -->
+<div class="page-break"></div>
+<h2><span class="n">07</span>Financial Projections</h2>
+
+<p>The model below is built on <strong>average active placements as headcount ramps</strong> through each year, not on end-of-year headcount billed for all twelve months. Margins are reconciled to the tier table in Section 04.</p>
+
+<table>
+  <thead><tr><th>Metric</th><th class="tr-r">Year 1</th><th class="tr-r">Year 2</th><th class="tr-r">Year 3</th></tr></thead>
+  <tbody>
+    <tr><td>End-of-year placements</td><td class="tr-r">15</td><td class="tr-r">45</td><td class="tr-r">100</td></tr>
+    <tr><td>Avg. active placements <span style="color:var(--g400)">(ramp)</span></td><td class="tr-r">8</td><td class="tr-r">30</td><td class="tr-r">72</td></tr>
+    <tr><td>Avg. monthly client rate</td><td class="tr-r font-mono">$1,500</td><td class="tr-r font-mono">$1,600</td><td class="tr-r font-mono">$1,700</td></tr>
+    <tr class="hl"><td><strong>Annual revenue</strong></td><td class="tr-r font-mono"><strong>$144,000</strong></td><td class="tr-r font-mono"><strong>$576,000</strong></td><td class="tr-r font-mono"><strong>$1,469,000</strong></td></tr>
+    <tr><td>VA payroll <span style="color:var(--g400)">(47–50%)</span></td><td class="tr-r font-mono">$72,000</td><td class="tr-r font-mono">$277,000</td><td class="tr-r font-mono">$690,000</td></tr>
+    <tr><td>Operating costs <span style="color:var(--g400)">(PM, infra, admin)</span></td><td class="tr-r font-mono">$42,000</td><td class="tr-r font-mono">$130,000</td><td class="tr-r font-mono">$360,000</td></tr>
+    <tr class="hl"><td><strong>Net profit (est.)</strong></td><td class="tr-r font-mono"><strong>$30,000</strong></td><td class="tr-r font-mono"><strong>$169,000</strong></td><td class="tr-r font-mono"><strong>$419,000</strong></td></tr>
+    <tr class="hl"><td><strong>Net margin</strong></td><td class="tr-r"><span class="pill g">~21%</span></td><td class="tr-r"><span class="pill g">~29%</span></td><td class="tr-r"><span class="pill g">~29%</span></td></tr>
+  </tbody>
+</table>
+
+<div class="callout green">
+  <strong>Lean by design.</strong>
+  <p>The biggest cost centers that drain typical startups (software development, ops consulting, creative, marketing) are all handled by founders at near-zero marginal cost. The platform is already built, so the largest line item is sweat equity already spent.</p>
+</div>
+
+<!-- ═══════════════════ 08 GTM ═══════════════════ -->
+<div class="page-break"></div>
+<h2><span class="n">08</span>Go-to-Market Strategy</h2>
+
+<div class="two-col">
+  <div>
+    <h4>Phase 1 · Foundation (Mo. 1–3)</h4>
+    <ul>
+      <li>Register PH entity + U.S. LLC for credibility</li>
+      <li>Harden platform for first cohort</li>
+      <li>Pre-vet 20 to 30 candidates</li>
+      <li>Land first 3 to 5 clients via referral and outreach</li>
+    </ul>
+  </div>
+  <div>
+    <h4>Phase 2 · Growth (Mo. 4–12)</h4>
+    <ul>
+      <li>Content + LinkedIn thought leadership</li>
+      <li>Paid acquisition to U.S. realtors and solopreneurs</li>
+      <li>Referral program ($200 credit per client)</li>
+      <li>Scale to 15 active placements</li>
+    </ul>
+  </div>
+</div>
+
+<h4>Phase 3 · Scale (Year 2+)</h4>
+<ul style="padding-left:1.2rem; color:var(--g700);">
+  <li style="margin-bottom:.3rem;">Vertical specialization (real estate, e-commerce, healthcare admin)</li>
+  <li style="margin-bottom:.3rem;">License the platform to other agencies (SaaS revenue)</li>
+  <li style="margin-bottom:.3rem;">Add multi-timezone talent markets (Colombia, DR)</li>
+  <li>Enterprise case studies and social proof</li>
+</ul>
+
+<div class="callout red">
+  <strong>The U.S.-based partner is the single biggest accelerant.</strong>
+  <p>Local presence builds the trust that purely offshore agencies struggle to establish, and unlocks the client relationships that drive recurring revenue. It is the one function the founding team does not already cover.</p>
+</div>
+
+<!-- ═══════════════════ 09 ORG ═══════════════════ -->
+<div class="page-break"></div>
+<h2><span class="n">09</span>Organization &amp; Work Distribution</h2>
+
+<p>Four Philippine co-founders cover every critical function in-house. We are seeking a U.S.-based partner.</p>
+
+<table>
+  <thead><tr><th>Role</th><th>Person</th><th>Location</th><th>Owns</th></tr></thead>
+  <tbody>
+    <tr class="hl"><td><strong>CEO / Head of Sales</strong></td><td>Open · U.S. partner</td><td>United States</td><td>Client acquisition, partnerships, U.S. business development, brand presence</td></tr>
+    <tr><td><strong>COO / Operations Manager</strong></td><td>Jay (Jaymark) Remigio</td><td>Manila, PH</td><td>VA workforce management &amp; scheduling, client onboarding, QA, SLA &amp; process, PM oversight, scaling operations</td></tr>
+    <tr><td><strong>CTO / Developer</strong></td><td>Jayson Remigio</td><td>Manila, PH</td><td>Platform build &amp; infrastructure (Vue + Supabase), AI layer, integrations, data &amp; reporting, financial systems</td></tr>
+    <tr><td><strong>Design Specialist</strong></td><td>Princess ("Cess")</td><td>Manila, PH</td><td>Brand identity, decks &amp; collateral, design-role VA training &amp; deliverable QA, recruitment screening for design talent</td></tr>
+    <tr><td><strong>Head of Marketing</strong></td><td>Rucela Barreda-Remigio</td><td>Philippines</td><td>Social media strategy &amp; content, paid acquisition campaigns, lead generation, online presence</td></tr>
+    <tr><td><strong>Email Marketing &amp; Recruitment</strong></td><td>Dennis Elbao</td><td>Manila, PH</td><td>Email marketing campaigns &amp; lead nurture, VA sourcing, recruitment &amp; candidate screening, talent pipeline for scaling delivery</td></tr>
+    <tr><td><strong>Project Managers</strong></td><td>Hired into the pool</td><td>Remote, PH</td><td>Day-to-day VA management, EOD review, client check-ins, performance tracking</td></tr>
+    <tr><td><strong>Virtual Assistants</strong></td><td>Recruited pool</td><td>Remote, PH</td><td>Client task execution across all service tiers, reporting up through Operations</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <strong>No gaps, no overlap.</strong>
+  <p>Tech (Jayson), operations (Jay), design (Princess), and marketing (Rucela) are owned by founders, with email marketing and recruitment driven by Dennis. Project managers and VAs are hired into the pool and report up through Operations. The only open seat is the U.S. partner.</p>
+</div>
+
+<!-- ═══════════════════ 10 RISK ═══════════════════ -->
+<div class="page-break"></div>
+<h2><span class="n">10</span>Risk Analysis &amp; Mitigation</h2>
+
+<table>
+  <thead><tr><th>Risk</th><th class="tr-c">Likelihood</th><th class="tr-c">Impact</th><th>Mitigation</th></tr></thead>
+  <tbody>
+    <tr><td><strong>VA turnover / poaching</strong></td><td class="tr-c"><span class="pill y">Medium</span></td><td class="tr-c"><span class="pill r">High</span></td><td>Above-market pay, career development, strong culture</td></tr>
+    <tr><td><strong>Client churn</strong></td><td class="tr-c"><span class="pill y">Medium</span></td><td class="tr-c"><span class="pill r">High</span></td><td>Quarterly reviews, proactive PM check-ins, fast replacement guarantee</td></tr>
+    <tr><td><strong>Slow client acquisition</strong></td><td class="tr-c"><span class="pill y">Medium</span></td><td class="tr-c"><span class="pill y">Medium</span></td><td>U.S.-based partner for trust, referral incentives, content</td></tr>
+    <tr><td><strong>Worker classification</strong></td><td class="tr-c"><span class="pill b">Low</span></td><td class="tr-c"><span class="pill y">Medium</span></td><td>Independent-contractor model with legal counsel on U.S. LLC setup</td></tr>
+    <tr><td><strong>Platform scaling / reliability</strong></td><td class="tr-c"><span class="pill b">Low</span></td><td class="tr-c"><span class="pill y">Medium</span></td><td>Managed Postgres, server-side pagination, phased realtime rollout, in-house engineering</td></tr>
+    <tr><td><strong>AI displacing VA demand</strong></td><td class="tr-c"><span class="pill b">Low</span></td><td class="tr-c"><span class="pill y">Medium</span></td><td>Position VAs as AI-augmented, not AI-replaced; HiveMind AI makes that the product</td></tr>
+  </tbody>
+</table>
+
+<!-- ═══════════════════ 11 CONCLUSION ═══════════════════ -->
+<div class="page-break"></div>
+<h2><span class="n">11</span>Conclusion &amp; Call to Action</h2>
+
+<p>The Philippine VA staffing industry is a $40B+ ecosystem growing at double digits, yet it remains operationally fragmented and runs on spreadsheets and chat apps. There is a clear opening for a <strong>tech-enabled, talent-first agency</strong> that treats its VAs well, owns its infrastructure, and delivers measurably better outcomes.</p>
+
+<p>HiveMind brings four strengths most new entrants lack: <strong>in-house engineering</strong> with a platform already built, <strong>operator insight</strong> from inside competitor operations, <strong>design</strong>, and <strong>marketing</strong>, all covered by founders at a lean cost base.</p>
+
+<div class="callout">
+  <strong>What we need.</strong>
+  <p>A U.S.-based partner who can be the face of the company in the American market: someone who can open doors, close deals, and build the client relationships that drive recurring revenue. In return we offer a co-founding role in a business with strong unit economics, a low startup cost, a large addressable market, and a real product that already works.</p>
+</div>
+
+<p>This document is the technical foundation. The next step is a conversation about equity structure, go-to-market timing, and how your network and expertise fit the plan.</p>
+
+<div class="doc-footer">
+  Confidential · HiveMind Feasibility Study &amp; Technical Memo v5 · Prepared 2026 by Jaymark, Rucela, Jayson &amp; Princess<br>
+  Market data sourced from IBPAP, EF EPI, and industry reports (2025–2026). Financial figures are estimates.
+</div>
+
+</body>
+</html>
