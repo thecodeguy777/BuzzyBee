@@ -403,17 +403,19 @@ tbody tr.hl td { color:var(--ink); font-weight:500; }
 }
 .mark .mhex { width:15px; height:20px; }
 .mark .mind { color:var(--blue); }
-.closing .mark { color:var(--white); }
+body.is-closing .mark { color:#fff; }
+body.is-closing .mark .mind { color:#fff; }
+body.is-closing .mark .mhex { filter:brightness(0) invert(1); }
 .pageno {
   position:absolute; bottom:3.4%; right:6.4%; z-index:20;
   font-family:'JetBrains Mono',monospace; font-size:.78rem; color:var(--g400); font-weight:500;
 }
-.closing .pageno { color:var(--g500); }
+body.is-closing .pageno { color:var(--g400); }
 .confidential {
   position:absolute; bottom:3.4%; left:6.4%; z-index:20;
   font-size:.66rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--g400);
 }
-.closing .confidential { color:var(--g500); }
+body.is-closing .confidential { color:var(--g400); }
 
 /* ── DOT NAV ── */
 .dots { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); display:flex; gap:7px; z-index:50; }
@@ -492,7 +494,7 @@ tbody tr.hl td { color:var(--ink); font-weight:500; }
         <div>
           <div class="kicker red">02 · Why Now</div>
           <h2 class="slide-h">The market is exploding. The <span class="accent-red">operations are duct-taped.</span></h2>
-          <p class="lede">Most VA agencies are relationship businesses running on a stack of disconnected SaaS tools, with no proprietary infrastructure and below-market pay that drives churn.</p>
+          <p class="lede">Most VA agencies are relationship businesses running on a stack of disconnected tools, with no software of their own and below-market pay that drives high turnover.</p>
         </div>
         <div>
           <ul class="checklist red">
@@ -509,14 +511,14 @@ tbody tr.hl td { color:var(--ink); font-weight:500; }
     <section class="slide">
       <div class="kicker">03 · The Thesis</div>
       <h2 class="slide-h">Pay better. Retain better. <span class="accent">Deliver better.</span></h2>
-      <p class="lede">Our core flywheel, and the reason a talent-first agency wins on the dimension clients actually feel.</p>
+      <p class="lede">The simple cycle behind the business, and why paying people well wins where clients actually feel it.</p>
       <div class="flow">
-        <div class="fstep"><div class="sn">01</div><h5>Better pay</h5><p>$600–900/mo vs. $400–700 at incumbents</p></div>
-        <div class="fstep"><div class="sn">02</div><h5>Better retention</h5><p>Lower churn, lower recruitment cost</p></div>
-        <div class="fstep"><div class="sn">03</div><h5>Better outcomes</h5><p>Continuity = compounding client value</p></div>
-        <div class="fstep"><div class="sn">04</div><h5>Higher LTV</h5><p>Retained clients, expanding accounts</p></div>
+        <div class="fstep"><div class="sn">01</div><h5>We pay VAs more</h5><p>$600–900/mo with us, vs. $400–700 at other agencies</p></div>
+        <div class="fstep"><div class="sn">02</div><h5>They stay longer</h5><p>Less turnover, lower hiring cost</p></div>
+        <div class="fstep"><div class="sn">03</div><h5>Clients get better work</h5><p>A familiar VA who keeps improving</p></div>
+        <div class="fstep"><div class="sn">04</div><h5>Clients stay and grow</h5><p>They keep us longer and add more help</p></div>
       </div>
-      <div class="callout"><strong>Paired with a proprietary platform.</strong><p>Fair pay attracts top-tier talent; purpose-built software turns that talent into measurably superior, consistent service. Neither alone is the moat; together they are.</p></div>
+      <div class="callout"><strong>Paired with a proprietary platform.</strong><p>Fair pay attracts top-tier talent; purpose-built software turns that talent into measurably better, more consistent service. Neither alone is the advantage; together they are.</p></div>
     </section>
 
     <!-- ── 05 · COMPETITION ── -->
@@ -524,13 +526,13 @@ tbody tr.hl td { color:var(--ink); font-weight:500; }
       <div class="kicker">04 · Competitive Landscape</div>
       <h2 class="slide-h">A fragmented field with a clear open lane.</h2>
       <table>
-        <thead><tr><th>Company</th><th>Model</th><th>Client / mo</th><th>VA take-home</th><th>Differentiator</th></tr></thead>
+        <thead><tr><th>Company</th><th>How they work</th><th>Client pays/mo</th><th>VA earns/mo</th><th>What sets them apart</th></tr></thead>
         <tbody>
-          <tr><td><strong>NexusPoint</strong></td><td>Managed staffing + training</td><td>$1,500–2,500</td><td>~$500–700</td><td>Lifestyle Club, equipment provided</td></tr>
-          <tr><td><strong>Cyberbacker</strong></td><td>High-volume placement</td><td>$1,200–2,000</td><td>~$400–600</td><td>Scale, brand recognition in PH</td></tr>
-          <tr><td><strong>A Team Overseas</strong></td><td>Founder-led boutique</td><td>~$3,000</td><td>Higher</td><td>Premium, long-term EA focus</td></tr>
-          <tr><td><strong>OnlineJobs.ph</strong></td><td>Self-serve marketplace</td><td>$3–10/hr direct</td><td>100% to VA</td><td>Largest board, no mgmt layer</td></tr>
-          <tr class="hl"><td><strong>HiveMind</strong></td><td>Tech-first managed staffing</td><td>$1,200–2,200</td><td><strong>$600–900</strong></td><td>Unified platform · higher pay · AI-augmented</td></tr>
+          <tr><td><strong>NexusPoint</strong></td><td>Hires, trains &amp; manages VAs for the client</td><td>$1,500–2,500</td><td>~$500–700</td><td>Lifestyle Club, equipment provided</td></tr>
+          <tr><td><strong>Cyberbacker</strong></td><td>Matches VAs to clients at large scale</td><td>$1,200–2,000</td><td>~$400–600</td><td>Scale, brand recognition in PH</td></tr>
+          <tr><td><strong>A Team Overseas</strong></td><td>Small premium agency, founder-run</td><td>~$3,000</td><td>Higher</td><td>Premium, long-term EA focus</td></tr>
+          <tr><td><strong>OnlineJobs.ph</strong></td><td>Job board: clients hire &amp; manage themselves</td><td>$3–10/hr direct</td><td>100% to VA</td><td>Largest board, no management</td></tr>
+          <tr class="hl"><td><strong>HiveMind</strong></td><td>We recruit &amp; manage VAs, on our own software</td><td>$1,200–2,200</td><td><strong>$600–900</strong></td><td>One platform · higher pay · AI-assisted</td></tr>
         </tbody>
       </table>
     </section>
@@ -582,7 +584,7 @@ tbody tr.hl td { color:var(--ink); font-weight:500; }
           <div style="margin-top:.5rem;"><span class="pill g">~59% gross margin</span></div>
         </div>
       </div>
-      <div class="callout"><strong>The fair-pay advantage.</strong><p>VAs earn $600–900/mo vs. a ~$450–540 market average; above-market pay that converts directly into lower recruitment cost and lower client-facing churn.</p></div>
+      <div class="callout"><strong>The fair-pay advantage.</strong><p>VAs earn $600–900/mo vs. a ~$450–540 market average; above-market pay that converts directly into lower hiring cost and fewer clients leaving.</p></div>
     </section>
 
     <!-- ── 08 · PLATFORM ── -->
@@ -844,8 +846,8 @@ tbody tr.hl td { color:var(--ink); font-weight:500; }
       <table>
         <thead><tr><th>Metric</th><th class="tr-r">Year 1</th><th class="tr-r">Year 2</th><th class="tr-r">Year 3</th></tr></thead>
         <tbody>
-          <tr><td>End-of-year placements</td><td class="tr-r">15</td><td class="tr-r">45</td><td class="tr-r">100</td></tr>
-          <tr><td>Avg. active placements <span class="text-muted" style="color:var(--g400);">(ramp)</span></td><td class="tr-r">8</td><td class="tr-r">30</td><td class="tr-r">72</td></tr>
+          <tr><td>End-of-year clients</td><td class="tr-r">15</td><td class="tr-r">45</td><td class="tr-r">100</td></tr>
+          <tr><td>Avg. active clients <span class="text-muted" style="color:var(--g400);">(ramp)</span></td><td class="tr-r">8</td><td class="tr-r">30</td><td class="tr-r">72</td></tr>
           <tr><td>Avg. monthly client rate</td><td class="tr-r font-mono">$1,500</td><td class="tr-r font-mono">$1,600</td><td class="tr-r font-mono">$1,700</td></tr>
           <tr><td><strong>Annual revenue</strong></td><td class="tr-r font-mono"><strong>$144K</strong></td><td class="tr-r font-mono"><strong>$576K</strong></td><td class="tr-r font-mono"><strong>$1.47M</strong></td></tr>
           <tr><td>VA payroll <span style="color:var(--g400);">(47–50%)</span></td><td class="tr-r font-mono">$72K</td><td class="tr-r font-mono">$277K</td><td class="tr-r font-mono">$690K</td></tr>
@@ -854,7 +856,7 @@ tbody tr.hl td { color:var(--ink); font-weight:500; }
           <tr class="hl"><td><strong>Net margin</strong></td><td class="tr-r"><span class="pill g">~21%</span></td><td class="tr-r"><span class="pill g">~29%</span></td><td class="tr-r"><span class="pill g">~29%</span></td></tr>
         </tbody>
       </table>
-      <p style="font-size:.78rem; color:var(--g400); margin-top:.7rem;">Revenue reflects <strong style="color:var(--g500);">average active placements</strong> across each year as headcount ramps, not end-of-year count billed for all 12 months. Margins reconciled to the tier table.</p>
+      <p style="font-size:.78rem; color:var(--g400); margin-top:.7rem;">Revenue reflects <strong style="color:var(--g500);">average active clients</strong> across each year as headcount ramps, not end-of-year count billed for all 12 months. Margins reconciled to the tier table.</p>
     </section>
 
     <!-- ── 12 · GO TO MARKET ── -->
@@ -870,7 +872,7 @@ tbody tr.hl td { color:var(--ink); font-weight:500; }
         <div class="card">
           <div class="ico">2</div>
           <h4>Growth · Mo. 4–12</h4>
-          <p>Content + paid acquisition to U.S. realtors &amp; solopreneurs, referral program, partnerships, scaling to 15 placements.</p>
+          <p>Content + paid acquisition to U.S. realtors &amp; solopreneurs, referral program, partnerships, scaling to 15 clients.</p>
         </div>
         <div class="card red">
           <div class="ico">3</div>
@@ -892,7 +894,7 @@ tbody tr.hl td { color:var(--ink); font-weight:500; }
           <tr><td><strong>COO / Operations</strong></td><td>Jaymark Remigio</td><td>Manila, PH</td><td>Workforce mgmt, process, scaling ops</td></tr>
           <tr><td><strong>CTO / Lead Dev</strong></td><td>Jayson Remigio</td><td>Manila, PH</td><td>Platform, infrastructure, AI, finance</td></tr>
           <tr><td><strong>Creative Director</strong></td><td>Princess Mary</td><td>Manila, PH</td><td>Brand, design QA, recruitment screening</td></tr>
-          <tr><td><strong>Head of Marketing</strong></td><td>Rucela Barreda-Remigio</td><td>Philippines</td><td>Social, content, paid acquisition, lead gen</td></tr>
+          <tr><td><strong>Head of Marketing</strong></td><td>Rucela Barreda-Remigio</td><td>Manila, PH</td><td>Social, content, paid acquisition, lead gen</td></tr>
           <tr><td><strong>Email Mktg &amp; Recruitment</strong></td><td>Dennis Elbao</td><td>Manila, PH</td><td>Email campaigns, lead nurture, VA recruitment &amp; screening</td></tr>
         </tbody>
       </table>
@@ -996,7 +998,7 @@ tbody tr.hl td { color:var(--ink); font-weight:500; }
         <thead><tr><th>Risk</th><th class="tr-c">Likelihood</th><th class="tr-c">Impact</th><th>Mitigation</th></tr></thead>
         <tbody>
           <tr><td><strong>VA turnover / poaching</strong></td><td class="tr-c"><span class="pill y">Medium</span></td><td class="tr-c"><span class="pill r">High</span></td><td>Above-market pay, career development, strong culture</td></tr>
-          <tr><td><strong>Client churn</strong></td><td class="tr-c"><span class="pill y">Medium</span></td><td class="tr-c"><span class="pill r">High</span></td><td>QPR cadence, proactive PM check-ins, fast replacement guarantee</td></tr>
+          <tr><td><strong>Client turnover</strong></td><td class="tr-c"><span class="pill y">Medium</span></td><td class="tr-c"><span class="pill r">High</span></td><td>QPR cadence, proactive PM check-ins, fast replacement guarantee</td></tr>
           <tr><td><strong>Slow client acquisition</strong></td><td class="tr-c"><span class="pill y">Medium</span></td><td class="tr-c"><span class="pill y">Medium</span></td><td>U.S.-based partner for trust; referral incentives; content</td></tr>
           <tr><td><strong>Worker classification</strong></td><td class="tr-c"><span class="pill b">Low</span></td><td class="tr-c"><span class="pill y">Medium</span></td><td>Contractor model with legal counsel on US LLC setup</td></tr>
           <tr><td><strong>AI displacing demand</strong></td><td class="tr-c"><span class="pill b">Low</span></td><td class="tr-c"><span class="pill y">Medium</span></td><td>Position VAs as AI-augmented, not AI-replaced; upskill on tools</td></tr>
@@ -1057,6 +1059,7 @@ tbody tr.hl td { color:var(--ink); font-weight:500; }
     var closing = slides[i].classList.contains('closing');
     document.documentElement.style.setProperty('--bar-on', closing ? '#93c5fd' : '#2563eb');
     bar.style.background = closing ? '#93c5fd' : '#2563eb';
+    document.body.classList.toggle('is-closing', closing);
   }
   function go(n){ i = Math.max(0, Math.min(slides.length-1, n)); render(); }
   function next(){ go(i+1); }
