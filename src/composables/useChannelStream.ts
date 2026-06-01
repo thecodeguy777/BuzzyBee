@@ -53,8 +53,10 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
   const channelsStore = useChannelsStore()
 
   const allMessages = ref<CommsMessage[]>([])
-  // reactions: messageId -> emoji -> { count, mine }
-  const reactions = ref<Record<string, Record<string, { count: number; mine: boolean }>>>({})
+  // reactions: messageId -> emoji -> Set<userId>. Tracking the actual user ids
+  // (not a raw counter) makes applying a reaction idempotent — so the optimistic
+  // update and the DB broadcast echo for the same (user, emoji) don't double up.
+  const reactions = ref<Record<string, Record<string, Set<string>>>>({})
   const loading = ref(false)
   const sending = ref(false)
   const online = ref<HuddlePresence[]>([])
@@ -90,9 +92,10 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
 
   function reactionList(messageId: string) {
     const r = reactions.value[messageId]
+    const uid = me() ?? ''
     if (!r) return [] as { emoji: string; count: number; mine: boolean }[]
     return Object.entries(r)
-      .map(([emoji, v]) => ({ emoji, count: v.count, mine: v.mine }))
+      .map(([emoji, users]) => ({ emoji, count: users.size, mine: users.has(uid) }))
       .filter((x) => x.count > 0)
   }
   function profile(userId: string) {
@@ -119,19 +122,15 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
   function applyReactionRow(row: any, removed: boolean) {
     const mid = row?.message_id
     const emoji = row?.emoji
-    if (!mid || !emoji) return
-    const cur = { ...(reactions.value[mid] ?? {}) }
-    const entry = { ...(cur[emoji] ?? { count: 0, mine: false }) }
-    if (removed) {
-      entry.count = Math.max(0, entry.count - 1)
-      if (row.user_id === me()) entry.mine = false
-    } else {
-      entry.count += 1
-      if (row.user_id === me()) entry.mine = true
-    }
-    if (entry.count <= 0) delete cur[emoji]
-    else cur[emoji] = entry
-    reactions.value = { ...reactions.value, [mid]: cur }
+    const uid = row?.user_id
+    if (!mid || !emoji || !uid) return
+    const byEmoji = reactions.value[mid] ?? (reactions.value[mid] = {})
+    const set = byEmoji[emoji] ?? (byEmoji[emoji] = new Set<string>())
+    if (removed) set.delete(uid)
+    else set.add(uid) // idempotent: re-adding the same user is a no-op
+    if (set.size === 0) delete byEmoji[emoji]
+    // Reassign the message entry so the template's reactionList() recomputes.
+    reactions.value = { ...reactions.value, [mid]: { ...byEmoji } }
   }
 
   async function loadHistory(id: string, opts: { silent?: boolean } = {}) {
@@ -169,12 +168,11 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
       console.warn('[comms] loadReactions:', error.message)
       return
     }
-    const map: Record<string, Record<string, { count: number; mine: boolean }>> = {}
+    const map: Record<string, Record<string, Set<string>>> = {}
     for (const r of (data ?? []) as any[]) {
       const m = (map[r.message_id] ??= {})
-      const e = (m[r.emoji] ??= { count: 0, mine: false })
-      e.count += 1
-      if (r.user_id === me()) e.mine = true
+      const s = (m[r.emoji] ??= new Set<string>())
+      s.add(r.user_id)
     }
     reactions.value = map
   }
@@ -302,9 +300,9 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
   async function toggleReaction(messageId: string, emoji: string) {
     const uid = me()
     if (!uid) return
-    const mine = reactions.value[messageId]?.[emoji]?.mine
-    // Optimistic
-    applyReactionRow({ message_id: messageId, user_id: uid, emoji }, !!mine)
+    const mine = reactions.value[messageId]?.[emoji]?.has(uid) ?? false
+    // Optimistic (idempotent vs. the broadcast echo, since we key by user id)
+    applyReactionRow({ message_id: messageId, user_id: uid, emoji }, mine)
     if (mine) {
       const { error } = await supabase
         .from('message_reactions')
