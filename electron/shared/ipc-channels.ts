@@ -25,6 +25,7 @@ export const IPC = {
   MEETING_FETCH_DETAIL: 'meeting:fetch-detail',
   MEETING_SET_CLIENT: 'meeting:set-client',
   MEETING_RETRY_SUMMARY: 'meeting:retry-summary',
+  MEETING_REGENERATE_SUMMARY: 'meeting:regenerate-summary',
   MEETING_EXPORT_PDF: 'meeting:export-pdf',
   CLIENTS_LIST: 'clients:list',
 
@@ -81,6 +82,7 @@ export interface AuthSession {
   userId: string
   email: string | null
   fullName: string | null
+  role: string | null
 }
 
 export interface AppSettings {

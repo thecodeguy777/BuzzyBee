@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useAuthStore, type UserRole } from '@/stores/auth'
 import { Save, Check } from 'lucide-vue-next'
+import HexAvatar from '@/components/shared/HexAvatar.vue'
 
 const auth = useAuthStore()
 
@@ -78,18 +79,13 @@ async function handleSave() {
     <div class="card bg-base-100 border border-base-300 shadow-sm">
       <div class="card-body p-6 space-y-5">
         <div class="flex items-center gap-4">
-          <div
-            class="w-16 h-16 rounded-full bg-primary/20 text-primary flex items-center justify-center font-semibold text-xl shrink-0 overflow-hidden"
-          >
-            <img
-              v-if="avatarUrl"
-              :src="avatarUrl"
-              :alt="fullName"
-              class="w-full h-full object-cover"
-              @error="avatarUrl = ''"
-            />
-            <span v-else>{{ auth.initials }}</span>
-          </div>
+          <HexAvatar
+            :avatar-url="avatarUrl || null"
+            :name="fullName"
+            :label="avatarUrl ? undefined : auth.initials"
+            :size="64"
+            tint="primary"
+          />
           <div class="min-w-0">
             <div class="font-medium truncate">{{ auth.user?.email }}</div>
             <div class="text-xs text-base-content/60">Email is managed by your sign-in account.</div>

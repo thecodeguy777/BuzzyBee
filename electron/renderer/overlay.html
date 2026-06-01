@@ -4,8 +4,20 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>HiveMind AI — Overlay</title>
+    <style>
+      /* Force transparency past DaisyUI's html/body background so the
+         frameless rounded corners render against the desktop, not white. */
+      html, body { background: transparent !important; margin: 0; }
+    </style>
+    <script>
+      // Apply the saved theme before first paint to avoid a light-mode flash.
+      try {
+        var t = localStorage.getItem('hivemind-theme');
+        document.documentElement.dataset.theme = t === 'dark' ? 'dark' : 'light';
+      } catch (e) { /* localStorage unavailable */ }
+    </script>
   </head>
-  <body style="margin: 0; background: transparent;">
+  <body>
     <div id="app"></div>
     <script type="module" src="./overlay-main.ts"></script>
   </body>

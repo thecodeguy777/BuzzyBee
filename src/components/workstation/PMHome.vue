@@ -17,11 +17,14 @@ import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth'
 import { useClientsStore } from '@/stores/clients'
 import { useTasksStore } from '@/stores/tasks'
+import { useStatusesStore } from '@/stores/statuses'
 import { useTeamStore } from '@/stores/team'
+import HexAvatar from '@/components/shared/HexAvatar.vue'
 
 const auth = useAuthStore()
 const clients = useClientsStore()
 const tasks = useTasksStore()
+const statusesStore = useStatusesStore()
 const team = useTeamStore()
 const router = useRouter()
 
@@ -112,7 +115,7 @@ const activeClients = computed(() =>
   clients.clients.filter((c) => c.status === 'active')
 )
 const allOpenTasks = computed(() =>
-  tasks.tasks.filter((t) => t.status !== 'done' && t.status !== 'cancelled')
+  tasks.tasks.filter((t) => statusesStore.isOpen(t.project_id, t.status))
 )
 const overdueTasks = computed(() => {
   const today = startOfDay().getTime()
@@ -123,7 +126,7 @@ const overdueTasks = computed(() => {
 const completedThisWeek = computed(() => {
   const wk = startOfWeek().getTime()
   return tasks.tasks.filter((t) => {
-    if (t.status !== 'done' || !t.completed_at) return false
+    if (!statusesStore.isDone(t.project_id, t.status) || !t.completed_at) return false
     return new Date(t.completed_at).getTime() >= wk
   }).length
 })
@@ -173,8 +176,7 @@ const hivemindSuggestions = computed<HiveMindSuggestion[]>(() => {
       open: tasks.tasks.filter(
         (t) =>
           t.assignee_id === m.id &&
-          t.status !== 'done' &&
-          t.status !== 'cancelled'
+          statusesStore.isOpen(t.project_id, t.status)
       ).length
     }))
     .sort((a, b) => a.open - b.open)
@@ -334,8 +336,7 @@ const vaCards = computed<VaCard[]>(() => {
     open_tasks: tasks.tasks.filter(
       (t) =>
         t.assignee_id === m.id &&
-        t.status !== 'done' &&
-        t.status !== 'cancelled'
+        statusesStore.isOpen(t.project_id, t.status)
     ).length
   }))
   out.sort((a, b) => b.hours_today - a.hours_today || b.open_tasks - a.open_tasks)
@@ -362,8 +363,7 @@ const clientRows = computed<ClientRow[]>(() => {
       const openCount = tasks.tasks.filter(
         (t) =>
           t.client_id === c.id &&
-          t.status !== 'done' &&
-          t.status !== 'cancelled'
+          statusesStore.isOpen(t.project_id, t.status)
       ).length
       return {
         id: c.id,
@@ -388,18 +388,6 @@ const statusDot: Record<string, string> = {
   active: 'bg-success',
   paused: 'bg-warning',
   archived: 'bg-base-content/30'
-}
-
-function initials(name: string, email: string | null) {
-  const src = name || email || '?'
-  return (
-    src
-      .split(/\s|@/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((p) => p.charAt(0).toUpperCase())
-      .join('') || 'BB'
-  )
 }
 
 function goVa(id: string) {
@@ -671,17 +659,13 @@ function goClient(id: string) {
           class="flex items-center gap-3 p-2.5 rounded-lg border border-base-200 hover:border-base-content/20 hover:bg-base-200/40 transition-all text-left"
           @click="goVa(v.id)"
         >
-          <div
-            class="w-9 h-9 rounded-full bg-primary/15 text-primary text-xs font-semibold flex items-center justify-center shrink-0 overflow-hidden"
-          >
-            <img
-              v-if="v.avatar_url"
-              :src="v.avatar_url"
-              :alt="v.name"
-              class="w-full h-full object-cover"
-            />
-            <span v-else>{{ initials(v.name, v.email) }}</span>
-          </div>
+          <HexAvatar
+            :avatar-url="v.avatar_url"
+            :name="v.name"
+            :email="v.email"
+            :size="36"
+            class="shrink-0"
+          />
           <div class="flex-1 min-w-0">
             <div class="text-sm font-medium truncate">{{ v.name }}</div>
             <div class="text-[0.65rem] text-base-content/60 flex items-center gap-1.5 mt-0.5 tabular-nums">

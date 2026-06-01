@@ -70,6 +70,7 @@ function statusDot(c: Client) {
       <ChevronDown class="w-3.5 h-3.5" :stroke-width="1.75" />
     </button>
 
+    <transition name="dropdown">
     <div
       v-if="open"
       class="absolute z-40 mt-1 w-72 rounded-lg border border-base-300 bg-base-100 shadow-lg overflow-hidden"
@@ -124,5 +125,6 @@ function statusDot(c: Client) {
         </RouterLink>
       </div>
     </div>
+    </transition>
   </div>
 </template>

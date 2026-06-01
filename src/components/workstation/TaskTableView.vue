@@ -6,10 +6,6 @@ import {
   Trash2,
   Circle,
   CheckCircle2,
-  CircleDashed,
-  CircleAlert,
-  CircleSlash,
-  Loader2,
   ChevronRight,
   ChevronDown,
   Flag,
@@ -27,12 +23,18 @@ import { useTasksStore, type Task, type TaskStatus } from '@/stores/tasks'
 import { useTaskFieldsStore, type TaskFieldDef } from '@/stores/taskFields'
 import { useClientsStore } from '@/stores/clients'
 import { useTeamStore } from '@/stores/team'
+import { useStatusesStore } from '@/stores/statuses'
+import { useProjectsStore } from '@/stores/projects'
+import { statusClasses } from '@/lib/statusColors'
 import { useColumnWidths } from '@/composables/useColumnWidths'
+import HexAvatar from '@/components/shared/HexAvatar.vue'
 
 const tasks = useTasksStore()
 const taskFields = useTaskFieldsStore()
 const clients = useClientsStore()
 const team = useTeamStore()
+const statusesStore = useStatusesStore()
+const projects = useProjectsStore()
 
 // TKT-0004 — Excel-style resizable columns. Widths persist to localStorage
 // so a user's preferred layout survives reloads.
@@ -60,27 +62,32 @@ const emit = defineEmits<{ (e: 'add-column'): void }>()
 // -----------------------------------------------------------------------------
 // Status / priority metadata
 // -----------------------------------------------------------------------------
-// Progress-bar mapping (TKT-0007). Each status has a position on the lifecycle
-// (0–100) and a track color. Blocked sits at the same position as In progress
-// but flagged red because it happens mid-flow.
-const statuses: {
-  value: TaskStatus
-  label: string
-  icon: any
-  pillBg: string
-  pillFg: string
-  dotBg: string
-  pct: number
-  barClass: string
-}[] = [
-  { value: 'todo',        label: 'Todo',        icon: CircleDashed, pillBg: 'bg-base-200',   pillFg: 'text-base-content/70', dotBg: 'bg-base-content/40', pct: 8,   barClass: 'bg-base-content/40' },
-  { value: 'in_progress', label: 'In progress', icon: Loader2,      pillBg: 'bg-primary/10', pillFg: 'text-primary',          dotBg: 'bg-primary',         pct: 55,  barClass: 'bg-primary' },
-  { value: 'blocked',     label: 'Blocked',     icon: CircleAlert,  pillBg: 'bg-error/10',   pillFg: 'text-error',            dotBg: 'bg-error',           pct: 55,  barClass: 'bg-error' },
-  { value: 'done',        label: 'Done',        icon: CheckCircle2, pillBg: 'bg-success/10', pillFg: 'text-success',          dotBg: 'bg-success',         pct: 100, barClass: 'bg-success' },
-  { value: 'cancelled',   label: 'Cancelled',   icon: CircleSlash,  pillBg: 'bg-base-200',   pillFg: 'text-base-content/40', dotBg: 'bg-base-content/30', pct: 0,   barClass: 'bg-base-content/30' }
-]
+// Columns are now data-driven (per-project task_statuses): label, color, order,
+// and done/cancelled semantics come from the statuses store. Tailwind classes
+// are resolved from the column's color token via statusClasses().
+const columns = computed(() =>
+  statusesStore.forProject(projects.currentProjectId).map((s) => ({
+    def: s,
+    value: s.key as TaskStatus,
+    label: s.label,
+    classes: statusClasses(s.color)
+  }))
+)
+// Resolve the display metadata (classes/label/semantics) for a task's status.
+// Falls back to the first column when a task references a removed status.
 function statusOf(s: TaskStatus) {
-  return statuses.find((x) => x.value === s) ?? statuses[0]
+  return columns.value.find((c) => c.value === s) ?? columns.value[0] ?? null
+}
+// Progress-bar fill % driven purely by semantics: done → full, cancelled →
+// empty, anything open sits mid-flow.
+function progressPct(s: TaskStatus): number {
+  const pid = projects.currentProjectId
+  if (statusesStore.isDone(pid, s)) return 100
+  if (statusesStore.isCancelled(pid, s)) return 0
+  return 50
+}
+function statusLabel(s: TaskStatus): string {
+  return statusOf(s)?.label ?? s
 }
 
 const priorities: { value: 1 | 2 | 3 | 4; label: string; textClass: string }[] = [
@@ -97,13 +104,21 @@ function priorityOf(p: number) {
 // Group-by-status (collapse persisted in localStorage)
 // -----------------------------------------------------------------------------
 const COLLAPSE_KEY = 'buzzybee.workstation.task-table.collapsed-groups'
+// Default: collapse the project's cancelled-type columns. Persistence is keyed
+// by status key, so a user's explicit expand/collapse choices survive reloads.
+function defaultCollapsed(): TaskStatus[] {
+  return statusesStore
+    .forProject(projects.currentProjectId)
+    .filter((s) => s.is_cancelled)
+    .map((s) => s.key as TaskStatus)
+}
 function loadCollapsed(): Set<TaskStatus> {
-  if (typeof window === 'undefined') return new Set(['cancelled'])
+  if (typeof window === 'undefined') return new Set(defaultCollapsed())
   try {
     const raw = window.localStorage.getItem(COLLAPSE_KEY)
-    return new Set(raw ? (JSON.parse(raw) as TaskStatus[]) : ['cancelled'])
+    return new Set(raw ? (JSON.parse(raw) as TaskStatus[]) : defaultCollapsed())
   } catch {
-    return new Set(['cancelled'])
+    return new Set(defaultCollapsed())
   }
 }
 const collapsed = ref<Set<TaskStatus>>(loadCollapsed())
@@ -118,8 +133,9 @@ function toggleGroup(s: TaskStatus) {
 }
 
 const groups = computed(() => {
+  const cols = columns.value
   const map = new Map<TaskStatus, Task[]>()
-  for (const s of statuses) map.set(s.value, [])
+  for (const c of cols) map.set(c.value, [])
   for (const t of tasks.tasksForCurrentProject) map.get(t.status)?.push(t)
   for (const list of map.values()) {
     list.sort(
@@ -128,12 +144,15 @@ const groups = computed(() => {
         a.created_at.localeCompare(b.created_at)
     )
   }
-  return statuses
-    .map((s) => ({
-      ...s,
-      tasks: map.get(s.value) ?? []
+  return cols
+    .map((c) => ({
+      value: c.value,
+      label: c.label,
+      dotBg: c.classes.dot,
+      tasks: map.get(c.value) ?? []
     }))
-    .filter((g) => g.tasks.length > 0 || g.value !== 'cancelled')
+    // Empty groups stay visible unless the status is a cancelled-type bucket.
+    .filter((g) => g.tasks.length > 0 || !statusesStore.isCancelled(projects.currentProjectId, g.value))
 })
 
 const customCols = computed(() => taskFields.defsForCurrentClient)
@@ -147,21 +166,20 @@ const totalCols = computed(() => 9 + customCols.value.length + 1)
 // One contextual suggestion based on the current state.
 // -----------------------------------------------------------------------------
 const suggestion = computed(() => {
+  const pid = projects.currentProjectId
   const inFlight = tasks.tasksForCurrentProject.filter(
-    (t) => t.status === 'in_progress'
+    (t) => statusesStore.isOpen(pid, t.status)
   )
   const overdue = tasks.tasksForCurrentProject.filter(
     (t) =>
       t.due_on &&
-      t.status !== 'done' &&
-      t.status !== 'cancelled' &&
+      statusesStore.isOpen(pid, t.status) &&
       new Date(t.due_on + 'T00:00:00').getTime() < Date.now()
   )
   const unassigned = tasks.tasksForCurrentProject.filter(
     (t) =>
       !t.assignee_id &&
-      t.status !== 'done' &&
-      t.status !== 'cancelled'
+      statusesStore.isOpen(pid, t.status)
   )
   if (overdue.length >= 2) {
     return {
@@ -196,7 +214,13 @@ async function setStatus(t: Task, status: TaskStatus) {
   await tasks.setStatus(t.id, status)
 }
 async function toggleDone(t: Task) {
-  await tasks.setStatus(t.id, t.status === 'done' ? 'todo' : 'done')
+  const pid = projects.currentProjectId
+  // Check → first done column; uncheck → first (default) column.
+  const target = statusesStore.isDone(pid, t.status)
+    ? statusesStore.defaultKey(pid)
+    : statusesStore.firstDoneKey(pid)
+  if (!target || target === t.status) return
+  await tasks.setStatus(t.id, target)
 }
 async function setPriority(t: Task, priority: 1 | 2 | 3 | 4) {
   if (t.priority === priority) return
@@ -250,25 +274,27 @@ async function deleteCol(d: TaskFieldDef) {
 // -----------------------------------------------------------------------------
 // Add task (new and per-group)
 // -----------------------------------------------------------------------------
-const newTitleByStatus = ref<Record<TaskStatus, string>>({
-  todo: '',
-  in_progress: '',
-  blocked: '',
-  done: '',
-  cancelled: ''
-})
+// Keyed by status key (dynamic per project), so we use a partial record.
+const newTitleByStatus = ref<Record<string, string>>({})
 const adderOpenFor = ref<TaskStatus | null>(null)
 
+// Opens the inline adder under the project's default (first) column.
+function openDefaultAdder() {
+  adderOpenFor.value = statusesStore.defaultKey(projects.currentProjectId) ?? null
+}
+
 async function commitNew(status: TaskStatus) {
-  const title = newTitleByStatus.value[status].trim()
+  const title = (newTitleByStatus.value[status] ?? '').trim()
   if (!title) {
     adderOpenFor.value = null
     return
   }
-  // createTask always inserts as 'todo'. If the user added from a non-todo
-  // group, we follow up with a status change so the row lands in the right group.
+  // createTask inserts into the project's default (first) column. If the user
+  // added from a different group, follow up with a status change so the row
+  // lands in the right group.
   const created = await tasks.createTask({ title })
-  if (status !== 'todo' && created?.id) {
+  const defaultKey = statusesStore.defaultKey(projects.currentProjectId)
+  if (status !== defaultKey && created?.id) {
     await tasks.setStatus(created.id, status)
   }
   newTitleByStatus.value[status] = ''
@@ -400,13 +426,8 @@ const editableCell =
 // changes status). Same recipe as TaskBoardView: priority_order between
 // neighbors, status from the target tbody's data-status attribute.
 // -----------------------------------------------------------------------------
-const tbodyRefs = ref<Record<TaskStatus, HTMLElement | null>>({
-  todo: null,
-  in_progress: null,
-  blocked: null,
-  done: null,
-  cancelled: null
-})
+// Keyed by status key (dynamic per project).
+const tbodyRefs = ref<Record<string, HTMLElement | null>>({})
 const sortables: Sortable[] = []
 
 function setTbodyRef(status: TaskStatus, el: Element | any) {
@@ -453,8 +474,8 @@ function destroySortables() {
 }
 function buildSortables() {
   destroySortables()
-  for (const s of statuses) {
-    const el = tbodyRefs.value[s.value]
+  for (const c of columns.value) {
+    const el = tbodyRefs.value[c.value]
     if (!el) continue
     sortables.push(
       Sortable.create(el, {
@@ -608,7 +629,7 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
         type="button"
         class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-transform hover:scale-[1.02] active:scale-95 shadow-hc-1"
         style="background: var(--hc-ink); color: var(--hc-paper);"
-        @click="adderOpenFor = 'todo'"
+        @click="openDefaultAdder()"
       >
         <Plus class="w-3.5 h-3.5" :stroke-width="2" />
         New task
@@ -743,7 +764,7 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
                     type="button"
                     class="px-2.5 py-1 rounded-md text-xs font-medium transition-transform hover:scale-[1.02] active:scale-95"
                     style="background: var(--hc-accent); color: var(--hc-paper);"
-                    @click="adderOpenFor = 'todo'"
+                    @click="openDefaultAdder()"
                   >
                     {{ suggestion.cta }}
                   </button>
@@ -851,17 +872,19 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
                         type="button"
                         data-no-drag
                         class="inline-flex items-center justify-center hover:scale-110 transition-transform"
-                        :class="statusOf(t.status).pillFg"
+                        :class="statusOf(t.status)?.classes.pillFg"
                         @click="toggleDone(t)"
                       >
-                        <CheckCircle2
-                          v-if="t.status === 'done'"
-                          class="w-4 h-4"
-                          :stroke-width="2"
-                          fill="currentColor"
-                          fill-opacity="0.18"
-                        />
-                        <Circle v-else class="w-4 h-4" :stroke-width="1.75" />
+                        <transition name="pop" mode="out-in">
+                          <CheckCircle2
+                            v-if="statusesStore.isDone(projects.currentProjectId, t.status)"
+                            class="w-4 h-4"
+                            :stroke-width="2"
+                            fill="currentColor"
+                            fill-opacity="0.18"
+                          />
+                          <Circle v-else class="w-4 h-4" :stroke-width="1.75" />
+                        </transition>
                       </button>
                     </div>
                   </td>
@@ -872,8 +895,8 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
                       <input
                         :value="t.title"
                         type="text"
-                        class="flex-1 bg-transparent outline-none text-sm px-3 py-1.5 truncate"
-                        :class="t.status === 'done' && 'line-through text-base-content/45'"
+                        class="flex-1 bg-transparent outline-none text-sm px-3 py-1.5 truncate transition-colors"
+                        :class="statusesStore.isDone(projects.currentProjectId, t.status) && 'line-through text-base-content/45'"
                         @blur="setTitle(t, ($event.target as HTMLInputElement).value)"
                         @keydown.enter="($event.target as HTMLInputElement).blur()"
                       />
@@ -902,34 +925,34 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
                         class="inline-block w-10 h-1.5 rounded-full overflow-hidden shrink-0 bg-base-200"
                         :title="
                           tasks.assigneeProgress(t.id).total > 1
-                            ? `${statusOf(t.status).label} · ${tasks.assigneeProgress(t.id).done}/${tasks.assigneeProgress(t.id).total} assignees done`
-                            : statusOf(t.status).label
+                            ? `${statusLabel(t.status)} · ${tasks.assigneeProgress(t.id).done}/${tasks.assigneeProgress(t.id).total} assignees done`
+                            : statusLabel(t.status)
                         "
                       >
                         <span
                           class="block h-full rounded-full transition-[width,background-color] duration-300 ease-out"
-                          :class="statusOf(t.status).barClass"
+                          :class="statusOf(t.status)?.classes.bar"
                           :style="{
                             width: (
-                              tasks.assigneeProgress(t.id).total > 1 && t.status !== 'done' && t.status !== 'cancelled'
+                              tasks.assigneeProgress(t.id).total > 1 && statusesStore.isOpen(projects.currentProjectId, t.status)
                                 ? Math.max(8, tasks.assigneeProgress(t.id).pct)
-                                : statusOf(t.status).pct
+                                : progressPct(t.status)
                             ) + '%'
                           }"
                         />
                       </span>
                       <span
                         class="text-xs font-medium truncate"
-                        :class="statusOf(t.status).pillFg"
+                        :class="statusOf(t.status)?.classes.pillFg"
                       >
-                        {{ statusOf(t.status).label }}
+                        {{ statusLabel(t.status) }}
                       </span>
                       <select
                         :value="t.status"
                         class="absolute inset-0 opacity-0 cursor-pointer"
                         @change="setStatus(t, ($event.target as HTMLSelectElement).value as TaskStatus)"
                       >
-                        <option v-for="s in statuses" :key="s.value" :value="s.value">{{ s.label }}</option>
+                        <option v-for="c in columns" :key="c.value" :value="c.value">{{ c.label }}</option>
                       </select>
                     </div>
                   </td>
@@ -994,25 +1017,32 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
                       @click="openDrawer(t)"
                     >
                       <div class="flex items-center -space-x-1.5">
-                        <span
+                        <HexAvatar
                           v-for="(a, i) in tasks.getAssignees(t.id).slice(0, 3)"
                           :key="a.user_id"
-                          class="relative w-6 h-6 rounded-full text-[0.55rem] font-semibold text-white flex items-center justify-center ring-2 ring-white"
-                          :style="`background: ${hashColor(a.user_id)}; z-index: ${10 - i}`"
+                          ring
+                          :size="24"
+                          :font-size="9"
+                          :fill="hashColor(a.user_id)"
+                          :label="initials(team.profiles[a.user_id]?.full_name || team.profiles[a.user_id]?.email?.split('@')[0] || '?')"
+                          :style="{ zIndex: 10 - i }"
                         >
-                          {{ initials(team.profiles[a.user_id]?.full_name || team.profiles[a.user_id]?.email?.split('@')[0] || '?') }}
-                          <span
-                            v-if="a.completed_at"
-                            class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-success ring-1 ring-white"
-                          />
-                        </span>
-                        <span
+                          <template #badge>
+                            <span
+                              v-if="a.completed_at"
+                              class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-success ring-1 ring-white"
+                            />
+                          </template>
+                        </HexAvatar>
+                        <HexAvatar
                           v-if="tasks.getAssignees(t.id).length > 3"
-                          class="relative w-6 h-6 rounded-full text-[0.55rem] font-semibold flex items-center justify-center ring-2 ring-white bg-base-200 text-base-content/70"
-                          style="z-index: 7"
-                        >
-                          +{{ tasks.getAssignees(t.id).length - 3 }}
-                        </span>
+                          placeholder
+                          ring
+                          :size="24"
+                          :font-size="9"
+                          :label="`+${tasks.getAssignees(t.id).length - 3}`"
+                          :style="{ zIndex: 7 }"
+                        />
                       </div>
                     </button>
                     <span v-else class="text-base-content/35 text-sm">—</span>

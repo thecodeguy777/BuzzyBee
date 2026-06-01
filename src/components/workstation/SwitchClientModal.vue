@@ -37,6 +37,7 @@ watch(open, (is) => {
 
 <template>
   <Teleport to="body">
+    <transition name="modal-fade">
     <div
       v-if="open"
       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
@@ -45,6 +46,7 @@ watch(open, (is) => {
       aria-labelledby="switch-client-title"
       @click.self="cancel"
     >
+      <transition name="modal-pop" appear>
       <div class="w-full max-w-md rounded-xl bg-base-100 border border-base-300 shadow-xl overflow-hidden">
         <div class="px-6 py-5">
           <h2 id="switch-client-title" class="font-display text-xl font-semibold">
@@ -90,6 +92,8 @@ watch(open, (is) => {
           </button>
         </div>
       </div>
+      </transition>
     </div>
+    </transition>
   </Teleport>
 </template>

@@ -5,13 +5,16 @@ import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth'
 import { useClientsStore } from '@/stores/clients'
 import { useProjectsStore } from '@/stores/projects'
+import { useStatusesStore } from '@/stores/statuses'
 import {
   uploadTaskAttachment,
   deleteTaskAttachment,
   type TaskAttachmentMeta
 } from '@/lib/taskAttachments'
 
-export type TaskStatus = 'todo' | 'in_progress' | 'blocked' | 'done' | 'cancelled'
+// Status is now a dynamic, per-project column key (see the statuses store),
+// not a fixed enum. Kept as a named alias for readability across the app.
+export type TaskStatus = string
 
 export interface TaskAttachment {
   url?: string
@@ -87,6 +90,7 @@ export const useTasksStore = defineStore('tasks', () => {
   const auth = useAuthStore()
   const clients = useClientsStore()
   const projects = useProjectsStore()
+  const statuses = useStatusesStore()
 
   const tasks = ref<Task[]>([])
   /** Multi-assignee rows keyed by task_id. Loaded in fetchAll, updated via realtime. */
@@ -110,16 +114,16 @@ export const useTasksStore = defineStore('tasks', () => {
     return tasks.value.filter((t) => t.project_id === pid)
   })
 
+  // Grouped by the current project's columns (dynamic). A bucket exists for
+  // every defined status; an unexpected/legacy status key still gets its own
+  // bucket so no task ever silently disappears.
   const tasksByStatus = computed(() => {
-    const map: Record<TaskStatus, Task[]> = {
-      todo: [],
-      in_progress: [],
-      blocked: [],
-      done: [],
-      cancelled: []
+    const map: Record<string, Task[]> = {}
+    for (const c of statuses.forProject(projects.currentProjectId)) map[c.key] = []
+    for (const t of tasksForCurrentProject.value) {
+      ;(map[t.status] ??= []).push(t)
     }
-    for (const t of tasksForCurrentProject.value) map[t.status].push(t)
-    for (const k of Object.keys(map) as TaskStatus[]) {
+    for (const k of Object.keys(map)) {
       map[k].sort((a, b) => a.priority_order - b.priority_order || a.created_at.localeCompare(b.created_at))
     }
     return map

@@ -11,9 +11,12 @@ import {
 } from 'lucide-vue-next'
 import { useTasksStore, type Task } from '@/stores/tasks'
 import { useClientsStore } from '@/stores/clients'
+import { useStatusesStore } from '@/stores/statuses'
+import { statusClasses } from '@/lib/statusColors'
 
 const tasks = useTasksStore()
 const clients = useClientsStore()
+const statusesStore = useStatusesStore()
 
 // ── Month state ───────────────────────────────────────────────────────────
 const cursor = ref(startOfMonth(new Date()))
@@ -79,7 +82,7 @@ const tasksByDate = computed(() => {
 
 const undatedTasks = computed(() =>
   tasks.tasksForCurrentClient
-    .filter((t) => !t.due_on && t.status !== 'cancelled' && t.status !== 'done')
+    .filter((t) => !t.due_on && statusesStore.isOpen(t.project_id, t.status))
     .sort((a, b) => a.priority_order - b.priority_order || a.created_at.localeCompare(b.created_at))
 )
 
@@ -259,11 +262,7 @@ const todayKey = computed(() => ymd(new Date()))
 const overdueCount = computed(() => {
   const t = todayKey.value
   return tasks.tasksForCurrentClient.filter(
-    (x) =>
-      x.due_on &&
-      x.due_on < t &&
-      x.status !== 'done' &&
-      x.status !== 'cancelled'
+    (x) => x.due_on && x.due_on < t && statusesStore.isOpen(x.project_id, x.status)
   ).length
 })
 
@@ -272,14 +271,14 @@ function jumpToToday() {
 }
 
 // ── Status indicator on chips ─────────────────────────────────────────────
-function statusDotClass(status: Task['status']) {
-  return {
-    todo: 'bg-base-content/30',
-    in_progress: 'bg-info',
-    blocked: 'bg-error',
-    done: 'bg-success',
-    cancelled: 'bg-base-content/20'
-  }[status]
+// Dot color comes from the task's own project status column (calendar can show
+// tasks from across the client's projects), falling back to neutral.
+function statusDotClass(t: Task) {
+  const def = statusesStore.get(t.project_id, t.status)
+  return statusClasses(def?.color).dot
+}
+function statusLabel(t: Task) {
+  return statusesStore.get(t.project_id, t.status)?.label ?? t.status
 }
 </script>
 
@@ -395,12 +394,12 @@ function statusDotClass(status: Task['status']) {
                 <div class="flex-1 min-w-0 px-1.5 py-1 flex items-center gap-1.5">
                   <span
                     class="w-1.5 h-1.5 rounded-full shrink-0"
-                    :class="statusDotClass(t.status)"
-                    :title="t.status.replace('_', ' ')"
+                    :class="statusDotClass(t)"
+                    :title="statusLabel(t)"
                   />
                   <div
                     class="text-[0.7rem] leading-tight font-medium truncate"
-                    :class="t.status === 'done' && 'line-through text-base-content/50'"
+                    :class="statusesStore.isDone(t.project_id, t.status) && 'line-through text-base-content/50'"
                     :title="t.title"
                   >
                     {{ t.title }}

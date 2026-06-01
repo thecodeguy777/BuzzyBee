@@ -1,0 +1,31 @@
+-- Phase 4 — Workflow engine + tasks
+-- See applied migration `dialer_tasks` in Supabase for the actual content.
+-- This file mirrors what was applied via MCP for local reference.
+
+-- 1. dialer_tasks table (id, lead_id, call_id, parent_event_id, title,
+--    description, task_type, status, assigned_to_user_id, created_by_user_id,
+--    completed_by_user_id, due_at, sla_hours, completed_at, snooze_until,
+--    metadata, created_at, updated_at)
+-- 2. Indexes on (assigned_to_user_id, status, due_at), (lead_id, created_at),
+--    open due_at, overdue
+-- 3. updated_at trigger
+-- 4. Backfilled FK from dialer_lead_events.task_id → dialer_tasks.id
+-- 5. RLS — visible to admins, to assignees, and to anyone who can see the
+--    parent lead (mirroring dialer_lead_events policy)
+-- 6. Realtime publication
+-- 7. Trigger: dialer_calls disposition set → auto-create task per rule
+--    - contacted     → follow_up_email      (4h SLA)
+--    - callback      → callback             (due_at = callback_at)
+--    - voicemail     → sms_voicemail_followup (1h SLA)
+--    - dnc           → audit_dnc            (4h SLA)
+--    - wrong-number  → audit_wrong_number   (24h SLA)
+--    - not-interested → review_not_interested (24h SLA)
+--    - no-answer     → (none)
+-- 8. Trigger: dialer_leads stage change → auto-create task per rule
+--    - qualified     → schedule_discovery   (24h SLA)
+--    - proposal      → send_proposal        (48h SLA)
+--    - negotiation   → follow_up_proposal   (72h SLA)
+--    - closed-won    → onboarding_kickoff   (24h SLA)
+-- 9. Trigger: dialer_tasks INSERT → emit task_created event
+-- 10. Trigger: dialer_tasks UPDATE (status='done') → emit task_completed
+--     event with completed_in_sla flag

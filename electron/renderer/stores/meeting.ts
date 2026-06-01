@@ -109,7 +109,15 @@ export const useMeetingStore = defineStore('meeting', () => {
   }
 
   function addTranscriptChunk(chunk: TranscriptChunk) {
-    transcript.value.push(chunk)
+    // Interim partials are growing fragments of the same utterance. Replace
+    // a trailing non-final entry instead of appending every partial, so the
+    // local array stays clean too (the live view already filters isFinal).
+    const last = transcript.value[transcript.value.length - 1]
+    if (last && !last.isFinal) {
+      transcript.value[transcript.value.length - 1] = chunk
+    } else {
+      transcript.value.push(chunk)
+    }
     // Send a name-resolved version to main so AI agents see "Mary" not "You · 2"
     window.electronAPI.meeting.sendTranscriptChunk({
       ...chunk,

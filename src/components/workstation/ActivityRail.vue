@@ -7,6 +7,7 @@ import { useClientsStore } from '@/stores/clients'
 import { useProjectsStore } from '@/stores/projects'
 import { useTeamStore } from '@/stores/team'
 import { useAuthStore } from '@/stores/auth'
+import HexAvatar from '@/components/shared/HexAvatar.vue'
 
 // -----------------------------------------------------------------------------
 // State / persistence
@@ -293,11 +294,7 @@ async function openTask(it: FeedItem) {
             @click="openTask(it)"
           >
             <div class="flex items-start gap-2.5">
-              <div
-                class="w-7 h-7 shrink-0 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[0.7rem] font-semibold"
-              >
-                {{ actorInitial(it.ev.user_id) }}
-              </div>
+              <HexAvatar :label="actorInitial(it.ev.user_id)" :size="28" :font-size="11" />
               <div class="flex-1 min-w-0">
                 <p class="text-xs text-base-content/80 leading-snug">
                   <span class="font-medium text-base-content">{{ actorName(it.ev.user_id) }}</span>

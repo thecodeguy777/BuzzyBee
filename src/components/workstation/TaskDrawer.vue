@@ -1,36 +1,114 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   X,
   Trash2,
   CalendarDays,
   Flag,
-  CircleDashed,
-  Loader2,
-  CircleCheck,
-  CircleAlert,
-  CircleSlash,
   Hash,
   History,
   MessageSquare,
   Search,
   Check,
-  UserPlus
+  UserPlus,
+  Send
 } from 'lucide-vue-next'
 import { useTasksStore, type TaskStatus, type TaskActivityEvent } from '@/stores/tasks'
+import { useStatusesStore } from '@/stores/statuses'
+import { statusClasses } from '@/lib/statusColors'
+import { useTaskChat } from '@/composables/useTaskChat'
 import { useTeamStore, type MemberProfile } from '@/stores/team'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectMembersStore } from '@/stores/projectMembers'
 import TaskAttachments from '@/components/workstation/TaskAttachments.vue'
 import RichTextEditor from '@/components/workstation/RichTextEditor.vue'
+import HexAvatar from '@/components/shared/HexAvatar.vue'
 
 const tasks = useTasksStore()
+const statusesStore = useStatusesStore()
 const team = useTeamStore()
 const auth = useAuthStore()
 const members = useProjectMembersStore()
 
 const open = computed(() => tasks.selectedTask !== null)
 const t = computed(() => tasks.selectedTask)
+
+// ── Per-task chat (task_comments + Realtime) ───────────────────────────────
+const taskId = computed(() => t.value?.id ?? null)
+const chat = useTaskChat(taskId)
+const draft = ref('')
+const bottomRef = ref<HTMLElement | null>(null)
+const scrollBodyRef = ref<HTMLElement | null>(null)
+
+// "Near the bottom" within ~120px — used so incoming messages don't yank you
+// down while you're scrolled up reading earlier history.
+function isNearBottom() {
+  const el = scrollBodyRef.value
+  if (!el) return true
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 120
+}
+
+// The first message-load for a freshly-opened task should jump to the latest,
+// regardless of scroll position.
+const pendingInitialScroll = ref(true)
+watch(taskId, () => {
+  pendingInitialScroll.value = true
+})
+
+const typingLabel = computed(() => {
+  const names = chat.typingUsers.value.map((x) => x.name.split(' ')[0] || 'Someone')
+  if (names.length === 0) return ''
+  if (names.length === 1) return `${names[0]} is typing…`
+  if (names.length === 2) return `${names[0]} and ${names[1]} are typing…`
+  return `${names.length} people are typing…`
+})
+
+function fmtCommentTime(iso: string) {
+  const d = new Date(iso)
+  const sameDay = d.toDateString() === new Date().toDateString()
+  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  return sameDay ? time : `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, ${time}`
+}
+
+function scrollChatToBottom() {
+  nextTick(() => bottomRef.value?.scrollIntoView({ block: 'end' }))
+}
+
+async function onSendComment() {
+  const text = draft.value
+  if (!text.trim() || chat.sending.value) return
+  draft.value = ''
+  try {
+    await chat.sendMessage(text)
+    scrollChatToBottom()
+  } catch {
+    draft.value = text // restore so the user doesn't lose their message
+  }
+}
+
+// Mark read as the conversation changes while the drawer is open. Auto-scroll
+// only when already near the bottom, so incoming messages don't interrupt
+// someone reading older history. (A message you *send* force-scrolls via
+// onSendComment regardless.)
+watch(
+  () => chat.messages.value.length,
+  (len) => {
+    if (!open.value) return
+    void chat.markRead()
+    if (pendingInitialScroll.value && len > 0) {
+      pendingInitialScroll.value = false
+      scrollChatToBottom()
+    } else if (isNearBottom()) {
+      scrollChatToBottom()
+    }
+  },
+)
+watch(open, (is) => {
+  if (is) {
+    void chat.markRead()
+    scrollChatToBottom()
+  }
+})
 
 const title = ref('')
 const description = ref('')
@@ -43,19 +121,20 @@ let savedTimer: ReturnType<typeof setTimeout> | undefined
 const confirmDelete = ref(false)
 const showHistory = ref(false)
 
-const statuses: {
-  value: TaskStatus
-  label: string
-  icon: any
-  badgeClass: string
-  dotClass: string
-}[] = [
-  { value: 'todo', label: 'Todo', icon: CircleDashed, badgeClass: 'bg-base-200 text-base-content', dotClass: 'bg-base-content/40' },
-  { value: 'in_progress', label: 'In progress', icon: Loader2, badgeClass: 'bg-info/15 text-info', dotClass: 'bg-info' },
-  { value: 'blocked', label: 'Blocked', icon: CircleAlert, badgeClass: 'bg-error/15 text-error', dotClass: 'bg-error' },
-  { value: 'done', label: 'Done', icon: CircleCheck, badgeClass: 'bg-success/15 text-success', dotClass: 'bg-success' },
-  { value: 'cancelled', label: 'Cancelled', icon: CircleSlash, badgeClass: 'bg-base-200 text-base-content/60', dotClass: 'bg-base-content/30' }
-]
+// Per-project status columns for the open task, mapped to the badge/dropdown
+// shape this component renders. Color classes come from the column's color
+// token via statusClasses().
+const statuses = computed(() =>
+  statusesStore.forProject(t.value?.project_id).map((col) => {
+    const c = statusClasses(col.color)
+    return {
+      value: col.key as TaskStatus,
+      label: col.label,
+      badgeClass: `${c.pillBg} ${c.pillFg}`,
+      dotClass: c.dot
+    }
+  })
+)
 
 const priorities: { value: 1 | 2 | 3 | 4; label: string; color: string }[] = [
   { value: 1, label: 'Urgent', color: 'text-error' },
@@ -64,7 +143,18 @@ const priorities: { value: 1 | 2 | 3 | 4; label: string; color: string }[] = [
   { value: 4, label: 'Low', color: 'text-base-content/40' }
 ]
 
-const currentStatus = computed(() => statuses.find((s) => s.value === status.value)!)
+// The currently-selected status column (may be undefined if the task's status
+// key has no matching column, e.g. mid-migration); the template guards with ?.
+const currentStatus = computed(() => {
+  const def = statusesStore.get(t.value?.project_id, status.value)
+  if (!def) return undefined
+  const c = statusClasses(def.color)
+  return {
+    label: def.label,
+    badgeClass: `${c.pillBg} ${c.pillFg}`,
+    dotClass: c.dot
+  }
+})
 const currentPriority = computed(() => priorities.find((p) => p.value === priority.value)!)
 
 function syncFromTask() {
@@ -510,7 +600,7 @@ function openDuePicker(triggerEl: HTMLElement) {
         </header>
 
         <!-- body -->
-        <div class="flex-1 overflow-y-auto">
+        <div ref="scrollBodyRef" class="flex-1 overflow-y-auto">
           <!-- title -->
           <div class="px-6 pt-6 pb-3">
             <input
@@ -531,10 +621,10 @@ function openDuePicker(triggerEl: HTMLElement) {
                 tabindex="0"
                 role="button"
                 class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer transition-colors"
-                :class="currentStatus.badgeClass"
+                :class="currentStatus?.badgeClass ?? 'bg-base-200 text-base-content/60'"
               >
-                <span class="w-1.5 h-1.5 rounded-full" :class="currentStatus.dotClass" />
-                {{ currentStatus.label }}
+                <span class="w-1.5 h-1.5 rounded-full" :class="currentStatus?.dotClass ?? 'bg-base-content/30'" />
+                {{ currentStatus?.label ?? status }}
               </div>
               <ul
                 tabindex="0"
@@ -617,8 +707,7 @@ function openDuePicker(triggerEl: HTMLElement) {
                 <template v-for="a in taskAssignees" :key="a.user_id">
                   <button
                     type="button"
-                    class="group/asg relative w-7 h-7 rounded-full text-[0.6rem] font-semibold text-white flex items-center justify-center ring-2 ring-white transition-transform hover:scale-110 hover:z-10"
-                    :style="`background: ${assigneeColor(a.user_id)}`"
+                    class="group/asg relative w-7 h-7 transition-transform hover:scale-110 hover:z-10"
                     :title="
                       (team.profiles[a.user_id]?.full_name || team.profiles[a.user_id]?.email?.split('@')[0] || 'Loading…')
                       + (a.completed_at ? ' · done' : ' · in progress')
@@ -626,31 +715,34 @@ function openDuePicker(triggerEl: HTMLElement) {
                     "
                     @click="toggleAssigneeDone(a.user_id, a.completed_at !== null)"
                   >
-                    <img
-                      v-if="team.profiles[a.user_id]?.avatar_url"
-                      :src="team.profiles[a.user_id]!.avatar_url ?? undefined"
-                      :alt="team.profiles[a.user_id]!.full_name ?? ''"
-                      class="w-full h-full rounded-full object-cover"
-                    />
-                    <span v-else>{{ assigneeInitials(team.profiles[a.user_id] ?? null) }}</span>
-
-                    <!-- done check badge -->
-                    <span
-                      v-if="a.completed_at"
-                      class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-success ring-2 ring-white flex items-center justify-center"
+                    <HexAvatar
+                      ring
+                      :size="28"
+                      :font-size="10"
+                      :fill="assigneeColor(a.user_id)"
+                      :avatar-url="team.profiles[a.user_id]?.avatar_url"
+                      :label="assigneeInitials(team.profiles[a.user_id] ?? null)"
                     >
-                      <Check class="w-2 h-2 text-white" :stroke-width="3" />
-                    </span>
+                      <template #badge>
+                        <!-- done check badge -->
+                        <span
+                          v-if="a.completed_at"
+                          class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-success ring-2 ring-white flex items-center justify-center"
+                        >
+                          <Check class="w-2 h-2 text-white" :stroke-width="3" />
+                        </span>
 
-                    <!-- remove on hover (manager only) -->
-                    <span
-                      v-if="auth.role !== 'va' || auth.user?.id === a.user_id"
-                      class="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-error opacity-0 group-hover/asg:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
-                      :title="auth.user?.id === a.user_id ? 'Leave this task' : 'Remove from task'"
-                      @click.stop="removeAssigneeRow(a.user_id)"
-                    >
-                      <X class="w-2 h-2 text-white" :stroke-width="3" />
-                    </span>
+                        <!-- remove on hover (manager only) -->
+                        <span
+                          v-if="auth.role !== 'va' || auth.user?.id === a.user_id"
+                          class="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-error opacity-0 group-hover/asg:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
+                          :title="auth.user?.id === a.user_id ? 'Leave this task' : 'Remove from task'"
+                          @click.stop="removeAssigneeRow(a.user_id)"
+                        >
+                          <X class="w-2 h-2 text-white" :stroke-width="3" />
+                        </span>
+                      </template>
+                    </HexAvatar>
                   </button>
                 </template>
               </div>
@@ -705,18 +797,13 @@ function openDuePicker(triggerEl: HTMLElement) {
                         class="w-full text-left px-3 py-2 hover:bg-base-200/60 transition-colors flex items-center gap-2"
                         @click="addAssigneeFromPicker(p)"
                       >
-                        <span
-                          class="w-7 h-7 rounded-full flex items-center justify-center text-[0.65rem] font-semibold text-white shrink-0 overflow-hidden"
-                          :style="`background: ${assigneeColor(p.id)}`"
-                        >
-                          <img
-                            v-if="p.avatar_url"
-                            :src="p.avatar_url"
-                            :alt="p.full_name ?? ''"
-                            class="w-full h-full object-cover"
-                          />
-                          <span v-else>{{ assigneeInitials(p) }}</span>
-                        </span>
+                        <HexAvatar
+                          :size="28"
+                          :font-size="11"
+                          :fill="assigneeColor(p.id)"
+                          :avatar-url="p.avatar_url"
+                          :label="assigneeInitials(p)"
+                        />
                         <span class="flex-1 min-w-0">
                           <span class="block text-sm font-medium truncate">{{ p.full_name || p.email || '—' }}</span>
                           <span class="block text-[0.65rem] text-base-content/50 truncate">
@@ -759,15 +846,97 @@ function openDuePicker(triggerEl: HTMLElement) {
           <!-- attachments -->
           <TaskAttachments :task="t" />
 
-          <!-- comments placeholder -->
+          <!-- conversation (task_comments, live over Realtime) -->
           <div class="px-6 py-4 border-t border-base-300/60">
-            <div class="text-xs font-medium text-base-content/60 uppercase tracking-wide flex items-center gap-1.5 mb-2">
+            <div class="flex items-center gap-1.5 mb-3 text-xs font-medium text-base-content/60 uppercase tracking-wide">
               <MessageSquare class="w-3.5 h-3.5" :stroke-width="1.75" />
-              Comments
+              Conversation
+              <span v-if="chat.messages.value.length" class="text-base-content/40 normal-case">
+                ({{ chat.messages.value.length }})
+              </span>
+              <span
+                v-if="chat.viewers.value.length"
+                class="ml-auto inline-flex items-center gap-1 normal-case tracking-normal text-[0.65rem] text-base-content/50"
+                :title="chat.viewers.value.map((v) => v.name).join(', ') + ' viewing'"
+              >
+                <span class="relative flex h-1.5 w-1.5">
+                  <span class="absolute inline-flex h-full w-full rounded-full bg-success opacity-75 animate-ping"></span>
+                  <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-success"></span>
+                </span>
+                {{ chat.viewers.value.length }} viewing
+              </span>
             </div>
-            <p class="text-xs text-base-content/40 italic">
-              Threading + @mentions land in the next iteration.
-            </p>
+
+            <!-- message list -->
+            <div
+              v-if="chat.loading.value"
+              class="text-xs text-base-content/40 italic py-2"
+            >
+              Loading conversation…
+            </div>
+            <div
+              v-else-if="!chat.messages.value.length"
+              class="text-xs text-base-content/40 italic py-2"
+            >
+              No messages yet — start the conversation.
+            </div>
+            <ul v-else class="space-y-3">
+              <li
+                v-for="m in chat.messages.value"
+                :key="m.id"
+                class="flex gap-2.5"
+              >
+                <HexAvatar
+                  :avatar-url="chat.authorProfile(m.user_id)?.avatar_url"
+                  :name="m.user_name || chat.authorProfile(m.user_id)?.full_name"
+                  :size="28"
+                  :font-size="11"
+                />
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-baseline gap-2">
+                    <span class="text-xs font-medium truncate">
+                      {{ m.user_name || chat.authorProfile(m.user_id)?.full_name || 'Someone' }}
+                    </span>
+                    <span class="text-[0.65rem] text-base-content/40 shrink-0">
+                      {{ fmtCommentTime(m.created_at) }}
+                    </span>
+                  </div>
+                  <div class="text-sm text-base-content/90 whitespace-pre-wrap break-words">
+                    {{ m.message }}
+                  </div>
+                </div>
+              </li>
+            </ul>
+            <div ref="bottomRef" />
+
+            <!-- typing indicator -->
+            <div
+              v-if="typingLabel"
+              class="text-[0.7rem] text-base-content/50 italic mt-2 h-4"
+            >
+              {{ typingLabel }}
+            </div>
+
+            <!-- composer -->
+            <form class="mt-3 flex items-end gap-2" @submit.prevent="onSendComment">
+              <textarea
+                v-model="draft"
+                rows="1"
+                placeholder="Write a message…  (Enter to send, Shift+Enter for a new line)"
+                class="textarea textarea-bordered textarea-sm flex-1 resize-none leading-relaxed min-h-0 py-1.5"
+                @input="chat.notifyTyping()"
+                @keydown.enter.exact.prevent="onSendComment"
+              />
+              <button
+                type="submit"
+                class="btn btn-primary btn-sm btn-circle shrink-0"
+                :disabled="!draft.trim() || chat.sending.value"
+                title="Send"
+                aria-label="Send message"
+              >
+                <Send class="w-4 h-4" :stroke-width="2" />
+              </button>
+            </form>
           </div>
 
           <!-- activity log -->

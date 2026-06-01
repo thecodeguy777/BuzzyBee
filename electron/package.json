@@ -18,8 +18,11 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
+    "@signalwire/js": "^3.30.0",
     "@supabase/supabase-js": "^2.105.1",
-    "electron-store": "^8.2.0"
+    "dotenv": "^17.4.2",
+    "electron-store": "^8.2.0",
+    "sip.js": "^0.21.2"
   },
   "devDependencies": {
     "@electron/packager": "^20.0.0",

@@ -5,53 +5,51 @@ import {
   Plus,
   CalendarDays,
   Flag,
-  CircleDashed,
-  Loader2,
-  CircleAlert,
-  CheckCircle2,
-  CircleSlash,
   Paperclip,
   Pencil,
   ZoomOut,
-  Check
+  Check,
+  ChevronDown,
+  MoreVertical,
+  Trash2,
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  CircleSlash
 } from 'lucide-vue-next'
 import { useTasksStore, type Task, type TaskStatus } from '@/stores/tasks'
 import { useClientsStore } from '@/stores/clients'
+import { useProjectsStore } from '@/stores/projects'
+import { useAuthStore } from '@/stores/auth'
+import { useStatusesStore, type TaskStatusDef } from '@/stores/statuses'
+import { statusClasses, STATUS_COLOR_OPTIONS } from '@/lib/statusColors'
 
 const tasks = useTasksStore()
 const clients = useClientsStore()
+const projects = useProjectsStore()
+const auth = useAuthStore()
+const statusesStore = useStatusesStore()
 
-// TKT-0007 (board): the column header is filled with the status color and
-// shows a white-on-color label + count. No progress bar, no dot — the header
-// itself is the status indicator.
-const columns: {
-  status: TaskStatus
-  label: string
-  icon: any
-  headerBgClass: string
-  countBgClass: string
-}[] = [
-  { status: 'todo',        label: 'Todo',        icon: CircleDashed, headerBgClass: 'bg-base-content/55', countBgClass: 'bg-white/20' },
-  { status: 'in_progress', label: 'In progress', icon: Loader2,      headerBgClass: 'bg-primary',         countBgClass: 'bg-white/20' },
-  { status: 'blocked',     label: 'Blocked',     icon: CircleAlert,  headerBgClass: 'bg-error',           countBgClass: 'bg-white/20' },
-  { status: 'done',        label: 'Done',        icon: CheckCircle2, headerBgClass: 'bg-success',         countBgClass: 'bg-white/20' },
-  { status: 'cancelled',   label: 'Cancelled',   icon: CircleSlash,  headerBgClass: 'bg-base-content/30', countBgClass: 'bg-white/20' }
-]
+// Only managers edit columns (RLS enforces this server-side too).
+const canManage = computed(() => auth.isAdmin || auth.role === 'pm')
+const boardError = ref<string | null>(null)
+// Focus helper for inline rename / add-column inputs.
+const vFocus = { mounted: (el: HTMLElement) => el.focus() }
 
-const cardsByStatus = computed(() => tasks.tasksByStatus)
+// Columns are the current project's task_statuses, in sort order. The header is
+// filled with the status color (white-on-color label + count).
+const columns = computed<TaskStatusDef[]>(() =>
+  statusesStore.forProject(projects.currentProjectId)
+)
+
+const cardsByStatus = computed<Record<string, Task[]>>(() => tasks.tasksByStatus)
 
 // ── SortableJS wiring ──────────────────────────────────────────────────────
 // One Sortable instance per column body. group:'bb-tasks' lets cards move
 // between columns. onEnd reads the dropped element's data-task-id and the
 // new column's data-status, then updates priority_order + status.
 
-const columnBodies = ref<Record<TaskStatus, HTMLElement | null>>({
-  todo: null,
-  in_progress: null,
-  blocked: null,
-  done: null,
-  cancelled: null
-})
+const columnBodies = ref<Record<string, HTMLElement | null>>({})
 const sortables: Sortable[] = []
 
 function setColumnRef(status: TaskStatus, el: Element | any) {
@@ -103,8 +101,8 @@ function destroySortables() {
 
 function buildSortables() {
   destroySortables()
-  for (const col of columns) {
-    const el = columnBodies.value[col.status]
+  for (const col of columns.value) {
+    const el = columnBodies.value[col.key]
     if (!el) continue
     sortables.push(
       Sortable.create(el, {
@@ -225,13 +223,7 @@ const cardTitleClass = computed(() => {
 })
 
 // ── Quick add ──────────────────────────────────────────────────────────────
-const newTitleByCol = ref<Record<TaskStatus, string>>({
-  todo: '',
-  in_progress: '',
-  blocked: '',
-  done: '',
-  cancelled: ''
-})
+const newTitleByCol = ref<Record<string, string>>({})
 
 async function quickAdd(status: TaskStatus) {
   const title = newTitleByCol.value[status]?.trim()
@@ -246,6 +238,124 @@ async function quickAdd(status: TaskStatus) {
     console.warn('[board] quickAdd:', (e as Error).message)
   }
 }
+
+// ── Column management (managers only; RLS enforces server-side) ─────────────
+const COLLAPSE_KEY = 'buzzybee.workstation.board-collapsed'
+function loadCollapsed(): Set<string> {
+  if (typeof window === 'undefined') return new Set()
+  try {
+    return new Set(JSON.parse(window.localStorage.getItem(COLLAPSE_KEY) || '[]') as string[])
+  } catch {
+    return new Set()
+  }
+}
+const collapsedKeys = ref<Set<string>>(loadCollapsed())
+function isCollapsed(key: string) {
+  return collapsedKeys.value.has(key)
+}
+function toggleCollapse(key: string) {
+  const n = new Set(collapsedKeys.value)
+  if (n.has(key)) n.delete(key)
+  else n.add(key)
+  collapsedKeys.value = n
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...n]))
+  }
+}
+
+const editingColId = ref<string | null>(null)
+const editLabel = ref('')
+const openMenuId = ref<string | null>(null)
+const colorOptions = STATUS_COLOR_OPTIONS
+
+function startRename(col: TaskStatusDef) {
+  if (!canManage.value) return
+  openMenuId.value = null
+  editingColId.value = col.id
+  editLabel.value = col.label
+}
+async function commitRename(col: TaskStatusDef) {
+  const v = editLabel.value.trim()
+  editingColId.value = null
+  if (!v || v === col.label) return
+  try {
+    await statusesStore.updateStatus(col.id, { label: v })
+  } catch (e) {
+    boardError.value = (e as Error).message
+  }
+}
+function toggleMenu(id: string) {
+  openMenuId.value = openMenuId.value === id ? null : id
+}
+async function recolor(col: TaskStatusDef, color: string) {
+  try {
+    await statusesStore.updateStatus(col.id, { color })
+  } catch (e) {
+    boardError.value = (e as Error).message
+  }
+}
+async function toggleDoneFlag(col: TaskStatusDef) {
+  try {
+    await statusesStore.updateStatus(col.id, { is_done: !col.is_done, is_cancelled: false })
+  } catch (e) {
+    boardError.value = (e as Error).message
+  }
+}
+async function toggleCancelledFlag(col: TaskStatusDef) {
+  try {
+    await statusesStore.updateStatus(col.id, { is_cancelled: !col.is_cancelled, is_done: false })
+  } catch (e) {
+    boardError.value = (e as Error).message
+  }
+}
+async function moveCol(col: TaskStatusDef, dir: -1 | 1) {
+  const ids = columns.value.map((c) => c.id)
+  const i = ids.indexOf(col.id)
+  const j = i + dir
+  if (i === -1 || j < 0 || j >= ids.length) return
+  ;[ids[i], ids[j]] = [ids[j], ids[i]]
+  try {
+    await statusesStore.reorder(ids)
+  } catch (e) {
+    boardError.value = (e as Error).message
+  }
+}
+async function removeCol(col: TaskStatusDef) {
+  openMenuId.value = null
+  const n = (cardsByStatus.value[col.key] ?? []).length
+  if (n > 0) {
+    boardError.value = `Move the ${n} task${n === 1 ? '' : 's'} out of “${col.label}” before deleting it.`
+    return
+  }
+  try {
+    await statusesStore.deleteStatus(col.id)
+  } catch (e) {
+    boardError.value = (e as Error).message
+  }
+}
+
+const addingCol = ref(false)
+const newColLabel = ref('')
+async function commitAddCol() {
+  const v = newColLabel.value.trim()
+  if (!v || !projects.currentProjectId) {
+    addingCol.value = false
+    return
+  }
+  newColLabel.value = ''
+  addingCol.value = false
+  try {
+    await statusesStore.addStatus(projects.currentProjectId, { label: v })
+  } catch (e) {
+    boardError.value = (e as Error).message
+  }
+}
+
+function closeColMenus() {
+  openMenuId.value = null
+}
+onMounted(() => document.addEventListener('click', closeColMenus))
+onBeforeUnmount(() => document.removeEventListener('click', closeColMenus))
 </script>
 
 <template>
@@ -301,36 +411,138 @@ async function quickAdd(status: TaskStatus) {
       </div>
     </div>
 
-    <div class="flex items-start gap-3 overflow-x-auto pb-4">
-      <section
-        v-for="col in columns"
-        :key="col.status"
-        class="shrink-0 rounded-xl bg-base-200/50 border border-base-300 flex flex-col max-h-[calc(100vh-12rem)] transition-[width] duration-200"
-        :class="colWidthClass"
-        :data-status="col.status"
-      >
-        <header
-          class="flex items-center gap-2 px-3 py-2 rounded-t-xl text-white"
-          :class="col.headerBgClass"
-        >
-          <span class="text-xs font-semibold uppercase tracking-wider truncate flex-1">
-            {{ col.label }}
-          </span>
-          <span
-            class="text-[0.7rem] font-semibold tabular-nums px-1.5 py-0.5 rounded-full leading-none shrink-0"
-            :class="col.countBgClass"
-          >
-            {{ cardsByStatus[col.status].length }}
-          </span>
-        </header>
+    <p v-if="boardError" class="text-error text-xs flex items-center gap-2">
+      {{ boardError }}
+      <button type="button" class="underline hover:no-underline" @click="boardError = null">dismiss</button>
+    </p>
 
-        <div
-          :ref="(el) => setColumnRef(col.status, el)"
-          class="flex-1 overflow-y-auto p-2 space-y-2 min-h-[3rem]"
-          :data-status="col.status"
+    <div class="flex items-start gap-3 overflow-x-auto pb-4">
+      <template v-for="col in columns" :key="col.key">
+        <!-- Collapsed column → narrow rail -->
+        <section
+          v-if="isCollapsed(col.key)"
+          class="shrink-0 w-11 rounded-xl bg-base-100 border border-base-300 shadow-sm overflow-hidden"
+          :data-status="col.key"
+        >
+          <button
+            type="button"
+            class="w-full min-h-[9rem] flex flex-col items-center gap-2 py-2 text-white"
+            :class="statusClasses(col.color).headerBg"
+            :title="`Expand ${col.label}`"
+            @click="toggleCollapse(col.key)"
+          >
+            <ChevronDown class="w-3.5 h-3.5 -rotate-90 shrink-0" :stroke-width="2" />
+            <span class="text-[0.7rem] font-semibold tabular-nums px-1.5 rounded-full bg-white/20 shrink-0">
+              {{ (cardsByStatus[col.key] ?? []).length }}
+            </span>
+            <span class="text-xs font-semibold uppercase tracking-wider [writing-mode:vertical-rl] rotate-180">
+              {{ col.label }}
+            </span>
+          </button>
+        </section>
+
+        <!-- Expanded column -->
+        <section
+          v-else
+          class="shrink-0 rounded-xl bg-base-100 border border-base-300 shadow-sm flex flex-col max-h-[calc(100vh-12rem)] transition-[width] duration-200"
+          :class="colWidthClass"
+          :data-status="col.key"
+        >
+          <header
+            class="flex items-center gap-1.5 px-2.5 py-2 rounded-t-xl text-white"
+            :class="statusClasses(col.color).headerBg"
+          >
+            <button
+              type="button"
+              data-no-drag
+              class="opacity-80 hover:opacity-100 shrink-0"
+              title="Collapse column"
+              @click.stop="toggleCollapse(col.key)"
+            >
+              <ChevronDown class="w-3.5 h-3.5" :stroke-width="2" />
+            </button>
+            <input
+              v-if="editingColId === col.id"
+              v-model="editLabel"
+              v-focus
+              data-no-drag
+              class="flex-1 min-w-0 bg-white/25 rounded px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wider outline-none text-white placeholder-white/60"
+              @blur="commitRename(col)"
+              @keydown.enter.prevent="commitRename(col)"
+              @keydown.esc="editingColId = null"
+            />
+            <span
+              v-else
+              class="text-xs font-semibold uppercase tracking-wider truncate flex-1"
+              :class="canManage && 'cursor-text'"
+              :title="canManage ? 'Double-click to rename' : ''"
+              @dblclick="startRename(col)"
+            >
+              {{ col.label }}
+            </span>
+            <span
+              class="text-[0.7rem] font-semibold tabular-nums px-1.5 py-0.5 rounded-full leading-none shrink-0 bg-white/20"
+            >
+              {{ (cardsByStatus[col.key] ?? []).length }}
+            </span>
+            <div v-if="canManage" class="relative shrink-0">
+              <button
+                type="button"
+                data-no-drag
+                class="opacity-80 hover:opacity-100 flex items-center"
+                title="Column options"
+                @click.stop="toggleMenu(col.id)"
+              >
+                <MoreVertical class="w-3.5 h-3.5" :stroke-width="2" />
+              </button>
+              <div
+                v-if="openMenuId === col.id"
+                data-no-drag
+                class="absolute right-0 top-full mt-1 z-30 w-52 rounded-xl bg-white border border-base-300 shadow-hc-2 overflow-hidden text-base-content p-2 space-y-1"
+                @click.stop
+              >
+                <button type="button" class="w-full text-left text-sm px-2 py-1.5 rounded-md hover:bg-base-200/60 flex items-center gap-2" @click="startRename(col)">
+                  <Pencil class="w-3.5 h-3.5" :stroke-width="1.75" /> Rename
+                </button>
+                <div class="flex items-center gap-1.5 px-2 py-1.5">
+                  <button
+                    v-for="c in colorOptions"
+                    :key="c.value"
+                    type="button"
+                    :title="c.label"
+                    class="w-5 h-5 rounded-full ring-2 ring-offset-1 transition-transform hover:scale-110"
+                    :class="[c.swatch, col.color === c.value ? 'ring-base-content/50' : 'ring-transparent']"
+                    @click="recolor(col, c.value)"
+                  />
+                </div>
+                <button type="button" class="w-full text-left text-sm px-2 py-1.5 rounded-md hover:bg-base-200/60 flex items-center gap-2" @click="toggleDoneFlag(col)">
+                  <CheckCircle2 class="w-3.5 h-3.5" :class="col.is_done ? 'text-success' : 'text-base-content/40'" :stroke-width="1.75" /> Counts as done
+                </button>
+                <button type="button" class="w-full text-left text-sm px-2 py-1.5 rounded-md hover:bg-base-200/60 flex items-center gap-2" @click="toggleCancelledFlag(col)">
+                  <CircleSlash class="w-3.5 h-3.5" :class="col.is_cancelled ? 'text-base-content/70' : 'text-base-content/40'" :stroke-width="1.75" /> Counts as cancelled
+                </button>
+                <div class="flex gap-1">
+                  <button type="button" class="flex-1 px-2 py-1.5 rounded-md hover:bg-base-200/60 flex items-center justify-center" title="Move left" @click="moveCol(col, -1)">
+                    <ArrowLeft class="w-3.5 h-3.5" :stroke-width="1.75" />
+                  </button>
+                  <button type="button" class="flex-1 px-2 py-1.5 rounded-md hover:bg-base-200/60 flex items-center justify-center" title="Move right" @click="moveCol(col, 1)">
+                    <ArrowRight class="w-3.5 h-3.5" :stroke-width="1.75" />
+                  </button>
+                </div>
+                <button type="button" class="w-full text-left text-sm px-2 py-1.5 rounded-md hover:bg-error/10 text-error flex items-center gap-2" @click="removeCol(col)">
+                  <Trash2 class="w-3.5 h-3.5" :stroke-width="1.75" /> Delete column
+                </button>
+              </div>
+            </div>
+          </header>
+
+          <div
+          :ref="(el) => setColumnRef(col.key, el)"
+          class="flex-1 overflow-y-auto p-2 space-y-2 min-h-[3rem] bg-base-200/40"
+          :data-status="col.key"
         >
           <article
-            v-for="t in cardsByStatus[col.status]"
+            v-for="t in (cardsByStatus[col.key] ?? [])"
             :key="t.id"
             :data-task-id="t.id"
             class="group relative rounded-lg bg-white border border-base-300 shadow-sm hover:shadow-md hover:border-base-content/20 transition-shadow cursor-grab active:cursor-grabbing select-text"
@@ -351,7 +563,7 @@ async function quickAdd(status: TaskStatus) {
               <div
                 :class="[
                   cardTitleClass,
-                  t.status === 'done' && 'text-base-content/50 line-through'
+                  statusesStore.isDone(projects.currentProjectId, t.status) && 'text-base-content/50 line-through'
                 ]"
               >
                 {{ t.title }}
@@ -414,7 +626,7 @@ async function quickAdd(status: TaskStatus) {
           </article>
 
           <div
-            v-if="cardsByStatus[col.status].length === 0"
+            v-if="(cardsByStatus[col.key] ?? []).length === 0"
             class="text-xs text-base-content/40 italic px-2 py-3 text-center"
           >
             Drop tasks here.
@@ -422,14 +634,14 @@ async function quickAdd(status: TaskStatus) {
         </div>
 
         <form
-          v-if="col.status !== 'cancelled'"
+          v-if="!col.is_cancelled"
           class="border-t border-base-300/60 p-2"
-          @submit.prevent="quickAdd(col.status)"
+          @submit.prevent="quickAdd(col.key)"
         >
           <label class="flex items-center gap-2 px-1 py-1 rounded-md hover:bg-base-100/60 transition-colors group/add">
             <Plus class="w-3.5 h-3.5 text-base-content/40 group-focus-within/add:text-primary" :stroke-width="1.75" />
             <input
-              v-model="newTitleByCol[col.status]"
+              v-model="newTitleByCol[col.key]"
               type="text"
               class="flex-1 bg-transparent outline-none text-sm placeholder:text-base-content/40"
               :placeholder="`Add to ${col.label.toLowerCase()}`"
@@ -437,7 +649,30 @@ async function quickAdd(status: TaskStatus) {
             />
           </label>
         </form>
-      </section>
+        </section>
+      </template>
+
+      <!-- Add column -->
+      <div v-if="canManage" class="shrink-0 w-60 pt-0.5">
+        <form v-if="addingCol" @submit.prevent="commitAddCol">
+          <input
+            v-model="newColLabel"
+            v-focus
+            class="w-full rounded-xl border border-base-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+            placeholder="Column name — Enter to add"
+            @blur="commitAddCol"
+            @keydown.esc="addingCol = false; newColLabel = ''"
+          />
+        </form>
+        <button
+          v-else
+          type="button"
+          class="w-full flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-base-300 bg-base-100/60 px-3 py-2 text-sm text-base-content/60 hover:text-primary hover:border-primary/40 transition-colors"
+          @click="addingCol = true"
+        >
+          <Plus class="w-4 h-4" :stroke-width="1.75" /> Add column
+        </button>
+      </div>
     </div>
   </div>
 </template>

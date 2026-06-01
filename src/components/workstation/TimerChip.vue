@@ -104,6 +104,7 @@ async function handleClockOut() {
     </button>
 
     <!-- Popover (only when running + open) -->
+    <transition name="dropdown">
     <div
       v-if="time.isRunning && open"
       class="absolute right-0 z-40 mt-1 w-72 rounded-lg border border-base-300 bg-base-100 shadow-lg overflow-hidden"
@@ -143,5 +144,6 @@ async function handleClockOut() {
         </p>
       </div>
     </div>
+    </transition>
   </div>
 </template>

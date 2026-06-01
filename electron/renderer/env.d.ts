@@ -51,6 +51,9 @@ declare global {
       overlay: {
         toggle: () => Promise<void>
       }
+      dialer: {
+        open: () => Promise<void>
+      }
       auth: {
         signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string; session?: AuthSession }>
         signOut: () => Promise<{ success: boolean }>
@@ -69,6 +72,7 @@ declare global {
         }>>
         detail: (id: string) => Promise<any | null>
         exportPdf: (id: string) => Promise<{ success: boolean; path?: string; error?: string }>
+        regenerateSummary: (id: string) => Promise<{ success: boolean; summaryText?: string; parsed?: any; error?: string }>
       }
       clients: {
         list: () => Promise<Array<{ id: string; name: string; status: string | null }>>

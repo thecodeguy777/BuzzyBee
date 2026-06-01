@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase'
 import { useClientsStore } from '@/stores/clients'
 import { useTasksStore, type Task, type TaskActivityEvent } from '@/stores/tasks'
 import { useTeamStore, type MemberProfile } from '@/stores/team'
+import HexAvatar from '@/components/shared/HexAvatar.vue'
 
 const props = defineProps<{ vaId: string }>()
 const emit = defineEmits<{ (e: 'back'): void }>()
@@ -210,19 +211,6 @@ function relTime(ts: number) {
   return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-function initials(p: MemberProfile | null) {
-  if (!p) return '?'
-  const src = p.full_name || p.email || '?'
-  return (
-    src
-      .split(/\s|@/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((x) => x.charAt(0).toUpperCase())
-      .join('') || 'BB'
-  )
-}
-
 const statusMeta: Record<string, { label: string; class: string }> = {
   active: { label: 'Active', class: 'bg-success/10 text-success' },
   paused: { label: 'Paused', class: 'bg-warning/10 text-warning' },
@@ -242,17 +230,13 @@ const statusMeta: Record<string, { label: string; class: string }> = {
       >
         <ChevronLeft class="w-5 h-5" :stroke-width="1.75" />
       </button>
-      <div
-        class="w-12 h-12 rounded-full bg-primary/15 text-primary text-base font-semibold flex items-center justify-center shrink-0 overflow-hidden"
-      >
-        <img
-          v-if="va?.avatar_url"
-          :src="va.avatar_url"
-          :alt="va.full_name ?? ''"
-          class="w-full h-full object-cover"
-        />
-        <span v-else>{{ initials(va) }}</span>
-      </div>
+      <HexAvatar
+        :avatar-url="va?.avatar_url"
+        :name="va?.full_name"
+        :email="va?.email"
+        :size="48"
+        tint="primary"
+      />
       <div class="flex-1 min-w-0">
         <h2 class="font-display text-lg font-semibold truncate">
           {{ va?.full_name || va?.email || 'Loading…' }}

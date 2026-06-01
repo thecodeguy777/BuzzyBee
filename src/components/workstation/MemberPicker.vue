@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Search, X, UserPlus } from 'lucide-vue-next'
 import { useProjectMembersStore, type ProjectMemberRole } from '@/stores/projectMembers'
 import { useProjectsStore } from '@/stores/projects'
+import HexAvatar from '@/components/shared/HexAvatar.vue'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -57,18 +58,6 @@ watch(
     }
   }
 )
-
-function initialsOf(name: string | null, email: string | null) {
-  const src = name || email || '?'
-  return (
-    src
-      .split(/\s|@/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((p) => p.charAt(0).toUpperCase())
-      .join('') || 'BB'
-  )
-}
 
 async function add(userId: string) {
   if (!projects.currentProjectId) return
@@ -173,17 +162,13 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onEsc))
                 class="w-full flex items-center gap-3 px-2 py-2 rounded-md hover:bg-base-200/60 text-left"
                 @click="add(r.id)"
               >
-                <div
-                  class="w-8 h-8 rounded-full bg-primary/15 text-primary text-xs font-semibold flex items-center justify-center shrink-0 overflow-hidden"
-                >
-                  <img
-                    v-if="r.avatar_url"
-                    :src="r.avatar_url"
-                    :alt="r.full_name ?? ''"
-                    class="w-full h-full object-cover"
-                  />
-                  <span v-else>{{ initialsOf(r.full_name, r.email) }}</span>
-                </div>
+                <HexAvatar
+                  :avatar-url="r.avatar_url"
+                  :name="r.full_name"
+                  :email="r.email"
+                  :size="32"
+                  :font-size="12"
+                />
                 <div class="flex-1 min-w-0">
                   <div class="text-sm font-medium truncate">
                     {{ r.full_name || r.email }}

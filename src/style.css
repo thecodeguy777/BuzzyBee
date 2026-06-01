@@ -47,10 +47,11 @@
   --color-error: oklch(55% 0.2 25);
   --color-error-content: oklch(99% 0.005 250);
 
-  /* Tight radii for structured feel */
+  /* Tight radii for structured feel; boxes rounded a touch more so cards read
+     as softly floating (Honeycomb redesign) without losing the precise look. */
   --radius-selector: 0.375rem;   /* 6px */
   --radius-field: 0.375rem;      /* 6px */
-  --radius-box: 0.5rem;          /* 8px */
+  --radius-box: 0.75rem;         /* 12px */
   --size-selector: 0.25rem;
   --size-field: 0.25rem;
   --border: 1px;
@@ -73,7 +74,7 @@
   --color-neutral-content: oklch(15% 0.015 250);
   --radius-selector: 0.375rem;
   --radius-field: 0.375rem;
-  --radius-box: 0.5rem;
+  --radius-box: 0.75rem;
   --border: 1px;
 }
 
@@ -129,6 +130,96 @@ body {
 .shadow-hm-xs { box-shadow: var(--hm-shadow-xs); }
 .shadow-hm-sm { box-shadow: var(--hm-shadow-sm); }
 .shadow-hm-md { box-shadow: var(--hm-shadow-md); }
+
+/* ── Scrollbars ──────────────────────────────────────────────────
+   Thin and unobtrusive: track is invisible, the thumb is faint at rest
+   and only firms up when you hover the scroll area. Theme-aware via
+   base-content so it works in both light and dark. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--color-base-content) 15%, transparent) transparent;
+}
+*:hover {
+  scrollbar-color: color-mix(in oklch, var(--color-base-content) 30%, transparent) transparent;
+}
+
+/* WebKit/Chromium (overlay-style: transparent track, pill thumb) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, var(--color-base-content) 14%, transparent);
+  border-radius: 9999px;
+}
+:hover::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, var(--color-base-content) 28%, transparent);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklch, var(--color-base-content) 45%, transparent);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ── Motion: shared transitions & micro-interactions ─────────────
+   Conventions — enters ~160-250ms (ease-out), exits ~100-120ms (ease-in),
+   250ms for structural height/scale shifts. Everything here is neutralized
+   under prefers-reduced-motion (guard at the bottom of this block). */
+
+/* Route / page content swap (App.vue router-view) */
+.page-enter-active { transition: opacity 200ms ease-out, transform 200ms ease-out; }
+.page-leave-active { transition: opacity 120ms ease-in, transform 120ms ease-in; }
+.page-enter-from { opacity: 0; transform: translateY(6px); }
+.page-leave-to { opacity: 0; transform: translateY(-4px); }
+
+/* Dropdowns / popovers */
+.dropdown-enter-active { transition: opacity 160ms ease-out, transform 160ms ease-out; }
+.dropdown-leave-active { transition: opacity 100ms ease-in, transform 100ms ease-in; }
+.dropdown-enter-from,
+.dropdown-leave-to { opacity: 0; transform: translateY(-6px); }
+
+/* Modal: backdrop fade + card pop */
+.modal-fade-enter-active,
+.modal-fade-leave-active { transition: opacity 200ms ease; }
+.modal-fade-enter-from,
+.modal-fade-leave-to { opacity: 0; }
+.modal-pop-enter-active { transition: opacity 250ms ease-out, transform 250ms cubic-bezier(0.16, 1, 0.3, 1); }
+.modal-pop-enter-from { opacity: 0; transform: scale(0.96) translateY(4px); }
+
+/* Expand/collapse height — driven by ExpandTransition.vue (sets height inline) */
+.expand-enter-active,
+.expand-leave-active { overflow: hidden; transition: height 250ms ease-in-out, opacity 200ms ease; }
+.expand-enter-from,
+.expand-leave-to { opacity: 0; }
+
+/* Checkbox completion pop */
+@keyframes bb-pop {
+  0% { transform: scale(0.5); opacity: 0; }
+  60% { transform: scale(1.15); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.pop-enter-active { animation: bb-pop 180ms ease-out; }
+
+/* Quick-add success — a single outward ring pulse in the success color */
+@keyframes bb-pulse-success {
+  0% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--color-success) 45%, transparent); }
+  100% { box-shadow: 0 0 0 7px color-mix(in oklch, var(--color-success) 0%, transparent); }
+}
+.bb-pulse-success { animation: bb-pulse-success 500ms ease-out; }
+
+/* Accessibility: honor the OS "reduce motion" setting everywhere. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 
 /* ── Scroll-reveal ───────────────────────────── */
 .reveal {

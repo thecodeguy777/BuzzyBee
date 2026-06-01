@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>HiveMind — Phone-Company Decision</title>
+<style>
+  :root {
+    --bg: #0b0d10;
+    --panel: #14181d;
+    --line: #232a33;
+    --ink: #eef1f5;
+    --mute: #a3acb8;
+    --accent: #f5b400;
+    --accent-soft: #f5b40022;
+    --good: #5ecf94;
+    --bad: #e26565;
+    --warn: #e2a740;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    background: var(--bg); color: var(--ink);
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Inter, system-ui, sans-serif;
+  }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  .deck {
+    width: min(1200px, 96vw);
+    height: min(720px, 92vh);
+    position: relative;
+  }
+  .slide {
+    position: absolute; inset: 0;
+    padding: 64px 80px;
+    display: none;
+    flex-direction: column;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.5);
+    overflow: hidden;
+  }
+  .slide.active { display: flex; }
+  .slide h1 {
+    font-size: 52px; font-weight: 700; margin: 0 0 12px;
+    letter-spacing: -0.02em; line-height: 1.1;
+  }
+  .slide h2 {
+    font-size: 36px; font-weight: 600; margin: 0 0 32px;
+    letter-spacing: -0.01em; line-height: 1.2;
+  }
+  .slide h3 { font-size: 22px; font-weight: 600; margin: 0 0 14px; color: var(--accent); }
+  .slide p { font-size: 22px; line-height: 1.6; color: var(--ink); max-width: 60ch; }
+  .slide ul { font-size: 21px; line-height: 1.7; padding-left: 24px; max-width: 70ch; }
+  .slide li { margin: 8px 0; }
+  .slide li b { color: var(--accent); font-weight: 600; }
+
+  .eyebrow {
+    text-transform: uppercase;
+    letter-spacing: .18em;
+    font-size: 13px;
+    color: var(--accent);
+    margin-bottom: 22px;
+    font-weight: 600;
+  }
+  .footer {
+    position: absolute; left: 36px; right: 36px; bottom: 22px;
+    display: flex; justify-content: space-between; align-items: center;
+    color: var(--mute); font-size: 13px;
+  }
+  .pip { font-variant-numeric: tabular-nums; }
+  .brand {
+    letter-spacing: .12em; text-transform: uppercase; font-weight: 600;
+    color: var(--mute);
+  }
+  .brand b { color: var(--accent); }
+
+  /* tables */
+  table { border-collapse: collapse; width: 100%; font-size: 18px; }
+  th, td { border-bottom: 1px solid var(--line); padding: 14px 14px; text-align: left; vertical-align: top; }
+  th { color: var(--mute); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+  td.num { font-variant-numeric: tabular-nums; }
+  .pill { display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .pill.good { background: #5ecf9422; color: var(--good); }
+  .pill.bad { background: #e2656522; color: var(--bad); }
+  .pill.warn { background: #e2a74022; color: var(--warn); }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .card {
+    background: #0d1115; border: 1px solid var(--line);
+    border-radius: 10px; padding: 22px 24px;
+  }
+  .card h3 { margin-bottom: 8px; font-size: 20px; }
+  .card p { font-size: 17px; line-height: 1.55; }
+  .accent { color: var(--accent); }
+  .big {
+    font-size: 110px; font-weight: 700; letter-spacing: -0.04em;
+    color: var(--accent); line-height: 1;
+  }
+  .big-sub { font-size: 22px; color: var(--ink); margin-top: 12px; max-width: 22ch; line-height: 1.4; }
+
+  .nav {
+    position: fixed; right: 20px; bottom: 18px;
+    display: flex; gap: 8px;
+    font-size: 13px;
+  }
+  .nav button {
+    background: transparent; color: var(--mute); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 14px; cursor: pointer; font: inherit;
+  }
+  .nav button:hover { color: var(--ink); border-color: var(--accent); }
+  .progress {
+    position: fixed; left: 0; right: 0; bottom: 0; height: 3px;
+    background: var(--line);
+  }
+  .progress > div {
+    height: 100%; background: var(--accent);
+    transition: width 240ms ease;
+  }
+
+  .stack > * + * { margin-top: 16px; }
+  .row { display: flex; gap: 60px; align-items: baseline; }
+  .meta { color: var(--mute); font-size: 17px; line-height: 1.5; max-width: 60ch; }
+  .quote {
+    border-left: 3px solid var(--accent); padding: 10px 0 10px 18px;
+    color: var(--ink); font-style: italic; max-width: 68ch;
+    font-size: 22px; line-height: 1.5;
+  }
+  .lead { font-size: 24px; line-height: 1.5; max-width: 60ch; }
+</style>
+</head>
+<body>
+
+<div class="deck" id="deck">
+
+  <!-- 1: Title -->
+  <section class="slide active">
+    <div class="eyebrow">Board Update — May 2026</div>
+    <h1>The phone-company question</h1>
+    <p class="lead" style="margin-top: 18px;">We looked at five companies that could power HiveMind's sales calls. This is a plain-language summary of who they are, what they charge, and why we picked the one we did.</p>
+    <div style="margin-top: auto;" class="meta">No technical background needed to follow along.</div>
+    <div class="footer"><span class="brand">Hive<b>Mind</b></span><span class="pip">1 / 13</span></div>
+  </section>
+
+  <!-- 2: The headline -->
+  <section class="slide">
+    <div class="eyebrow">The Short Version</div>
+    <h2>We talked to five phone companies. Only one would do business with us.</h2>
+    <div class="row" style="margin-top: 28px;">
+      <div>
+        <div class="big">1 of 5</div>
+        <div class="big-sub">said yes when we asked to open an account</div>
+      </div>
+      <div>
+        <div class="big">~30%</div>
+        <div class="big-sub">cheaper per call than the best-known name on the list</div>
+      </div>
+    </div>
+    <p style="margin-top: 36px;">Their name is <b class="accent">SignalWire</b>. The rest of this deck explains why that turned out to be a good thing, not a compromise.</p>
+    <div class="footer"><span class="brand">Hive<b>Mind</b></span><span class="pip">2 / 13</span></div>
+  </section>
+
+  <!-- 3: The five candidates -->
+  <section class="slide">
+    <div class="eyebrow">The Five Candidates</div>
+    <h2>They're not really all in the same business</h2>
+    <table>
+      <thead><tr><th>Company</th><th>What they actually sell</th><th>Verdict</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>SignalWire</b></td>
+          <td>Phone lines and calling minutes, by the minute. We build our own dialer software on top.</td>
+          <td><span class="pill good">Chosen</span></td>
+        </tr>
+        <tr>
+          <td><b>Twilio</b></td>
+          <td>Same model as SignalWire. The most famous name in this space. Roughly 30% more expensive.</td>
+          <td><span class="pill bad">Rejected us</span></td>
+        </tr>
+        <tr>
+          <td><b>Vonage</b></td>
+          <td>Also similar to SignalWire, but won't sell to small accounts without a sales call.</td>
+          <td><span class="pill warn">Possible backup</span></td>
+        </tr>
+        <tr>
+          <td><b>Five9</b></td>
+          <td>A complete call-center product. You rent seats per agent. Designed for 50-person sales floors.</td>
+          <td><span class="pill bad">Wrong fit</span></td>
+        </tr>
+        <tr>
+          <td><b>RingCentral</b></td>
+          <td>A full office phone system. Replaces your phones; doesn't let you build your own.</td>
+          <td><span class="pill bad">Wrong fit</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="meta" style="margin-top: 18px;">Five9 and RingCentral were never really competitors — we looked at them so we could rule them out on the record.</p>
+    <div class="footer"><span class="brand">Hive<b>Mind</b></span><span class="pip">3 / 13</span></div>
+  </section>
+
+  <!-- 4: Pricing -->
+  <section class="slide">
+    <div class="eyebrow">What It Costs</div>
+    <h2>The price difference is bigger than it looks</h2>
+    <table>
+      <thead><tr><th>Company</th><th>Cost per minute, calling a US number</th><th>How they bill</th></tr></thead>
+      <tbody>
+        <tr><td>SignalWire</td><td class="num">$0.0095 / min</td><td>Pay only for what we use</td></tr>
+        <tr><td>Twilio</td><td class="num">$0.0140 / min</td><td>Pay only for what we use</td></tr>
+        <tr><td>Vonage</td><td class="num">~$0.0130 / min</td><td>Pay only for what we use</td></tr>
+        <tr><td>Five9</td><td>$149+ per agent / month</td><td>Flat seat fee, plus international charges</td></tr>
+        <tr><td>RingCentral</td><td>$30+ per user / month</td><td>Flat seat fee, unlimited US</td></tr>
+      </tbody>
+    </table>
+    <p style="margin-top: 22px; font-size: 22px;">Same call, same line quality — about <b class="accent">30% cheaper per minute</b> than the most famous name on the list. The next slide makes that real with a three-month estimate.</p>
+    <p class="meta" style="margin-top: 14px;">Pricing reflects publicly listed rates as of May 2026.</p>
+    <div class="footer"><span class="brand">Hive<b>Mind</b></span><span class="pip">4 / 13</span></div>
+  </section>
+
+  <!-- 5: Three months of operating cost -->
+  <section class="slide" style="padding: 44px 64px 56px;">
+    <div class="eyebrow" style="margin-bottom: 14px;">Three Months Of Real Use</div>
+    <h2 style="margin-bottom: 16px; font-size: 32px;">What it would cost to run a 10-rep team for a quarter</h2>
+    <p style="font-size: 17px; line-height: 1.5; color: var(--mute); margin: 0 0 16px; max-width: none;">
+      <b class="accent">Scenario:</b> 10 sales reps · 4 hours of live calling each per workday · 22 working days a month · calls to US customers. Roughly 53,000 minutes a month, or 158,000 over the quarter.
+    </p>
+    <table style="font-size: 17px;">
+      <thead>
+        <tr>
+          <th style="padding: 8px 12px;">Company</th>
+          <th style="padding: 8px 12px;">Monthly</th>
+          <th style="padding: 8px 12px;">Three-month total</th>
+          <th style="padding: 8px 12px;">One-time setup</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding: 9px 12px;"><b>SignalWire</b></td>
+          <td class="num" style="padding: 9px 12px;">~$505</td>
+          <td class="num" style="padding: 9px 12px;"><b class="accent">~$1,515</b></td>
+          <td style="padding: 9px 12px;">$0</td>
+        </tr>
+        <tr>
+          <td style="padding: 9px 12px;">Twilio</td>
+          <td class="num" style="padding: 9px 12px;">~$740</td>
+          <td class="num" style="padding: 9px 12px;">~$2,220</td>
+          <td style="padding: 9px 12px;">$0</td>
+        </tr>
+        <tr>
+          <td style="padding: 9px 12px;">Vonage</td>
+          <td class="num" style="padding: 9px 12px;">~$690</td>
+          <td class="num" style="padding: 9px 12px;">~$2,070</td>
+          <td style="padding: 9px 12px;">$0</td>
+        </tr>
+        <tr>
+          <td style="padding: 9px 12px;">RingCentral</td>
+          <td class="num" style="padding: 9px 12px;">~$950</td>
+          <td class="num" style="padding: 9px 12px;">~$2,850</td>
+          <td style="padding: 9px 12px;">~$1,500 typical</td>
+        </tr>
+        <tr>
+          <td style="padding: 9px 12px;">Five9</td>
+          <td class="num" style="padding: 9px 12px;">~$1,490</td>
+          <td class="num" style="padding: 9px 12px;">~$4,470</td>
+          <td style="padding: 9px 12px;">$1,500 – $5,000</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="margin-top: 18px; font-size: 19px; line-height: 1.5; max-width: none;">
+      Over the first quarter, <b class="accent">SignalWire costs ~$700 less than the next-cheapest option and ~$4,500 less than Five9</b>. At 100 reps the gap grows to nearly $30,000 a year — money we keep for product instead of paying out.
+    </p>
+    <div class="footer"><span class="brand">Hive<b>Mind</b></span><span class="pip">5 / 13</span></div>
+  </section>
+
+  <!-- 6: Architecture / fit -->
+  <section class="slide">
+    <div class="eyebrow">Why The Other Models Don't Fit</div>
+    <h2>HiveMind needs raw materials, not a finished product</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h3>What we need</h3>
+        <p>Phone lines and minutes. That's it. We design the dialer, the lead screen, the AI summary, the manager dashboard ourselves. That's where HiveMind earns its keep.</p>
+      </div>
+      <div class="card">
+        <h3>Why not RingCentral</h3>
+        <p>Buying RingCentral means putting <i>their</i> phone system in front of our customers. We become a re-seller of their app, not the maker of ours.</p>
+      </div>
+      <div class="card">
+        <h3>Why not Five9</h3>
+        <p>Five9 already has its own agent screen, supervisor screen, and queues. Customers would have to use two systems — Five9 and HiveMind — to do one job.</p>
+      </div>
+      <div class="card">
+        <h3>The hidden advantage</h3>
+        <p>SignalWire uses the same playbook as Twilio. If we ever needed to switch, the work is measured in <b class="accent">days, not months</b>. The big suites are one-way doors.</p>
+      </div>
+    </div>
+    <div class="footer"><span class="brand">Hive<b>Mind</b></span><span class="pip">6 / 13</span></div>
+  </section>
+
+  <!-- 6: Compliance / onboarding -->
+  <section class="slide">
+    <div class="eyebrow">Who Would Sell To Us</div>
+    <h2>This was the surprise</h2>
+    <table>
+      <thead><tr><th>Company</th><th>Outcome</th><th>What happened</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Telnyx</td>
+          <td><span class="pill bad">Auto-rejected</span></td>
+          <td>The signup form refused us within minutes. No reason given, no appeal.</td>
+        </tr>
+        <tr>
+          <td>Twilio</td>
+          <td><span class="pill bad">Account frozen</span></td>
+          <td>Suspended for fraud review because we are a Philippine company calling US customers. Multi-week paperwork loop.</td>
+        </tr>
+        <tr>
+          <td>Vonage</td>
+          <td><span class="pill warn">Sales call required</span></td>
+          <td>No way to just sign up. They want a scheduled call with a salesperson before any account.</td>
+        </tr>
+        <tr>
+          <td>RingCentral &amp; Five9</td>
+          <td><span class="pill warn">Enterprise sales cycle</span></td>
+          <td>Weeks of demos and contract negotiation before placing one call. Both require minimum seat commitments.</td>
+        </tr>
+        <tr>
+          <td><b>SignalWire</b></td>
+          <td><span class="pill good">Approved · placing real calls</span></td>
+          <td>Same week we signed up. We are dialing right now.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="margin-top: 18px; font-size: 20px;">A company that won't take our money cannot be the backbone of HiveMind.</p>
+    <div class="footer"><span class="brand">Hive<b>Mind</b></span><span class="pip">7 / 13</span></div>
+  </section>
+
+  <!-- 7: Build speed -->
+  <section class="slide">
+    <div class="eyebrow">Speed To Build</div>
+    <h2>How quickly we can ship features</h2>
+    <ul>
+      <li><b>SignalWire</b> — Our first working call happened in a day. Their tools are familiar to anyone who has worked with Twilio.</li>
+      <li><b>Twilio</b> — Still the gold standard. Most developers know it. We would gladly use it if they let us. They won't.</li>
+      <li><b>Vonage</b> — Works fine, but the documentation is thinner. More time spent guessing, less time shipping.</li>
+      <li><b>RingCentral</b> — Not really designed for building on. The instructions assume you're embedding their product, not making your own.</li>
+      <li><b>Five9</b> — Their tools are aimed at sales-floor managers configuring queues, not at engineers building new products.</li>
+    </ul>
+    <p style="margin-top: 20px; font-size: 20px;">Every week we save here is a week we spend on features customers pay for.</p>
+    <div class="footer"><span class="brand">Hive<b>Mind</b></span><span class="pip">8 / 13</span></div>
+  </section>
+
+  <!-- 8: Why SignalWire wins -->
+  <section class="slide">
+    <div class="eyebrow">Why SignalWire</div>
+    <h2>Four reasons, any one of which would be enough</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h3>1. They said yes</h3>
+        <p>The other four either turned us down or quoted six-to-ten weeks of paperwork. SignalWire approved us, gave us a US phone number, and we are placing calls today.</p>
+      </div>
+      <div class="card">
+        <h3>2. The math works</h3>
+        <p>About 30% cheaper than Twilio for the same call. At our forecast volume, that's a six-figure annual line item we keep instead of paying out.</p>
+      </div>
+      <div class="card">
+        <h3>3. We can leave any time</h3>
+        <p>If SignalWire ever falls short, we can switch our dialer to Twilio in days. We are not locked in.</p>
+      </div>
+      <div class="card">
+        <h3>4. Their roadmap helps us</h3>
+        <p>The next feature SignalWire is shipping lets reps talk through a headset on their computer — no phone bill on the rep's side. Roughly another 40% off Phase 2.</p>
+      </div>
+    </div>
+    <div class="footer"><span class="brand">Hive<b>Mind</b></span><span class="pip">9 / 13</span></div>
+  </section>
+
+  <!-- 9: Risks -->
+  <section class="slide">
+    <div class="eyebrow">What Could Go Wrong</div>
+    <h2>The honest list</h2>
+    <table>
+      <thead><tr><th>Concern</th><th>How worried we are</th><th>What we'd do</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>SignalWire is smaller than Twilio. A serious outage would hurt.</td>
+          <td><span class="pill warn">Moderate</span></td>
+          <td>Our dialer is built so we can switch to Twilio in days. We re-check Twilio's approval status every quarter.</td>
+        </tr>
+        <tr>
+          <td>The headset feature we want for next year is in early testing.</td>
+          <td><span class="pill warn">Known limit</span></td>
+          <td>The current setup — rep calls from their cell phone — works fine for Phase 1. We don't need the headset to ship.</td>
+        </tr>
+        <tr>
+          <td>International calling has to be turned on per country.</td>
+          <td><span class="pill warn">Minor</span></td>
+          <td>A single setting toggle in their control panel. Not an architectural issue.</td>
+        </tr>
+        <tr>
+          <td>The free trial limits which numbers we can dial.</td>
+          <td><span class="pill good">Planned upgrade</span></td>
+          <td>We move to a paid account before launch. The carrier prepay request in this update covers it.</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="footer"><span class="brand">Hive<b>Mind</b></span><span class="pip">10 / 13</span></div>
+  </section>
+
+  <!-- 10: Roadmap -->
+  <section class="slide">
+    <div class="eyebrow">What This Unlocks</div>
+    <h2>What reps and customers experience, step by step</h2>
+    <ul>
+      <li><b>Now</b> — Rep clicks a name in HiveMind, their cell phone rings, they pick up, the lead's phone rings, both are connected. <span class="pill good">Live today</span></li>
+      <li><b>This quarter</b> — Rep uses a headset on their computer instead of a phone. Faster, hands-free, no rep cell phone bill.</li>
+      <li><b>End of year</b> — Customers can call us back. Their calls land in the same screen reps already use.</li>
+      <li><b>First half next year</b> — Every call is recorded and turned into a written summary by HiveMind's AI. Customers see this and choose us over HubSpot and Salesforce.</li>
+      <li><b>Later</b> — Larger customers bring their own SignalWire or Twilio account. We carry no carrier risk on their behalf.</li>
+    </ul>
+    <div class="footer"><span class="brand">Hive<b>Mind</b></span><span class="pip">11 / 13</span></div>
+  </section>
+
+  <!-- 11: Ask -->
+  <section class="slide">
+    <div class="eyebrow">What We're Asking</div>
+    <h2>Three small decisions</h2>
+    <ul style="font-size: 22px;">
+      <li>Approve a <b class="accent">prepayment to SignalWire</b> so we can move off the free trial and dial any customer, anywhere.</li>
+      <li>Approve a <b class="accent">small monthly budget</b> (under $50) for inbound phone numbers when customers want to call us back.</li>
+      <li>Confirm the position that <b class="accent">SignalWire is our default, not our dependency</b>. We chose them on merit, and we'll change vendors the moment a better one exists.</li>
+    </ul>
+    <div class="quote" style="margin-top: 32px;">
+      The right phone company is the one that lets us serve a paying customer this quarter — and lets us walk away in 90 days if we have to.
+    </div>
+    <div class="footer"><span class="brand">Hive<b>Mind</b></span><span class="pip">12 / 13</span></div>
+  </section>
+
+  <!-- 12: Closing -->
+  <section class="slide">
+    <div class="eyebrow">In Summary</div>
+    <h1>SignalWire is the right call.</h1>
+    <p class="lead" style="margin-top: 24px;">Cheaper than the famous name. Faster to build on than the all-in-one suites. And the only one of the five that would actually do business with a Philippine company today.</p>
+    <p class="meta" style="margin-top: 28px;">Questions, pushback, or alternate views welcome.</p>
+    <div style="margin-top: auto;" class="meta">— HiveMind · May 2026</div>
+    <div class="footer"><span class="brand">Hive<b>Mind</b></span><span class="pip">13 / 13</span></div>
+  </section>
+
+</div>
+
+<div class="nav">
+  <button id="prev">← Back</button>
+  <button id="next">Next →</button>
+</div>
+<div class="progress"><div id="bar"></div></div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  let i = 0;
+  const bar = document.getElementById('bar');
+
+  function go(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, idx) => s.classList.toggle('active', idx === i));
+    bar.style.width = (((i + 1) / slides.length) * 100) + '%';
+    location.hash = String(i + 1);
+  }
+
+  document.getElementById('next').onclick = () => go(i + 1);
+  document.getElementById('prev').onclick = () => go(i - 1);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); go(i + 1); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); go(i - 1); }
+    else if (e.key === 'Home') go(0);
+    else if (e.key === 'End') go(slides.length - 1);
+  });
+
+  const start = parseInt(location.hash.slice(1), 10);
+  go(Number.isFinite(start) && start > 0 ? start - 1 : 0);
+</script>
+</body>
+</html>

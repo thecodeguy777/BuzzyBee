@@ -1,0 +1,4 @@
+-- Phase 4.x — Task attachments (file uploads per task)
+-- See applied migration `dialer_task_attachments` for full content.
+-- Tables: buzzybee.dialer_task_attachments (metadata)
+-- Storage: bucket `dialer-task-attachments` (25 MB cap, authenticated R/W)

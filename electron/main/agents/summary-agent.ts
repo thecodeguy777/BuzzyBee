@@ -8,10 +8,10 @@ const store = new Store()
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const MODEL = 'llama-3.1-8b-instant'
 
-const SYSTEM_PROMPT = `You are the meeting summarizer for a VA staffing company. The VA was on a call with their client.
+const SYSTEM_PROMPT = `You are the meeting summarizer for a VA staffing company. The VA was on a call with their client — a business owner (real estate, construction/commercial, content, or another small business). Infer the domain from the transcript; don't assume real estate.
 
 You are given:
-1. The full transcript (with "You:" = VA, "Client:" = Client labels)
+1. The full transcript. "You:" = the VA. Any other speaker label ("Client", "Client · 2", or a person's name) is on the client side, which may include more than one person — attribute decisions and action items to the right party.
 2. The live intelligence state captured during the call (already-extracted action items, decisions, etc.)
 
 Your job: produce a polished, executive-ready summary in this exact JSON shape:
@@ -39,12 +39,24 @@ export async function* generateFinalSummary(
     return
   }
 
+  // Stay well under Groq free-tier 8b TPM (6000/min). Approx tokens ≈ chars/4.
+  // Budget: ~3000 chars transcript + state JSON + system prompt = ~1500 tokens per request.
+  // If transcript is longer, keep the head (intros/setup) and tail (closing/decisions),
+  // dropping the chatty middle.
+  const MAX_TRANSCRIPT_CHARS = 6000
+  function trimTranscript(text: string): string {
+    if (text.length <= MAX_TRANSCRIPT_CHARS) return text
+    const half = Math.floor(MAX_TRANSCRIPT_CHARS / 2)
+    return text.slice(0, half) + '\n\n[…middle of transcript trimmed for length…]\n\n' + text.slice(-half)
+  }
+
   try {
-    const userMsg = `LIVE STATE (captured during the call):
+    const trimmedTranscript = trimTranscript(fullTranscript)
+    const userMsg = `LIVE STATE (already extracted during the call — trust this as the source of truth):
 ${JSON.stringify(finalState, null, 2)}
 
-FULL TRANSCRIPT:
-${fullTranscript}
+TRANSCRIPT (may be trimmed if very long — use the live state above as canonical):
+${trimmedTranscript}
 
 Produce the final summary JSON.`
 
@@ -69,20 +81,20 @@ Produce the final summary JSON.`
         }),
       })
 
-      if (res.status !== 429) break
+      // Both 413 (too large) and 429 (rate limit) are recoverable with backoff
+      if (res.status !== 429 && res.status !== 413) break
 
-      // Honor Retry-After header from Groq
       const retryAfter = res.headers.get('retry-after')
       const waitSec = retryAfter ? Math.min(60, parseFloat(retryAfter)) : 8 * (attempt + 1)
-      console.log(`[Summary] 429, retrying in ${waitSec}s (attempt ${attempt + 1}/3)`)
+      console.log(`[Summary] ${res.status}, retrying in ${waitSec}s (attempt ${attempt + 1}/3)`)
       await new Promise(r => setTimeout(r, waitSec * 1000))
     }
 
     if (!res || !res.ok || !res.body) {
       const errText = res ? await res.text().catch(() => '') : ''
       yield JSON.stringify({
-        error: res?.status === 429
-          ? 'Rate limit hit. The big model is throttled — wait a minute or switch to llama-3.1-8b in settings later.'
+        error: res?.status === 429 || res?.status === 413
+          ? 'Groq rate limit hit. Wait ~60s and click Generate again.'
           : `Groq error: ${res?.status} ${errText.slice(0, 200)}`,
       })
       return

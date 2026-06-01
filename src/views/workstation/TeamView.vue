@@ -13,14 +13,17 @@ import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth'
 import { useClientsStore } from '@/stores/clients'
 import { useTasksStore } from '@/stores/tasks'
-import { useTeamStore, type MemberProfile } from '@/stores/team'
+import { useStatusesStore } from '@/stores/statuses'
+import { useTeamStore } from '@/stores/team'
 import VADetail from '@/components/workstation/VADetail.vue'
+import HexAvatar from '@/components/shared/HexAvatar.vue'
 
 const props = defineProps<{ vaId?: string }>()
 
 const auth = useAuthStore()
 const clients = useClientsStore()
 const tasks = useTasksStore()
+const statusesStore = useStatusesStore()
 const team = useTeamStore()
 const router = useRouter()
 
@@ -67,7 +70,7 @@ const openTasksByVa = computed<Record<string, number>>(() => {
   const m: Record<string, number> = {}
   for (const t of tasks.tasks) {
     if (!t.assignee_id) continue
-    if (t.status === 'done' || t.status === 'cancelled') continue
+    if (!statusesStore.isOpen(t.project_id, t.status)) continue
     m[t.assignee_id] = (m[t.assignee_id] ?? 0) + 1
   }
   return m
@@ -91,18 +94,6 @@ const filtered = computed(() => {
     return true
   })
 })
-
-function initials(p: MemberProfile) {
-  const src = p.full_name || p.email || '?'
-  return (
-    src
-      .split(/\s|@/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((x) => x.charAt(0).toUpperCase())
-      .join('') || 'BB'
-  )
-}
 
 function formatHours(seconds: number) {
   const h = Math.floor(seconds / 3600)
@@ -229,17 +220,13 @@ watch(
               "
               @click="selectVa(m.id)"
             >
-              <div
-                class="w-9 h-9 rounded-full bg-primary/15 text-primary text-xs font-semibold flex items-center justify-center shrink-0 overflow-hidden"
-              >
-                <img
-                  v-if="m.avatar_url"
-                  :src="m.avatar_url"
-                  :alt="m.full_name ?? ''"
-                  class="w-full h-full object-cover"
-                />
-                <span v-else>{{ initials(m) }}</span>
-              </div>
+              <HexAvatar
+                :avatar-url="m.avatar_url"
+                :name="m.full_name"
+                :email="m.email"
+                :size="36"
+                tint="primary"
+              />
               <div class="flex-1 min-w-0">
                 <div class="text-sm font-medium truncate">{{ m.full_name || m.email || 'Unknown' }}</div>
                 <div class="text-[0.65rem] text-base-content/50 truncate flex items-center gap-1">

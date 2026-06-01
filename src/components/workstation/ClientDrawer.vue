@@ -18,6 +18,7 @@ import {
   Users as UsersIcon,
   ListTodo
 } from 'lucide-vue-next'
+import HexAvatar from '@/components/shared/HexAvatar.vue'
 import { useClientsStore, type Client, type Channel, type ClientStatus, type ClientTier } from '@/stores/clients'
 import { useTeamStore } from '@/stores/team'
 import { useTasksStore } from '@/stores/tasks'
@@ -383,18 +384,6 @@ async function removePm(profileId: string) {
   }
 }
 
-function initialsOf(name: string | null, email: string | null) {
-  const src = name || email || '?'
-  return (
-    src
-      .split(/\s|@/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((p) => p.charAt(0).toUpperCase())
-      .join('') || 'BB'
-  )
-}
-
 const clientInitial = computed(() => (c.value?.name?.charAt(0) || 'C').toUpperCase())
 
 function close() {
@@ -657,12 +646,12 @@ watch(open, (is) => {
               :key="cp.pm_id"
               class="group flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-base-200/40 transition-colors"
             >
-              <div
-                class="w-9 h-9 rounded-full text-xs font-semibold flex items-center justify-center shrink-0"
-                :class="cp.is_primary ? 'bg-warning/20 text-warning ring-2 ring-warning/30' : 'bg-base-200 text-base-content/70'"
-              >
-                {{ initialsOf(cp.profile.full_name, cp.profile.email) }}
-              </div>
+              <HexAvatar
+                :name="cp.profile.full_name"
+                :email="cp.profile.email"
+                :size="36"
+                :tint="cp.is_primary ? 'warning' : 'neutral'"
+              />
               <div class="flex-1 min-w-0">
                 <div class="text-sm font-medium truncate flex items-center gap-1.5">
                   {{ cp.profile.full_name || cp.profile.email || '—' }}
@@ -728,9 +717,7 @@ watch(open, (is) => {
               <ul v-if="pmSearchResults.length" class="space-y-0.5 max-h-48 overflow-y-auto">
                 <li v-for="r in pmSearchResults" :key="r.id">
                   <div class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-base-200/60 group/r">
-                    <div class="w-7 h-7 rounded-full bg-primary/15 text-primary text-[0.65rem] font-semibold flex items-center justify-center shrink-0">
-                      {{ initialsOf(r.full_name, r.email) }}
-                    </div>
+                    <HexAvatar :name="r.full_name" :email="r.email" :size="28" :font-size="11" />
                     <div class="flex-1 min-w-0 text-xs">
                       <div class="font-medium truncate">{{ r.full_name || r.email }}</div>
                       <div v-if="r.full_name && r.email" class="text-base-content/50 truncate">{{ r.email }}</div>
@@ -792,18 +779,14 @@ watch(open, (is) => {
               class="group flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-base-200/40 transition-colors cursor-pointer"
               @click="openVaDetail(v.va_id)"
             >
-              <div
-                class="w-9 h-9 rounded-full bg-secondary/20 text-secondary text-xs font-semibold flex items-center justify-center shrink-0 overflow-hidden"
+              <HexAvatar
+                :avatar-url="v.profile?.avatar_url"
+                :name="v.profile?.full_name"
+                :email="v.profile?.email"
+                :size="36"
+                tint="secondary"
                 :class="v.status === 'paused' ? 'opacity-60' : ''"
-              >
-                <img
-                  v-if="v.profile?.avatar_url"
-                  :src="v.profile.avatar_url"
-                  :alt="v.profile.full_name ?? ''"
-                  class="w-full h-full object-cover"
-                />
-                <span v-else>{{ initialsOf(v.profile?.full_name ?? null, v.profile?.email ?? null) }}</span>
-              </div>
+              />
               <div class="flex-1 min-w-0">
                 <div class="text-sm font-medium truncate flex items-center gap-1.5">
                   {{ v.profile?.full_name || v.profile?.email || 'Loading…' }}
@@ -876,9 +859,7 @@ watch(open, (is) => {
               <ul v-if="vaSearchResults.length" class="space-y-0.5 max-h-48 overflow-y-auto">
                 <li v-for="r in vaSearchResults" :key="r.id">
                   <div class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-base-200/60 group/r">
-                    <div class="w-7 h-7 rounded-full bg-secondary/20 text-secondary text-[0.65rem] font-semibold flex items-center justify-center shrink-0">
-                      {{ initialsOf(r.full_name, r.email) }}
-                    </div>
+                    <HexAvatar :name="r.full_name" :email="r.email" :size="28" :font-size="11" tint="secondary" />
                     <div class="flex-1 min-w-0 text-xs">
                       <div class="font-medium truncate">{{ r.full_name || r.email }}</div>
                       <div v-if="r.full_name && r.email" class="text-base-content/50 truncate">{{ r.email }}</div>

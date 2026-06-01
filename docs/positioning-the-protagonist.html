@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>HiveMind — The Protagonist Positioning</title>
+<style>
+  :root {
+    --bg: #0b0d10;
+    --panel: #14181d;
+    --line: #232a33;
+    --ink: #eef1f5;
+    --mute: #a3acb8;
+    --accent: #f5b400;
+    --accent-soft: #f5b40022;
+    --warm: #ffd06e;
+    --good: #5ecf94;
+    --bad: #e26565;
+    --warn: #e2a740;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    background: var(--bg); color: var(--ink);
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Inter, system-ui, sans-serif;
+  }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  .deck {
+    width: min(1200px, 96vw);
+    height: min(760px, 94vh);
+    position: relative;
+  }
+  .slide {
+    position: absolute; inset: 0;
+    padding: 56px 72px;
+    display: none;
+    flex-direction: column;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.5);
+    overflow: hidden;
+  }
+  .slide.active { display: flex; }
+  .slide h1 {
+    font-size: 56px; font-weight: 700; margin: 0 0 14px;
+    letter-spacing: -0.025em; line-height: 1.05;
+  }
+  .slide h2 {
+    font-size: 36px; font-weight: 600; margin: 0 0 26px;
+    letter-spacing: -0.01em; line-height: 1.2;
+  }
+  .slide h3 { font-size: 20px; font-weight: 600; margin: 0 0 12px; color: var(--accent); }
+  .slide p { font-size: 21px; line-height: 1.6; color: var(--ink); max-width: 62ch; }
+  .slide ul { font-size: 19px; line-height: 1.7; padding-left: 22px; max-width: 70ch; }
+  .slide li { margin: 6px 0; }
+  .slide li b { color: var(--accent); font-weight: 600; }
+
+  .eyebrow {
+    text-transform: uppercase;
+    letter-spacing: .18em;
+    font-size: 12px;
+    color: var(--accent);
+    margin-bottom: 20px;
+    font-weight: 600;
+  }
+  .footer {
+    position: absolute; left: 36px; right: 36px; bottom: 18px;
+    display: flex; justify-content: space-between; align-items: center;
+    color: var(--mute); font-size: 12px;
+  }
+  .pip { font-variant-numeric: tabular-nums; }
+  .brand {
+    letter-spacing: .12em; text-transform: uppercase; font-weight: 600;
+    color: var(--mute);
+  }
+  .brand b { color: var(--accent); }
+
+  .lead { font-size: 24px; line-height: 1.55; max-width: 64ch; color: var(--ink); }
+  .meta { color: var(--mute); font-size: 16px; line-height: 1.55; max-width: 64ch; }
+  .quote {
+    border-left: 3px solid var(--accent); padding: 14px 0 14px 22px;
+    color: var(--ink); font-style: italic; max-width: 68ch;
+    font-size: 26px; line-height: 1.45;
+  }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .card {
+    background: #0d1115; border: 1px solid var(--line);
+    border-radius: 10px; padding: 20px 22px;
+  }
+  .card h3 { margin: 0 0 8px; font-size: 17px; color: var(--accent); }
+  .card p { font-size: 15px; line-height: 1.55; color: var(--ink); }
+  .card .label { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--mute); margin-bottom: 8px; }
+
+  .vs {
+    display: grid; grid-template-columns: 1fr 60px 1fr; gap: 24px;
+    align-items: stretch;
+  }
+  .vs .col { background: #0d1115; border: 1px solid var(--line); border-radius: 10px; padding: 20px 22px; }
+  .vs .col.them { border-color: #3a2424; }
+  .vs .col.us { border-color: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent-soft); }
+  .vs .arrow {
+    display: flex; align-items: center; justify-content: center;
+    color: var(--mute); font-size: 28px;
+  }
+  .vs h3 { margin: 0 0 12px; font-size: 16px; letter-spacing: .04em; text-transform: uppercase; }
+  .vs .them h3 { color: #c87b7b; }
+  .vs .us h3 { color: var(--accent); }
+  .vs p { font-size: 15px; line-height: 1.55; }
+
+  .pill { display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+  .pill.good { background: #5ecf9422; color: var(--good); }
+  .pill.bad { background: #e2656522; color: var(--bad); }
+  .pill.warm { background: #f5b40022; color: var(--accent); }
+
+  .big {
+    font-size: 96px; font-weight: 700; letter-spacing: -0.04em;
+    color: var(--accent); line-height: 1;
+  }
+  .big-sub { font-size: 19px; color: var(--ink); margin-top: 10px; max-width: 24ch; line-height: 1.4; }
+
+  .nav {
+    position: fixed; right: 20px; bottom: 18px;
+    display: flex; gap: 8px;
+    font-size: 13px;
+  }
+  .nav button {
+    background: transparent; color: var(--mute); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 14px; cursor: pointer; font: inherit;
+  }
+  .nav button:hover { color: var(--ink); border-color: var(--accent); }
+  .progress {
+    position: fixed; left: 0; right: 0; bottom: 0; height: 3px;
+    background: var(--line);
+  }
+  .progress > div {
+    height: 100%; background: var(--accent);
+    transition: width 240ms ease;
+  }
+
+  .accent { color: var(--accent); }
+  .warm { color: var(--warm); }
+
+  .headline {
+    font-size: 44px; line-height: 1.15; font-weight: 700;
+    letter-spacing: -0.02em; max-width: 24ch;
+  }
+  .headline .accent { color: var(--accent); }
+
+  .ribbon {
+    display: inline-block; background: var(--accent-soft);
+    color: var(--accent); padding: 6px 14px; border-radius: 6px;
+    font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+    margin-bottom: 18px;
+  }
+
+  .checklist { list-style: none; padding: 0; }
+  .checklist li {
+    padding-left: 28px; position: relative; margin: 10px 0;
+    font-size: 18px; line-height: 1.5;
+  }
+  .checklist li::before {
+    content: "▸"; position: absolute; left: 0; color: var(--accent);
+    font-weight: 700;
+  }
+  .checklist li.no::before { content: "✕"; color: var(--bad); }
+  .checklist li.yes::before { content: "✓"; color: var(--good); }
+</style>
+</head>
+<body>
+
+<div class="deck" id="deck">
+
+  <!-- 1: Title -->
+  <section class="slide active">
+    <div class="eyebrow">Positioning — May 2026</div>
+    <h1>The Protagonist.</h1>
+    <p class="lead" style="margin-top: 18px;">A new way to sell HiveMind that nobody else in the VA business can copy — because nobody else is in a position to tell the story we are.</p>
+    <div style="margin-top: auto;" class="meta">For internal brand work. The recommendation in one line: stop hiding the VA. Make them the protagonist of the marketing.</div>
+    <div class="footer"><span class="brand">Hive<b>Mind</b></span><span class="pip">1 / 12</span></div>
+  </section>
+
+  <!-- 2: The problem with VA marketing today -->
+  <section class="slide">
+    <div class="eyebrow">The Problem</div>
+    <h2>Every VA company is selling the same invisible person.</h2>
+    <div class="grid-3" style="margin-top: 10px;">
+      <div class="card">
+        <div class="label">MyOutDesk</div>
+        <p>"Pre-vetted virtual professionals." Stock photo of a headset.</p>
+      </div>
+      <div class="card">
+        <div class="label">Cyberbacker</div>
+        <p>"Get matched with a Cyberbacker." Smiling woman, no name, no story.</p>
+      </div>
+      <div class="card">
+        <div class="label">Wing / BELAY / Virtudesk</div>
+        <p>Tiered plans. Headset clip art. The VA is a SKU, not a human.</p>
+      </div>
+    </div>
+    <p style="margin-top: 26px;">The buyer is supposed to imagine "a Filipino" in the abstract. The actual person doing the work is treated as a commodity input, not a professional.</p>
+    <p class="meta" style="margin-top: 12px;">This is the industry default. It is also a huge opening.</p>
+    <div class="footer"><span class="brand">Hive<b>Mind</b></span><span class="pip">2 / 12</span></div>
+  </section>
+
+  <!-- 3: The reframe -->
+  <section class="slide">
+    <div class="eyebrow">The Reframe</div>
+    <h2>Three roles. One story.</h2>
+    <div class="grid-3" style="margin-top: 14px;">
+      <div class="card" style="border-color: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent-soft);">
+        <div class="label">Role 1</div>
+        <h3>The VA</h3>
+        <p style="color: var(--ink);">Is the <b class="accent">protagonist</b>. The person who builds the operation behind the client.</p>
+      </div>
+      <div class="card">
+        <div class="label">Role 2</div>
+        <h3>The Client</h3>
+        <p style="color: var(--ink);">Is the <b class="accent">witness</b>. The creator or realtor who gets to publicly credit the work.</p>
+      </div>
+      <div class="card">
+        <div class="label">Role 3</div>
+        <h3>HiveMind</h3>
+        <p style="color: var(--ink);">Is the <b class="accent">stage</b>. The product that makes invisible work legible enough to deserve a thank-you.</p>
+      </div>
+    </div>
+    <p style="margin-top: 30px;">Once you cast the roles this way, the whole pitch rewrites itself — landing page, pricing page, recruiting page, ads.</p>
+    <div class="footer"><span class="brand">Hive<b>Mind</b></span><span class="pip">3 / 12</span></div>
+  </section>
+
+  <!-- 4: Why only we can tell this -->
+  <section class="slide">
+    <div class="eyebrow">Why Only Us</div>
+    <h2>The moat is structural, not biographical.</h2>
+    <ul style="margin-top: 8px;">
+      <li><b>The product unlocks the story.</b> Without HiveMind, VA work has been invisible — Slack DMs, Excel reports, Time Doctor screenshots. You can't publicly credit work you can't see. We can.</li>
+      <li><b>The team is the face — by design.</b> Every competitor puts the founder on the About page and hides the operators. We invert that: VAs by name, leadership in the background. An American CEO trying to copy this by changing copy wouldn't change the org chart.</li>
+      <li><b>The hybrid model compounds it.</b> US-fronted, PH-operated, AI-augmented. A structural choice that took years to build. Competitors would have to rebuild themselves to match it.</li>
+      <li><b>Recruiting flywheel.</b> The brand becomes the magnet. Best PH operators self-select toward us. (More on this in slide 9.)</li>
+    </ul>
+    <p style="margin-top: 22px;" class="meta">MyOutDesk could spend a million dollars trying to copy the copy. They can't copy the structure underneath it.</p>
+    <div class="footer"><span class="brand">Hive<b>Mind</b></span><span class="pip">4 / 12</span></div>
+  </section>
+
+  <!-- 5: HiveMind as the mechanism -->
+  <section class="slide">
+    <div class="eyebrow">The Mechanism</div>
+    <h2>The product is what makes the gratitude possible.</h2>
+    <div class="vs" style="margin-top: 10px;">
+      <div class="col them">
+        <h3>Without the product</h3>
+        <p style="margin-top: 6px;">"Maria did a great job last month." A vague sentiment. The client cannot prove it, see it, or share it. The VA stays invisible. The work was real, but un-witnessed.</p>
+      </div>
+      <div class="arrow">→</div>
+      <div class="col us">
+        <h3>With HiveMind</h3>
+        <p style="margin-top: 6px;">"Maria handled 412 DMs, booked 3 sponsorship calls, and closed 14 action items last month." A screenshot of the dashboard. A name. A face. A career.</p>
+      </div>
+    </div>
+    <p style="margin-top: 30px;">Live transcripts, action items with role attribution, the call log, the deal pipeline — these were built as a productivity tool. <b class="accent">Re-frame them as a visibility tool</b> and they become the marketing engine.</p>
+    <div class="quote" style="margin-top: 22px;">HiveMind doesn't replace your VA. It makes them impossible to ignore.</div>
+    <div class="footer"><span class="brand">Hive<b>Mind</b></span><span class="pip">5 / 12</span></div>
+  </section>
+
+  <!-- 6: The content engine -->
+  <section class="slide">
+    <div class="eyebrow">The Content Engine</div>
+    <h2>What we'd actually film and post.</h2>
+    <div class="grid-2" style="margin-top: 4px;">
+      <div class="card">
+        <div class="label">Format 1</div>
+        <h3>60-second Appreciation Reels</h3>
+        <p>Creator on camera + HiveMind dashboard on screen + VA's face in Manila + their career story. One per client per quarter. The client posts it. We re-share.</p>
+      </div>
+      <div class="card">
+        <div class="label">Format 2</div>
+        <h3>"Day in the Life" Team Series</h3>
+        <p>The VA team, by name. Salary transparency. Career ladders. What they did before HiveMind. What they're doing now.</p>
+      </div>
+      <div class="card">
+        <div class="label">Format 3</div>
+        <h3>VA-Led Explainers</h3>
+        <p>The operators in their own voices. "Here's how I run a creator's DM inbox." "Here's how I close a contract-to-close file." No leadership, no founder. The work explained by the people doing it.</p>
+      </div>
+      <div class="card">
+        <div class="label">Format 4</div>
+        <h3>"Thank Your VA" Microsite</h3>
+        <p>A tool that lets any client generate a shareable credit video from their HiveMind dashboard. Built once. Runs forever. Every share is brand fuel.</p>
+      </div>
+    </div>
+    <div class="footer"><span class="brand">Hive<b>Mind</b></span><span class="pip">6 / 12</span></div>
+  </section>
+
+  <!-- 7: What this REPLACES -->
+  <section class="slide">
+    <div class="eyebrow">What This Replaces</div>
+    <h2>Kill the boiler-room aesthetic on contact.</h2>
+    <div class="vs" style="margin-top: 12px;">
+      <div class="col them">
+        <h3>Old Thinking</h3>
+        <p style="margin-top: 6px;"><b style="color: #c87b7b;">"We have Vegas closers."</b></p>
+        <p style="margin-top: 12px;">Reads as: Wolf of Wall Street, Glengarry, boiler room, the people calling at dinner about your car's extended warranty. Modern realtors and creators are themselves on TikTok. They are allergic to this energy.</p>
+      </div>
+      <div class="arrow">→</div>
+      <div class="col us">
+        <h3>New Thinking</h3>
+        <p style="margin-top: 6px;"><b class="accent">"We have a system."</b></p>
+        <p style="margin-top: 12px;">Software that responds in under 5 minutes. AI that drafts the next reply. A team that operates the platform on your behalf. The closer is the engine, not the album cover. The buyer never has to think about them.</p>
+      </div>
+    </div>
+    <p style="margin-top: 24px;" class="meta">The Vegas team still cold-burns the 8,000 leads. That doesn't change. What changes is what the leads <em>see</em>.</p>
+    <div class="footer"><span class="brand">Hive<b>Mind</b></span><span class="pip">7 / 12</span></div>
+  </section>
+
+  <!-- 8: The risk to dodge -->
+  <section class="slide">
+    <div class="eyebrow">The Risk</div>
+    <h2>This story has a wrong version. Don't tell it.</h2>
+    <ul class="checklist" style="margin-top: 8px;">
+      <li class="no"><b>"Hardworking Filipinos rescued by American clients."</b> &mdash; poverty porn. Paternalistic. Reads as a GoFundMe, not a brand.</li>
+      <li class="no"><b>"We give jobs to people who need them."</b> &mdash; positions the VA as a charity case. Cuts the legs off the dignity argument.</li>
+      <li class="no"><b>Soft-focus photography, stock smiles, voiceover about humble beginnings.</b> &mdash; saccharine. Insulting to the actual operators.</li>
+    </ul>
+    <p style="margin-top: 28px;">The right version is the opposite tone:</p>
+    <ul class="checklist" style="margin-top: 10px;">
+      <li class="yes"><b>"Globally competitive professionals running modern AI-augmented operations."</b></li>
+      <li class="yes"><b>"They are choosing a career, not being lifted out of something."</b></li>
+      <li class="yes"><b>Apple-ad aesthetic — confident, professional, unsentimental. Show the work; let the work speak.</b></li>
+    </ul>
+    <div class="footer"><span class="brand">Hive<b>Mind</b></span><span class="pip">8 / 12</span></div>
+  </section>
+
+  <!-- 9: Recruiting compound -->
+  <section class="slide">
+    <div class="eyebrow">The Hidden Dividend</div>
+    <h2>The marketing strategy IS the recruiting strategy.</h2>
+    <div style="margin-top: 14px;">
+      <div class="big">2x</div>
+      <div class="big-sub">return on every dollar of brand spend</div>
+    </div>
+    <p style="margin-top: 30px;">When the public-facing brand celebrates VAs by name, the best PH operators self-select toward HiveMind and away from MyOutDesk, Cyberbacker, and Virtudesk. That means:</p>
+    <ul style="margin-top: 10px;">
+      <li><b>Lower hiring cost.</b> Top applicants come to us.</li>
+      <li><b>Higher retention.</b> Public recognition is a benefit competitors can't match.</li>
+      <li><b>Better outcomes.</b> Better operators → happier clients → more appreciation reels → more recruiting flywheel.</li>
+    </ul>
+    <p class="meta" style="margin-top: 22px;">The current landing page claims "94% retention." Currently it's a number on a slide. Under the new positioning, it becomes the natural <em>consequence</em> of the brand &mdash; and gets easier to actually defend.</p>
+    <div class="footer"><span class="brand">Hive<b>Mind</b></span><span class="pip">9 / 12</span></div>
+  </section>
+
+  <!-- 10: The headline -->
+  <section class="slide">
+    <div class="eyebrow">The Seed Headline</div>
+    <h2>One line that does the work.</h2>
+    <div class="quote" style="font-size: 32px; line-height: 1.35; margin-top: 24px;">
+      Behind every great creator is a person<br/>you've never met. We built the software,<br/>and the team, that <span class="accent">finally lets you see them</span>.
+    </div>
+    <p style="margin-top: 36px;">Realtors read it and think about <b class="accent">their team</b>. Creators read it and think about <b class="accent">the operator behind their growth</b>. The Filipino reader applying for a job reads it and thinks <b class="accent">"that's where I want to work."</b></p>
+    <p class="meta" style="margin-top: 18px;">One sentence, three audiences, three different emotional reactions, all converging on the same brand.</p>
+    <div class="footer"><span class="brand">Hive<b>Mind</b></span><span class="pip">10 / 12</span></div>
+  </section>
+
+  <!-- 11: How this maps to the 8000 -> 250 goal -->
+  <section class="slide">
+    <div class="eyebrow">Conversion Math</div>
+    <h2>Why this matters for the 8,000-lead push.</h2>
+    <div class="row" style="display: flex; gap: 80px; margin-top: 10px; align-items: baseline;">
+      <div>
+        <div class="big">3.1%</div>
+        <div class="big-sub">required to hit 250 clients out of 8,000 leads</div>
+      </div>
+      <div>
+        <div class="big">$2.4M</div>
+        <div class="big-sub">ARR at $1,600/mo × 6-mo commit × 250 clients</div>
+      </div>
+    </div>
+    <p style="margin-top: 36px;">3.1% on cold outbound is achievable but aggressive. Industry baseline is 1-3%. <b class="accent">Sharp positioning is the difference between hitting the number and missing it.</b></p>
+    <p style="margin-top: 16px;">Current pitch is generic VA-with-AI. New pitch is product-first, protagonist-led, founder-on-camera. The same Vegas dialer team, the same 8,000 leads — different conversion rate.</p>
+    <div class="footer"><span class="brand">Hive<b>Mind</b></span><span class="pip">11 / 12</span></div>
+  </section>
+
+  <!-- 12: Next steps -->
+  <section class="slide">
+    <div class="eyebrow">Next</div>
+    <h2>What this changes &mdash; in order of leverage.</h2>
+    <ul style="margin-top: 8px;">
+      <li><b>Hero rewrite.</b> Replace "Stop losing leads to admin work" with the seed headline (or a tightened version of it). Add the dashboard-on-screen + VA-face composition.</li>
+      <li><b>New section: "Meet the Team."</b> Real names, real photos, real career stories. Not stock. This is the page nobody else will copy.</li>
+      <li><b>HiveMind AI section re-framed.</b> Currently shows "VA productivity." Re-frame as "client visibility into your team's work." Same screenshots, different copy.</li>
+      <li><b>Recruiting page.</b> "Apply to be on the bench." Same brand language. Doubles as marketing for clients.</li>
+      <li><b>First appreciation reel.</b> Pick one pilot client. Film it. Test the format before scaling.</li>
+    </ul>
+    <p class="meta" style="margin-top: 26px;">Estimated effort: 2-3 days of copy work + 1 photoshoot + 1 video shoot. No engineering changes required to the product — only re-framing of what's already built.</p>
+    <div class="footer"><span class="brand">Hive<b>Mind</b></span><span class="pip">12 / 12</span></div>
+  </section>
+
+</div>
+
+<div class="progress"><div id="bar" style="width: 8.3%;"></div></div>
+<div class="nav">
+  <button onclick="prev()">← Prev</button>
+  <button onclick="next()">Next →</button>
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  let idx = 0;
+  function show(i) {
+    slides[idx].classList.remove('active');
+    idx = (i + slides.length) % slides.length;
+    slides[idx].classList.add('active');
+    document.getElementById('bar').style.width = ((idx + 1) / slides.length * 100) + '%';
+  }
+  function next() { show(idx + 1); }
+  function prev() { show(idx - 1); }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { next(); e.preventDefault(); }
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp') { prev(); e.preventDefault(); }
+  });
+</script>
+
+</body>
+</html>

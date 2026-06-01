@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { useTasksStore, type Task, type TaskStatus } from '@/stores/tasks'
+import { computed, nextTick, ref, watch } from 'vue'
+import { useTasksStore, type Task } from '@/stores/tasks'
 import { useClientsStore } from '@/stores/clients'
+import { useStatusesStore } from '@/stores/statuses'
+import { useProjectsStore } from '@/stores/projects'
 import {
   Plus,
   Calendar as CalendarIcon,
@@ -21,10 +23,15 @@ import AddColumnModal from '@/components/workstation/AddColumnModal.vue'
 
 const tasks = useTasksStore()
 const clients = useClientsStore()
+const statusesStore = useStatusesStore()
+const projects = useProjectsStore()
 
 const newTitle = ref('')
 const creating = ref(false)
 const newError = ref<string | null>(null)
+// Brief success-ring pulse on the quick-add card after a task is created.
+const justAdded = ref(false)
+let justAddedTimer: ReturnType<typeof setTimeout> | null = null
 
 const VIEW_KEY = 'buzzybee.workstation.tasks-view'
 type ViewMode = 'overview' | 'table' | 'board' | 'calendar' | 'files'
@@ -48,12 +55,12 @@ const tabs: { value: ViewMode; label: string; icon: any; disabled?: boolean }[] 
 
 const showAddColumn = ref(false)
 
-const groups: { key: TaskStatus; label: string }[] = [
-  { key: 'todo', label: 'Todo' },
-  { key: 'in_progress', label: 'In progress' },
-  { key: 'blocked', label: 'Blocked' },
-  { key: 'done', label: 'Done' }
-]
+// Legacy list view groups, derived from the current project's status columns.
+const groups = computed(() =>
+  statusesStore
+    .forProject(projects.currentProjectId)
+    .map((col) => ({ key: col.key, label: col.label }))
+)
 
 const hasClient = computed(() => !!clients.currentClient)
 
@@ -64,6 +71,12 @@ async function quickAdd() {
   try {
     await tasks.createTask({ title: newTitle.value })
     newTitle.value = ''
+    // Flash the success ring (toggle off → nextTick → on so it retriggers on rapid adds).
+    justAdded.value = false
+    if (justAddedTimer) clearTimeout(justAddedTimer)
+    await nextTick()
+    justAdded.value = true
+    justAddedTimer = setTimeout(() => { justAdded.value = false }, 550)
   } catch (e) {
     newError.value = e instanceof Error ? e.message : 'Could not create task.'
   } finally {
@@ -72,7 +85,12 @@ async function quickAdd() {
 }
 
 async function toggleDone(t: Task) {
-  await tasks.setStatus(t.id, t.status === 'done' ? 'todo' : 'done')
+  const pid = projects.currentProjectId
+  const next = statusesStore.isDone(pid, t.status)
+    ? statusesStore.defaultKey(pid)
+    : statusesStore.firstDoneKey(pid)
+  // No suitable target column (e.g. project has no done/first column) — leave as-is.
+  await tasks.setStatus(t.id, next ?? t.status)
 }
 
 function priorityLabel(p: number) {
@@ -147,6 +165,7 @@ function dueClass(due: string | null) {
     <!-- Quick add -->
     <form
       class="card bg-base-100 border border-base-300 shadow-sm"
+      :class="{ 'bb-pulse-success': justAdded }"
       @submit.prevent="quickAdd"
     >
       <div class="card-body p-3 flex-row items-center gap-3">
@@ -220,7 +239,7 @@ function dueClass(due: string | null) {
               <input
                 type="checkbox"
                 class="checkbox checkbox-sm shrink-0"
-                :checked="t.status === 'done'"
+                :checked="statusesStore.isDone(projects.currentProjectId, t.status)"
                 @change="toggleDone(t)"
                 @click.stop
               />
@@ -231,7 +250,7 @@ function dueClass(due: string | null) {
               >
                 <div
                   class="text-sm truncate"
-                  :class="t.status === 'done' && 'line-through text-base-content/50'"
+                  :class="statusesStore.isDone(projects.currentProjectId, t.status) && 'line-through text-base-content/50'"
                 >
                   {{ t.title }}
                 </div>

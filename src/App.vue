@@ -16,10 +16,18 @@ const layout = computed<'workstation' | 'admin' | 'bare'>(() => {
 
 <template>
   <WorkstationLayout v-if="layout === 'workstation'">
-    <router-view />
+    <router-view v-slot="{ Component, route: r }">
+      <transition name="page" mode="out-in">
+        <component :is="Component" :key="r.path" />
+      </transition>
+    </router-view>
   </WorkstationLayout>
   <AppLayout v-else-if="layout === 'admin'">
-    <router-view />
+    <router-view v-slot="{ Component, route: r }">
+      <transition name="page" mode="out-in">
+        <component :is="Component" :key="r.path" />
+      </transition>
+    </router-view>
   </AppLayout>
   <router-view v-else />
 </template>

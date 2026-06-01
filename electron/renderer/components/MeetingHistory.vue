@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { History, Clock, RefreshCw, FileText, ChevronDown, ChevronUp, Download } from 'lucide-vue-next'
+import { History, Clock, RefreshCw, FileText, ChevronDown, ChevronUp, Download, Sparkles } from 'lucide-vue-next'
 
 interface MeetingRow {
   id: string
@@ -18,7 +18,30 @@ const loading = ref(false)
 const expandedId = ref<string | null>(null)
 const detail = ref<any | null>(null)
 const exporting = ref<string | null>(null)
+const regenerating = ref<string | null>(null)
 const toast = ref<{ message: string; isError?: boolean } | null>(null)
+
+async function regenerateSummary(id: string) {
+  if (regenerating.value) return
+  regenerating.value = id
+  try {
+    const result = await window.electronAPI.history.regenerateSummary(id)
+    if (result.success) {
+      toast.value = { message: 'Summary regenerated' }
+      // Refresh detail if currently expanded
+      if (expandedId.value === id) {
+        detail.value = await window.electronAPI.history.detail(id)
+      }
+      // Refresh list so the "summary" tag appears if it was missing
+      await load()
+    } else {
+      toast.value = { message: result.error || 'Failed to regenerate', isError: true }
+    }
+    setTimeout(() => { toast.value = null }, 4000)
+  } finally {
+    regenerating.value = null
+  }
+}
 
 async function exportPdf(id: string) {
   exporting.value = id
@@ -144,6 +167,14 @@ onMounted(load)
               <span v-if="m.summaryText" class="text-primary/70">summary</span>
             </div>
           </div>
+          <span
+            class="text-[10px] font-medium text-base-content/40 hover:text-primary px-2 py-1 rounded hover:bg-primary/5 transition-colors flex items-center gap-1"
+            :title="`Regenerate summary for ${m.title || 'meeting'}`"
+            @click.stop="regenerateSummary(m.id)"
+          >
+            <Sparkles class="w-3 h-3" :class="{ 'animate-pulse': regenerating === m.id }" />
+            <span>{{ regenerating === m.id ? 'Generating…' : 'Regenerate' }}</span>
+          </span>
           <span
             class="text-[10px] font-medium text-base-content/40 hover:text-primary px-2 py-1 rounded hover:bg-primary/5 transition-colors flex items-center gap-1"
             :title="`Export ${m.title || 'meeting'} as PDF`"

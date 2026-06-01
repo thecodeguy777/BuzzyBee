@@ -48,7 +48,7 @@ export const EMPTY_STATE: MeetingState = {
   redFlags: [],
 }
 
-const SYSTEM_PROMPT = `You are the meeting intelligence engine for a virtual assistant (VA) on a call with their client (a real estate agent or broker).
+const SYSTEM_PROMPT = `You are the meeting intelligence engine for a virtual assistant (VA) on a call with their client — a business owner (commonly real estate, but may be construction/commercial, content creation, or another small business). Infer the domain from the conversation; don't assume real estate.
 
 Your job: maintain a LIVING STATE of the meeting that evolves as new transcript chunks arrive. The state has 5 lists:
   - actionItems: tasks assigned to VA or Client
@@ -68,7 +68,7 @@ CRITICAL RULES:
    - "done" — completed during the call
 5. If a question gets answered, MOVE it from openQuestions to decisions (or remove if minor).
 6. Keep items concise (one sentence). Be specific. Use real names and dates.
-7. Use the speaker labels in the transcript: "You:" = VA, "Client:" = Client.
+7. Speaker labels: "You:" = the VA. Any other label ("Client", "Client · 2", or a person's name) is on the client side — there may be multiple client-side people; attribute action items and questions to the correct party.
 8. Output ONLY a valid JSON object matching this shape (no markdown fences):
 
 {
@@ -79,6 +79,27 @@ CRITICAL RULES:
   "redFlags": ["...","..."]
 }`
 
+// Trim arrays to keep the state-passing payload small. We keep the
+// most recent items per category so older context doesn't bloat every
+// agent call. Preserves IDs so the agent can still update items in place.
+const KEEP_RECENT = {
+  actionItems: 30,
+  openQuestions: 15,
+  decisions: 30,
+  clientPreferences: 20,
+  redFlags: 10,
+}
+
+function compactState(state: MeetingState): MeetingState {
+  return {
+    actionItems: state.actionItems.slice(-KEEP_RECENT.actionItems),
+    openQuestions: state.openQuestions.slice(-KEEP_RECENT.openQuestions),
+    decisions: state.decisions.slice(-KEEP_RECENT.decisions),
+    clientPreferences: state.clientPreferences.slice(-KEEP_RECENT.clientPreferences),
+    redFlags: state.redFlags.slice(-KEEP_RECENT.redFlags),
+  }
+}
+
 export async function updateMeetingState(
   currentState: MeetingState,
   newTranscriptChunk: string
@@ -87,8 +108,9 @@ export async function updateMeetingState(
   if (!apiKey) return currentState
 
   try {
+    const compactedState = compactState(currentState)
     const userMsg = `CURRENT STATE:
-${JSON.stringify(currentState, null, 2)}
+${JSON.stringify(compactedState, null, 2)}
 
 NEW TRANSCRIPT (since last update):
 ${newTranscriptChunk}

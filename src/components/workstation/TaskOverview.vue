@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useProjectsStore, type Project } from '@/stores/projects'
 import { useTasksStore } from '@/stores/tasks'
 import { useClientsStore } from '@/stores/clients'
+import { useStatusesStore } from '@/stores/statuses'
 import { useAuthStore } from '@/stores/auth'
 import {
   ListTodo,
@@ -55,6 +56,7 @@ const projects = useProjectsStore()
 const tasks = useTasksStore()
 const clients = useClientsStore()
 const auth = useAuthStore()
+const statusesStore = useStatusesStore()
 
 const p = computed<Project | null>(() => projects.currentProject)
 
@@ -147,16 +149,25 @@ async function saveStatus(value: Project['status']) {
   await saveField({ status: value })
 }
 
+// Per-column counts (dynamic keys) for the active breakdown line.
 const counts = computed(() => {
-  const map = { todo: 0, in_progress: 0, blocked: 0, done: 0, cancelled: 0 }
-  for (const t of tasks.tasksForCurrentProject) {
-    map[t.status]++
-  }
+  const map: Record<string, number> = {}
+  for (const t of tasks.tasksForCurrentProject) map[t.status] = (map[t.status] ?? 0) + 1
   return map
 })
 
+// Open (non-done, non-cancelled) columns for the current project.
+const openColumns = computed(() =>
+  statusesStore.forProject(projects.currentProjectId).filter((c) => !c.is_done && !c.is_cancelled)
+)
 const totalActive = computed(
-  () => counts.value.todo + counts.value.in_progress + counts.value.blocked
+  () => tasks.tasksForCurrentProject.filter((t) => statusesStore.isOpen(t.project_id, t.status)).length
+)
+const doneCount = computed(
+  () => tasks.tasksForCurrentProject.filter((t) => statusesStore.isDone(t.project_id, t.status)).length
+)
+const activeBreakdown = computed(() =>
+  openColumns.value.map((c) => `${counts.value[c.key] ?? 0} ${c.label.toLowerCase()}`).join(' · ')
 )
 
 const dueSoon = computed(() => {
@@ -165,7 +176,7 @@ const dueSoon = computed(() => {
   const week = new Date(today)
   week.setDate(week.getDate() + 7)
   return tasks.tasksForCurrentProject.filter((t) => {
-    if (!t.due_on || t.status === 'done' || t.status === 'cancelled') return false
+    if (!t.due_on || !statusesStore.isOpen(t.project_id, t.status)) return false
     const d = new Date(t.due_on + 'T00:00:00')
     return d >= today && d <= week
   }).length
@@ -175,7 +186,7 @@ const overdue = computed(() => {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   return tasks.tasksForCurrentProject.filter((t) => {
-    if (!t.due_on || t.status === 'done' || t.status === 'cancelled') return false
+    if (!t.due_on || !statusesStore.isOpen(t.project_id, t.status)) return false
     return new Date(t.due_on + 'T00:00:00') < today
   }).length
 })
@@ -310,7 +321,7 @@ async function destroy() {
             {{ totalActive }}
           </div>
           <div class="text-[0.7rem] text-base-content/50 mt-0.5">
-            {{ counts.todo }} todo · {{ counts.in_progress }} in prog · {{ counts.blocked }} blocked
+            {{ activeBreakdown }}
           </div>
         </div>
 
@@ -320,7 +331,7 @@ async function destroy() {
             <CheckCircle2 class="w-4 h-4 text-success" :stroke-width="1.75" />
           </div>
           <div class="font-display text-lg font-semibold mt-1 tabular-nums">
-            {{ counts.done }}
+            {{ doneCount }}
           </div>
         </div>
 

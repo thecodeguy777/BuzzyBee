@@ -1,61 +1,35 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
-import Store from 'electron-store'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import type { TranscriptChunk, CoachingPromptData } from '../shared/ipc-channels'
+import { getMainSupabaseClient } from './supabase-bridge'
 
-const SUPABASE_URL = 'https://bsjplzpoynsnluihmnul.supabase.co'
-const SUPABASE_ANON_KEY = 'sb_publishable_ML1dsNqpypvT84J-U4w6Rw_0UA4iycp'
-
-const store = new Store()
-
-let cachedClient: SupabaseClient | null = null
-
+// Use the SINGLE main-process client owned by supabase-bridge.ts.
+// (Previously this file had its own client, which meant signIn/signOut
+//  didn't fire onAuthStateChange on the bridge's separate client and
+//  the renderer kept showing the previous user's identity.)
 function getClient(): SupabaseClient {
-  if (cachedClient) return cachedClient
-  cachedClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    db: { schema: 'buzzybee' as never },
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: false,
-      storage: {
-        getItem: (key: string) => (store.get(`auth_${key}`) as string | undefined) ?? null,
-        setItem: (key: string, value: string) => store.set(`auth_${key}`, value),
-        removeItem: (key: string) => store.delete(`auth_${key}` as never),
-      },
-    },
-    realtime: {
-      // Stub transport so Supabase doesn't try to load native ws (which Node 20 lacks)
-      transport: class StubSocket {
-        constructor() { /* no-op */ }
-        connect() { /* no-op */ }
-        disconnect() { /* no-op */ }
-        send() { /* no-op */ }
-        addEventListener() { /* no-op */ }
-        removeEventListener() { /* no-op */ }
-      } as any,
-    },
-  })
-  return cachedClient
+  return getMainSupabaseClient()
 }
 
 // ── Auth ──
 
-export async function signIn(email: string, password: string): Promise<{ success: boolean; error?: string; session?: { userId: string; email: string | null; fullName: string | null } }> {
+export async function signIn(email: string, password: string): Promise<{ success: boolean; error?: string; session?: { userId: string; email: string | null; fullName: string | null; role: string | null } }> {
   try {
     const client = getClient()
     const { data, error } = await client.auth.signInWithPassword({ email, password })
     if (error) return { success: false, error: error.message }
     if (!data.session) return { success: false, error: 'No session returned' }
 
-    // Try to fetch the profile for full name
+    // Try to fetch the profile for full name + role (role gates the UI)
     let fullName: string | null = null
+    let role: string | null = null
     try {
       const { data: profile } = await client
         .from('profiles')
-        .select('full_name')
+        .select('full_name, role')
         .eq('id', data.session.user.id)
         .maybeSingle()
       fullName = (profile as any)?.full_name ?? null
+      role = (profile as any)?.role ?? null
     } catch {
       // ignore profile lookup failures
     }
@@ -66,6 +40,7 @@ export async function signIn(email: string, password: string): Promise<{ success
         userId: data.session.user.id,
         email: data.session.user.email ?? null,
         fullName,
+        role,
       },
     }
   } catch (err) {
@@ -78,20 +53,22 @@ export async function signOut(): Promise<void> {
   await client.auth.signOut()
 }
 
-export async function getCurrentSession(): Promise<{ userId: string; email: string | null; fullName: string | null } | null> {
+export async function getCurrentSession(): Promise<{ userId: string; email: string | null; fullName: string | null; role: string | null } | null> {
   try {
     const client = getClient()
     const { data } = await client.auth.getSession()
     if (!data.session) return null
 
     let fullName: string | null = null
+    let role: string | null = null
     try {
       const { data: profile } = await client
         .from('profiles')
-        .select('full_name')
+        .select('full_name, role')
         .eq('id', data.session.user.id)
         .maybeSingle()
       fullName = (profile as any)?.full_name ?? null
+      role = (profile as any)?.role ?? null
     } catch {
       // ignore
     }
@@ -100,6 +77,7 @@ export async function getCurrentSession(): Promise<{ userId: string; email: stri
       userId: data.session.user.id,
       email: data.session.user.email ?? null,
       fullName,
+      role,
     }
   } catch (err) {
     console.error('[Supabase] getCurrentSession error:', err)
@@ -243,6 +221,34 @@ export async function fetchMeetings(): Promise<Array<{
   } catch (err) {
     console.error('[Supabase] Fetch error:', err)
     return []
+  }
+}
+
+export async function updateMeetingSummary(
+  id: string,
+  summaryText: string,
+  parsed: any
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const client = getClient()
+    const { error } = await client
+      .from('meetings')
+      .update({
+        summary_text: summaryText,
+        key_decisions: parsed?.keyDecisions ?? [],
+        action_items: parsed?.actionItems ?? [],
+        follow_ups: parsed?.followUps ?? [],
+      })
+      .eq('id', id)
+
+    if (error) {
+      console.error('[Supabase] updateMeetingSummary error:', error)
+      return { success: false, error: error.message }
+    }
+    return { success: true }
+  } catch (err) {
+    console.error('[Supabase] updateMeetingSummary failed:', err)
+    return { success: false, error: String(err) }
   }
 }
 

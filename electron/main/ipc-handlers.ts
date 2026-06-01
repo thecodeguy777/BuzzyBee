@@ -3,7 +3,7 @@ import Store from 'electron-store'
 import { IPC, TranscriptChunk, AppSettings } from '../shared/ipc-channels'
 import { getControlWindow, getOverlayWindow, createOverlayWindow, toggleOverlay } from './windows'
 import { transcribeAudioElevenLabs } from './elevenlabs-service'
-import { signIn, signOut, getCurrentSession, pushMeeting, fetchMeetings, fetchMeetingDetail, fetchClients } from './supabase-sync'
+import { signIn, signOut, getCurrentSession, pushMeeting, fetchMeetings, fetchMeetingDetail, fetchClients, updateMeetingSummary } from './supabase-sync'
 import { exportMeetingPdf } from './pdf-export'
 import { updateMeetingState, EMPTY_STATE, type MeetingState } from './agents/action-items-agent'
 import { generateCoachingCard, type CoachingCard } from './agents/coach-agent'
@@ -212,9 +212,19 @@ export function registerIpcHandlers(): void {
   // ── Transcript Chunks (from renderer speech recognition) ──
 
   ipcMain.handle(IPC.MEETING_TRANSCRIPT_CHUNK, (_event, chunk: TranscriptChunk) => {
-    transcript.push(chunk)
+    // Deepgram emits interim partials as growing fragments of one utterance
+    // ("so we" → "so we were" → … → final). Replace a trailing non-final
+    // entry instead of accumulating every partial, so the transcript we
+    // persist to Supabase is the clean final sequence, not 4-5x bloat.
+    const last = transcript[transcript.length - 1]
+    if (last && !last.isFinal) {
+      transcript[transcript.length - 1] = chunk
+    } else {
+      transcript.push(chunk)
+    }
 
-    // Forward to overlay
+    // Forward to overlay — the overlay wants every partial for the live
+    // "typing" feel and does its own interim-replace on the display side.
     getOverlayWindow()?.webContents.send(IPC.OVERLAY_TRANSCRIPT, chunk)
 
     if (!chunk.isFinal || !chunk.text || !meetingActive) return
@@ -314,6 +324,60 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC.MEETING_SET_CLIENT, (_e, clientId: string | null) => {
     selectedClientId = clientId
+  })
+
+  ipcMain.handle(IPC.MEETING_REGENERATE_SUMMARY, async (_e, meetingId: string) => {
+    const meeting = await fetchMeetingDetail(meetingId)
+    if (!meeting) return { success: false, error: 'Meeting not found' }
+
+    const transcriptArr: any[] = Array.isArray(meeting.transcript) ? meeting.transcript : []
+    const fullText = transcriptArr
+      .filter(t => t.isFinal !== false)
+      .map(t => `${t.speaker}: ${t.text}`)
+      .join('\n')
+
+    if (fullText.length < 20) {
+      return { success: false, error: 'Transcript too short to summarize' }
+    }
+
+    // Reconstruct a minimal state from the stored row so summary agent has context
+    const reconstructedState = {
+      actionItems: Array.isArray(meeting.action_items) ? meeting.action_items.map((a: any, i: number) => ({
+        id: `a${i}`, task: a.task ?? '', assignee: a.assignee ?? 'VA', deadline: a.deadline ?? null, status: 'new',
+      })) : [],
+      openQuestions: [],
+      decisions: Array.isArray(meeting.key_decisions) ? meeting.key_decisions.map((d: string, i: number) => ({
+        id: `d${i}`, decision: d,
+      })) : [],
+      clientPreferences: [],
+      redFlags: [],
+    }
+
+    let accumulated = ''
+    try {
+      for await (const chunk of generateFinalSummary(fullText, reconstructedState as any)) {
+        accumulated += chunk
+      }
+
+      // Parse and save
+      let parsed: any = null
+      try {
+        const m = accumulated.match(/\{[\s\S]*\}/)
+        if (m) parsed = JSON.parse(m[0])
+      } catch { /* ignore */ }
+
+      if (parsed?.error) {
+        return { success: false, error: parsed.error }
+      }
+
+      const updateResult = await updateMeetingSummary(meetingId, accumulated, parsed)
+      if (!updateResult.success) return updateResult
+
+      return { success: true, summaryText: accumulated, parsed }
+    } catch (err) {
+      console.error('[Regenerate] error:', err)
+      return { success: false, error: String(err) }
+    }
   })
 
   ipcMain.handle(IPC.MEETING_EXPORT_PDF, async (_e, meetingId: string) => {

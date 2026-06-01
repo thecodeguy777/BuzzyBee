@@ -1,7 +1,13 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
+
+/* Drive `dark:` utilities off the in-app theme toggle (data-theme), NOT the
+   OS prefers-color-scheme. ~16 components already use dark: variants; this
+   makes them follow the HiveMind toggle instead of the user's system setting. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 @plugin "daisyui" {
-  themes: light --default;
+  themes: light --default, dark;
 }
 
 @plugin "daisyui/theme" {
@@ -39,6 +45,43 @@
   --noise: 0;
 }
 
+@plugin "daisyui/theme" {
+  name: "dark";
+  default: false;
+  prefersdark: false;
+  color-scheme: "dark";
+  /* Deep indigo-charcoal surfaces — keeps the HiveMind brand hue, not flat black */
+  --color-base-100: oklch(21% 0.018 264);
+  --color-base-200: oklch(25% 0.02 264);
+  --color-base-300: oklch(31% 0.022 264);
+  --color-base-content: oklch(92% 0.01 260);
+  /* Brighter indigo so the primary pops against dark surfaces */
+  --color-primary: oklch(64% 0.19 264);
+  --color-primary-content: oklch(17% 0.02 264);
+  --color-secondary: oklch(62% 0.19 25);
+  --color-secondary-content: oklch(98% 0.005 250);
+  --color-accent: oklch(62% 0.19 25);
+  --color-accent-content: oklch(98% 0.005 250);
+  --color-neutral: oklch(28% 0.02 264);
+  --color-neutral-content: oklch(92% 0.01 260);
+  --color-info: oklch(68% 0.14 240);
+  --color-info-content: oklch(17% 0.02 264);
+  --color-success: oklch(64% 0.14 158);
+  --color-success-content: oklch(15% 0.02 158);
+  --color-warning: oklch(75% 0.15 80);
+  --color-warning-content: oklch(20% 0.02 80);
+  --color-error: oklch(64% 0.2 22);
+  --color-error-content: oklch(98% 0.005 250);
+  --radius-selector: 0.375rem;
+  --radius-field: 0.375rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
+
 body {
   margin: 0;
   font-family: 'Inter', system-ui, sans-serif;
@@ -47,6 +90,23 @@ body {
 
 .font-mono {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Floating-card surface — detached, rounded, softly shadowed panel on the
+   deeper base-200 canvas. The "floating menu" look from the Honeycomb design.
+   Theme-aware via DaisyUI vars; shadow stays subtle in both light and dark. */
+.hc-card {
+  background: var(--color-base-100);
+  border: 1px solid var(--color-base-300);
+  border-radius: 1rem;
+  box-shadow: 0 1px 2px rgba(15, 18, 35, 0.04), 0 8px 24px -10px rgba(15, 18, 35, 0.12);
+}
+
+/* Hexagon clip — honeycomb-cell mask for logo marks / brand tiles. Pairs with
+   the reusable #hc-hex-clip <clipPath> rendered into each window root. */
+.hc-hex {
+  clip-path: url(#hc-hex-clip);
+  -webkit-clip-path: url(#hc-hex-clip);
 }
 
 /* Gradient utilities */
@@ -77,4 +137,29 @@ body {
 }
 .rec-blink {
   animation: rec-blink 1.5s ease-in-out infinite;
+}
+
+/* SortableJS ghost (placeholder where the dragged item will land) */
+.sortable-ghost {
+  opacity: 0.35;
+  background: var(--color-primary, oklch(55% 0.22 260));
+  background-color: color-mix(in oklch, var(--color-primary) 8%, transparent);
+  border-radius: 0.5rem;
+  outline: 2px dashed var(--color-primary, oklch(55% 0.22 260));
+  outline-offset: 4px;
+}
+.sortable-ghost > * {
+  visibility: hidden;
+}
+
+/* The element currently being dragged */
+.sortable-chosen {
+  cursor: grabbing;
+}
+
+/* Reduce the floating drag preview's shadow so it's clear it's a copy */
+.sortable-fallback {
+  opacity: 0.85;
+  transform: rotate(0.5deg);
+  box-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.25);
 }

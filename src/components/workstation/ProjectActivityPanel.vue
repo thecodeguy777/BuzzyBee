@@ -10,11 +10,14 @@ import {
 } from 'lucide-vue-next'
 import { useTasksStore, type Task, type TaskActivityEvent } from '@/stores/tasks'
 import { useProjectsStore } from '@/stores/projects'
+import { useStatusesStore } from '@/stores/statuses'
 import { useTeamStore } from '@/stores/team'
 import { useAuthStore } from '@/stores/auth'
+import HexAvatar from '@/components/shared/HexAvatar.vue'
 
 const tasks = useTasksStore()
 const projects = useProjectsStore()
+const statusesStore = useStatusesStore()
 const team = useTeamStore()
 const auth = useAuthStore()
 
@@ -79,7 +82,7 @@ function describe(ev: TaskActivityEvent): string {
   switch (ev.kind) {
     case 'created': return 'created'
     case 'status':
-      return ev.to === 'done'
+      return statusesStore.isDone(projects.currentProjectId, ev.to as string)
         ? 'completed'
         : `moved to ${String(ev.to).replace('_', ' ')}`
     case 'priority': return `set priority to ${priorityLabel(ev.to)}`
@@ -127,13 +130,12 @@ const overdueCount = computed(() => {
   return projectTasks.value.filter(
     (t) =>
       t.due_on &&
-      t.status !== 'done' &&
-      t.status !== 'cancelled' &&
+      statusesStore.isOpen(t.project_id, t.status) &&
       new Date(t.due_on + 'T00:00:00').getTime() < today.getTime()
   ).length
 })
 const inFlightCount = computed(
-  () => projectTasks.value.filter((t) => t.status === 'in_progress').length
+  () => projectTasks.value.filter((t) => statusesStore.isOpen(t.project_id, t.status)).length
 )
 const briefHeadline = computed(() => {
   if (overdueCount.value > 0) {
@@ -218,11 +220,12 @@ const briefHeadline = computed(() => {
           :key="`${it.task.id}-${it.ts}-${it.ev.kind}`"
           class="flex items-start gap-2"
         >
-          <div
-            class="w-6 h-6 shrink-0 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[0.6rem] font-semibold"
-          >
-            {{ actorInitial(it.ev.user_id) }}
-          </div>
+          <HexAvatar
+            :label="actorInitial(it.ev.user_id)"
+            :size="24"
+            :font-size="10"
+            class="shrink-0"
+          />
           <div class="flex-1 min-w-0">
             <p class="text-[0.7rem] text-base-content/80 leading-snug">
               <span class="font-medium text-base-content">{{ actorName(it.ev.user_id) }}</span>
