@@ -61,9 +61,21 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
   const sending = ref(false)
   const online = ref<HuddlePresence[]>([])
 
-  // Huddle is local intent layered on presence (no live audio in v1).
+  // Huddle: WebRTC audio mesh, signaled over the channel's private broadcast.
   const inHuddle = ref(false)
   const muted = ref(false)
+  const speaking = ref<Set<string>>(new Set())
+  const huddleError = ref<string | null>(null)
+
+  const ICE_SERVERS: RTCIceServer[] = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+  ]
+  let localStream: MediaStream | null = null
+  let audioCtx: AudioContext | null = null
+  const peers = new Map<string, { pc: RTCPeerConnection; audioEl?: HTMLAudioElement }>()
+  const analysers = new Map<string, AnalyserNode>() // userId -> analyser (local keyed by me())
+  let speakingRaf = 0
 
   let channel: RealtimeChannel | null = null
   let activeId: string | null = null
@@ -179,7 +191,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
 
   async function teardown() {
     online.value = []
-    inHuddle.value = false
+    if (inHuddle.value) stopHuddle()
     if (channel) {
       try {
         await channel.untrack()
@@ -246,9 +258,18 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     ch.on('broadcast', { event: 'UPDATE' }, onChange)
     ch.on('broadcast', { event: 'DELETE' }, onChange)
 
-    ch.on('presence', { event: 'sync' }, syncPresence)
-    ch.on('presence', { event: 'join' }, syncPresence)
-    ch.on('presence', { event: 'leave' }, syncPresence)
+    const onPresence = () => {
+      syncPresence()
+      if (inHuddle.value) reconcilePeers()
+    }
+    ch.on('presence', { event: 'sync' }, onPresence)
+    ch.on('presence', { event: 'join' }, onPresence)
+    ch.on('presence', { event: 'leave' }, onPresence)
+
+    // WebRTC signaling (offer/answer/ice) for the huddle audio mesh.
+    ch.on('broadcast', { event: 'rtc' }, (m: { payload?: any }) => {
+      if (activeId === id) void handleSignal(m.payload)
+    })
 
     ch.subscribe((status) => {
       if (status !== 'SUBSCRIBED') return
@@ -348,13 +369,181 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     return task.id
   }
 
-  function toggleHuddle() {
-    inHuddle.value = !inHuddle.value
-    if (!inHuddle.value) muted.value = false
+  // ── Huddle: WebRTC audio mesh ───────────────────────────────────────────────
+  function sendRtc(to: string, kind: string, data: unknown) {
+    void channel?.send({ type: 'broadcast', event: 'rtc', payload: { from: me(), to, kind, data } })
+  }
+
+  function setupAnalyser(userId: string, stream: MediaStream) {
+    try {
+      const AC = window.AudioContext || (window as any).webkitAudioContext
+      audioCtx ??= new AC()
+      const src = audioCtx.createMediaStreamSource(stream)
+      const an = audioCtx.createAnalyser()
+      an.fftSize = 512
+      src.connect(an)
+      analysers.set(userId, an)
+      ensureSpeakingLoop()
+    } catch {
+      /* analyser is best-effort (just powers the speaking glow) */
+    }
+  }
+
+  function ensureSpeakingLoop() {
+    if (speakingRaf) return
+    let last = 0
+    const tick = (ts: number) => {
+      speakingRaf = requestAnimationFrame(tick)
+      if (ts - last < 120) return
+      last = ts
+      const next = new Set<string>()
+      for (const [uid, an] of analysers) {
+        const buf = new Uint8Array(an.fftSize)
+        an.getByteTimeDomainData(buf)
+        let sum = 0
+        for (let i = 0; i < buf.length; i++) {
+          const v = (buf[i] - 128) / 128
+          sum += v * v
+        }
+        const rms = Math.sqrt(sum / buf.length)
+        if (rms > 0.045 && !(uid === me() && muted.value)) next.add(uid)
+      }
+      const changed = next.size !== speaking.value.size || [...next].some((u) => !speaking.value.has(u))
+      if (changed) speaking.value = next
+    }
+    speakingRaf = requestAnimationFrame(tick)
+  }
+
+  async function ensureLocalStream() {
+    if (localStream) return localStream
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+    localStream.getAudioTracks().forEach((t) => (t.enabled = !muted.value))
+    const uid = me()
+    if (uid) setupAnalyser(uid, localStream)
+    return localStream
+  }
+
+  function getPeer(userId: string): RTCPeerConnection {
+    const existing = peers.get(userId)
+    if (existing) return existing.pc
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
+    localStream?.getTracks().forEach((t) => pc.addTrack(t, localStream!))
+    pc.onicecandidate = (e) => {
+      if (e.candidate) sendRtc(userId, 'ice', e.candidate.toJSON())
+    }
+    pc.ontrack = (e) => {
+      const entry = peers.get(userId)
+      let el = entry?.audioEl
+      if (!el) {
+        el = document.createElement('audio')
+        el.autoplay = true
+        ;(el as any).playsInline = true
+        document.body.appendChild(el)
+        if (entry) entry.audioEl = el
+      }
+      el.srcObject = e.streams[0]
+      void el.play().catch(() => {})
+      if (!analysers.has(userId)) setupAnalyser(userId, e.streams[0])
+    }
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') closePeer(userId)
+    }
+    peers.set(userId, { pc })
+    return pc
+  }
+
+  async function makeOffer(userId: string) {
+    const pc = getPeer(userId)
+    const offer = await pc.createOffer()
+    await pc.setLocalDescription(offer)
+    sendRtc(userId, 'offer', pc.localDescription)
+  }
+
+  // Connect to / disconnect from huddle participants. The lower userId in each
+  // pair is the offerer, so exactly one side initiates.
+  function reconcilePeers() {
+    const myId = me()
+    if (!inHuddle.value || !myId) return
+    const wanted = new Set(huddlePeople.value.map((p) => p.userId).filter((u) => u !== myId))
+    for (const uid of wanted) {
+      if (!peers.has(uid) && myId < uid) void makeOffer(uid)
+    }
+    for (const uid of [...peers.keys()]) {
+      if (!wanted.has(uid)) closePeer(uid)
+    }
+  }
+
+  async function handleSignal(p: any) {
+    if (!p || p.to !== me()) return
+    const from = p.from as string
+    try {
+      if (p.kind === 'offer') {
+        const pc = getPeer(from)
+        await pc.setRemoteDescription(p.data)
+        const answer = await pc.createAnswer()
+        await pc.setLocalDescription(answer)
+        sendRtc(from, 'answer', pc.localDescription)
+      } else if (p.kind === 'answer') {
+        const pc = peers.get(from)?.pc
+        if (pc) await pc.setRemoteDescription(p.data)
+      } else if (p.kind === 'ice') {
+        const pc = peers.get(from)?.pc ?? getPeer(from)
+        await pc.addIceCandidate(p.data).catch(() => {})
+      }
+    } catch (e) {
+      console.warn('[huddle] signal:', (e as Error).message)
+    }
+  }
+
+  function closePeer(userId: string) {
+    const e = peers.get(userId)
+    if (!e) return
+    try { e.pc.close() } catch { /* ignore */ }
+    if (e.audioEl) {
+      e.audioEl.srcObject = null
+      e.audioEl.remove()
+    }
+    analysers.delete(userId)
+    peers.delete(userId)
+  }
+
+  async function startHuddle() {
+    huddleError.value = null
+    try {
+      await ensureLocalStream()
+      inHuddle.value = true
+      trackPresence()
+      reconcilePeers()
+    } catch {
+      huddleError.value = 'Microphone access is needed to join the huddle.'
+      inHuddle.value = false
+    }
+  }
+
+  function stopHuddle() {
+    inHuddle.value = false
+    muted.value = false
+    for (const uid of [...peers.keys()]) closePeer(uid)
+    localStream?.getTracks().forEach((t) => t.stop())
+    localStream = null
+    analysers.clear()
+    speaking.value = new Set()
+    if (speakingRaf) {
+      cancelAnimationFrame(speakingRaf)
+      speakingRaf = 0
+    }
+    audioCtx?.close().catch(() => {})
+    audioCtx = null
     trackPresence()
+  }
+
+  function toggleHuddle() {
+    if (inHuddle.value) stopHuddle()
+    else void startHuddle()
   }
   function toggleMute() {
     muted.value = !muted.value
+    localStream?.getAudioTracks().forEach((t) => (t.enabled = !muted.value))
     trackPresence()
   }
 
@@ -384,6 +573,8 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     huddlePeople,
     inHuddle,
     muted,
+    speaking,
+    huddleError,
     reactionList,
     profile,
     send,

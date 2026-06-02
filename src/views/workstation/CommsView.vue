@@ -248,8 +248,9 @@ const headerMembers = computed(() => stream.online.value.slice(0, 6))
         <button class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center text-base-content/60" title="Members"><Users class="w-4 h-4" :stroke-width="1.75" /></button>
       </header>
 
-      <p v-if="commsError" class="px-5 py-1.5 text-xs text-error flex items-center gap-2">
-        {{ commsError }} <button class="underline" @click="commsError = null">dismiss</button>
+      <p v-if="commsError || stream.huddleError.value" class="px-5 py-1.5 text-xs text-error flex items-center gap-2">
+        {{ commsError || stream.huddleError.value }}
+        <button class="underline" @click="commsError = null; stream.huddleError.value = null">dismiss</button>
       </p>
 
       <!-- stream -->
@@ -312,8 +313,19 @@ const headerMembers = computed(() => stream.online.value.slice(0, 6))
           <div class="text-xs font-semibold">Huddle</div>
           <div class="text-[0.65rem] text-base-content/50">in #{{ channels.currentChannel?.name }}</div>
         </div>
-        <div class="flex -space-x-1.5">
-          <HexAvatar v-for="p in stream.huddlePeople.value" :key="p.userId" :name="p.name" :avatar-url="p.avatarUrl" :size="30" ring />
+        <div class="flex -space-x-1">
+          <span
+            v-for="p in stream.huddlePeople.value"
+            :key="p.userId"
+            class="relative inline-flex rounded-xl transition-shadow"
+            :class="stream.speaking.value.has(p.userId) ? 'ring-2 ring-success ring-offset-1 ring-offset-primary/5' : ''"
+            :title="p.name + (p.muted ? ' (muted)' : '')"
+          >
+            <HexAvatar :name="p.name" :avatar-url="p.avatarUrl" :size="30" ring />
+            <span v-if="p.muted" class="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-error flex items-center justify-center ring-1 ring-base-100">
+              <MicOff class="w-2.5 h-2.5 text-white" :stroke-width="2" />
+            </span>
+          </span>
         </div>
         <div class="flex-1" />
         <template v-if="stream.inHuddle.value">
