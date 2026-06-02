@@ -393,13 +393,21 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
   }
 
   // ── Actions ────────────────────────────────────────────────────────────────
-  async function send(body: string, opts: { attachments?: Attachment[]; parentId?: string | null } = {}) {
+  async function send(
+    body: string,
+    opts: { attachments?: Attachment[]; parentId?: string | null; mentions?: string[] } = {},
+  ) {
     const text = body.trim()
     const id = activeId
     const uid = me()
     if ((!text && !(opts.attachments?.length)) || !id || !uid || sending.value) return
     sending.value = true
     try {
+      // Only keep mentioned ids whose @handle still survives in the text.
+      const mentions = (opts.mentions ?? []).filter((mid) => {
+        const name = team.profiles[mid]?.full_name
+        return name ? text.includes('@' + name) || text.includes('@' + name.split(' ')[0]) : true
+      })
       const { data, error } = await supabase
         .from('messages')
         .insert({
@@ -409,6 +417,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
           user_name: auth.fullName || null,
           body: text,
           attachments: opts.attachments ?? [],
+          mentioned_user_ids: mentions,
         })
         .select('*')
         .single()

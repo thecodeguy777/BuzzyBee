@@ -16,6 +16,7 @@ import { COMMS_STREAM } from '@/composables/commsStream'
 import { useClientsStore } from '@/stores/clients'
 import { useTasksStore } from '@/stores/tasks'
 import { useAuthStore } from '@/stores/auth'
+import { useTeamStore } from '@/stores/team'
 import { uploadCommsFile, linkAttachment } from '@/lib/commsAttachments'
 import type { Attachment } from '@/composables/useChannelStream'
 
@@ -24,6 +25,7 @@ const channels = useChannelsStore()
 const clients = useClientsStore()
 const tasks = useTasksStore()
 const auth = useAuthStore()
+const team = useTeamStore()
 
 const currentChannelId = computed(() => channels.currentChannelId)
 // Shared with the floating CommsDock + provided by WorkstationLayout so the
@@ -86,6 +88,8 @@ watch(() => stream.rootMessages.value.length, () => scrollToBottom())
 watch(currentChannelId, () => {
   pending.value = []
   draft.value = ''
+  mentionedIds.value = new Set()
+  mentionOpen.value = false
   scrollToBottom()
 })
 
@@ -176,16 +180,103 @@ async function onSend() {
   const body = draft.value
   if (!body.trim() && pending.value.length === 0) return
   const atts = pending.value
+  const mentions = [...mentionedIds.value]
   draft.value = ''
   pending.value = []
+  mentionOpen.value = false
   try {
-    await stream.send(body, { attachments: atts })
+    await stream.send(body, { attachments: atts, mentions })
+    mentionedIds.value = new Set()
     scrollToBottom()
   } catch (e) {
     draft.value = body
     pending.value = atts
     commsError.value = (e as Error).message
   }
+}
+
+// ── @mention autocomplete ────────────────────────────────────────────────────
+const composerEl = ref<HTMLTextAreaElement | null>(null)
+const mentionOpen = ref(false)
+const mentionQuery = ref('')
+const mentionStart = ref(-1)
+const mentionIndex = ref(0)
+const mentionStyle = ref<Record<string, string>>({})
+const mentionedIds = ref<Set<string>>(new Set())
+
+// Candidates = people active in the channel (presence) + anyone the team store
+// already knows. (Offline non-loaded members aren't listed yet.)
+const mentionCandidates = computed(() => {
+  const map = new Map<string, { id: string; name: string; avatarUrl: string | null }>()
+  for (const p of stream.online.value) map.set(p.userId, { id: p.userId, name: p.name, avatarUrl: p.avatarUrl })
+  for (const id of Object.keys(team.profiles)) {
+    if (map.has(id)) continue
+    const pr = team.profiles[id]
+    if (pr) map.set(id, { id, name: pr.full_name ?? 'Member', avatarUrl: pr.avatar_url ?? null })
+  }
+  map.delete(auth.user?.id ?? '')
+  return [...map.values()]
+})
+const mentionMatches = computed(() => {
+  const q = mentionQuery.value.toLowerCase()
+  const all = mentionCandidates.value
+  return (q ? all.filter((p) => p.name.toLowerCase().includes(q)) : all).slice(0, 6)
+})
+
+function positionMention() {
+  const el = composerEl.value
+  if (!el) return
+  const r = el.getBoundingClientRect()
+  mentionStyle.value = { left: `${r.left}px`, bottom: `${window.innerHeight - r.top + 6}px` }
+}
+function onComposerInput() {
+  const el = composerEl.value
+  if (!el) { mentionOpen.value = false; return }
+  const caret = el.selectionStart ?? draft.value.length
+  const m = draft.value.slice(0, caret).match(/(?:^|\s)@([\p{L}\p{N}._-]*)$/u)
+  if (m) {
+    mentionStart.value = caret - m[1].length - 1
+    mentionQuery.value = m[1]
+    mentionIndex.value = 0
+    mentionOpen.value = true
+    nextTick(positionMention)
+  } else {
+    mentionOpen.value = false
+  }
+}
+function pickMention(p: { id: string; name: string }) {
+  const el = composerEl.value
+  const caret = el?.selectionStart ?? draft.value.length
+  const before = draft.value.slice(0, mentionStart.value)
+  const after = draft.value.slice(caret)
+  const insert = `@${p.name} `
+  draft.value = before + insert + after
+  mentionedIds.value.add(p.id)
+  mentionOpen.value = false
+  nextTick(() => {
+    el?.focus()
+    const pos = (before + insert).length
+    el?.setSelectionRange(pos, pos)
+  })
+}
+function onComposerKeydown(e: KeyboardEvent) {
+  if (mentionOpen.value && mentionMatches.value.length) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); mentionIndex.value = (mentionIndex.value + 1) % mentionMatches.value.length; return }
+    if (e.key === 'ArrowUp') { e.preventDefault(); mentionIndex.value = (mentionIndex.value - 1 + mentionMatches.value.length) % mentionMatches.value.length; return }
+    if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pickMention(mentionMatches.value[mentionIndex.value]); return }
+    if (e.key === 'Escape') { e.preventDefault(); mentionOpen.value = false; return }
+  }
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void onSend() }
+}
+function insertMentionTrigger() {
+  const el = composerEl.value
+  el?.focus()
+  const caret = el?.selectionStart ?? draft.value.length
+  draft.value = draft.value.slice(0, caret) + '@' + draft.value.slice(caret)
+  nextTick(() => {
+    el?.setSelectionRange(caret + 1, caret + 1)
+    onComposerInput()
+  })
 }
 
 // ── Thread panel ────────────────────────────────────────────────────────────
@@ -567,8 +658,10 @@ function fullscreenScreen() {
             v-model="draft"
             rows="1"
             :placeholder="`Message #${channels.currentChannel?.name ?? ''}`"
+            ref="composerEl"
             class="w-full resize-none bg-transparent px-4 pt-3 pb-1 text-sm outline-none leading-relaxed min-h-0"
-            @keydown.enter.exact.prevent="onSend"
+            @keydown="onComposerKeydown"
+            @input="onComposerInput"
             @paste="onPaste"
           />
           <div class="flex items-center gap-1 px-2 pb-2">
@@ -576,7 +669,7 @@ function fullscreenScreen() {
             <button class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center text-base-content/50" title="Image" @click="pickFiles('image/*')"><ImageIcon class="w-4 h-4" :stroke-width="1.75" /></button>
             <button class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center text-base-content/50" title="Link" @click="addLink"><Link2 class="w-4 h-4" :stroke-width="1.75" /></button>
             <button ref="pickerBtn" class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center" :class="showPicker ? 'bg-base-200 text-primary' : 'text-base-content/50'" title="Emoji & GIFs" @click="togglePicker"><Smile class="w-4 h-4" :stroke-width="1.75" /></button>
-            <button class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center text-base-content/50" title="Mention"><AtSign class="w-4 h-4" :stroke-width="1.75" /></button>
+            <button class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center text-base-content/50" title="Mention someone" @click="insertMentionTrigger"><AtSign class="w-4 h-4" :stroke-width="1.75" /></button>
             <div class="flex-1" />
             <button
               class="w-9 h-9 rounded-xl bg-primary text-white flex items-center justify-center disabled:opacity-40"
@@ -641,6 +734,22 @@ function fullscreenScreen() {
     </aside>
 
     <MicCheck v-if="showMicCheck" @close="showMicCheck = false" />
+
+    <!-- @mention autocomplete -->
+    <Teleport to="body">
+      <div v-if="mentionOpen && mentionMatches.length" class="fixed z-[60] w-56 rounded-xl border border-base-300 bg-base-100 shadow-2xl overflow-hidden py-1" :style="mentionStyle">
+        <button
+          v-for="(p, i) in mentionMatches"
+          :key="p.id"
+          class="w-full flex items-center gap-2 px-2 py-1.5 text-left text-sm"
+          :class="i === mentionIndex ? 'bg-primary/10' : 'hover:bg-base-200'"
+          @mousedown.prevent="pickMention(p)"
+        >
+          <HexAvatar :name="p.name" :avatar-url="p.avatarUrl" :color-key="p.id" :size="22" />
+          <span class="truncate">{{ p.name }}</span>
+        </button>
+      </div>
+    </Teleport>
 
     <!-- Message → task: choose project when the client has several -->
     <Teleport to="body">
