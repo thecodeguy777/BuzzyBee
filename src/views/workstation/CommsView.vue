@@ -8,6 +8,8 @@ import {
 import HexAvatar from '@/components/shared/HexAvatar.vue'
 import CommsMessage from '@/components/comms/CommsMessage.vue'
 import MicCheck from '@/components/comms/MicCheck.vue'
+import GifPicker from '@/components/comms/GifPicker.vue'
+import { giphyEnabled, type Gif } from '@/lib/giphy'
 import { useChannelsStore } from '@/stores/channels'
 import { COMMS_STREAM } from '@/composables/commsStream'
 import { useClientsStore } from '@/stores/clients'
@@ -101,6 +103,18 @@ function addLink() {
 }
 function addEmoji(e: string) {
   draft.value += e
+}
+
+// GIF picker (Giphy). Clicking a GIF sends it immediately as an image attachment.
+const showGifPicker = ref(false)
+async function onPickGif(g: Gif) {
+  showGifPicker.value = false
+  try {
+    await stream.send('', { attachments: [{ kind: 'image', name: 'GIF', url: g.url, mime: 'image/gif' }] })
+    scrollToBottom()
+  } catch (e) {
+    commsError.value = (e as Error).message
+  }
 }
 async function onSend() {
   const body = draft.value
@@ -479,6 +493,12 @@ function fullscreenScreen() {
             <button class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center text-base-content/50" title="Link" @click="addLink"><Link2 class="w-4 h-4" :stroke-width="1.75" /></button>
             <button class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center text-base-content/50" title="Emoji" @click="addEmoji('🐝')"><Smile class="w-4 h-4" :stroke-width="1.75" /></button>
             <button class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center text-base-content/50" title="Mention"><AtSign class="w-4 h-4" :stroke-width="1.75" /></button>
+            <div v-if="giphyEnabled()" class="relative">
+              <button class="h-8 px-2 rounded-lg hover:bg-base-200 flex items-center justify-center text-base-content/50 text-xs font-bold tracking-wide" title="GIF" @click="showGifPicker = !showGifPicker">GIF</button>
+              <div v-if="showGifPicker" class="absolute bottom-full mb-2 left-0 z-30">
+                <GifPicker @pick="onPickGif" @close="showGifPicker = false" />
+              </div>
+            </div>
             <div class="flex-1" />
             <button
               class="w-9 h-9 rounded-xl bg-primary text-white flex items-center justify-center disabled:opacity-40"
