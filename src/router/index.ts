@@ -47,6 +47,13 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: false, bareLayout: true }
   },
   {
+    path: '/meet/:token',
+    name: 'meeting-room',
+    component: () => import('@/views/shared/MeetingRoom.vue'),
+    props: true,
+    meta: { requiresAuth: false, bareLayout: true }
+  },
+  {
     path: '/app',
     name: 'workstation-home',
     component: () => import('@/views/workstation/HomeView.vue'),

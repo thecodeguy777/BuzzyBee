@@ -3,13 +3,14 @@ import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount, inject } fr
 import { useRouter } from 'vue-router'
 import {
   Hash, Plus, Search, Users, Headphones, Mic, MicOff, MonitorUp, PhoneOff,
-  Paperclip, Image as ImageIcon, Link2, Smile, AtSign, Send, Sparkles, X, ChevronDown, CheckSquare, Settings2, Crown, Maximize2, Bell, BellOff, Wand2
+  Paperclip, Image as ImageIcon, Link2, Smile, AtSign, Send, Sparkles, X, ChevronDown, CheckSquare, Settings2, Crown, Maximize2, Bell, BellOff, Wand2, Video
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
 import CommsMessage from '@/components/comms/CommsMessage.vue'
 import MicCheck from '@/components/comms/MicCheck.vue'
 import MediaPicker from '@/components/comms/MediaPicker.vue'
 import { type Gif } from '@/lib/giphy'
+import { createMeetingRoom } from '@/lib/meetingRoom'
 import { useChannelsStore } from '@/stores/channels'
 import { COMMS_STREAM } from '@/composables/commsStream'
 import { useClientsStore } from '@/stores/clients'
@@ -33,6 +34,17 @@ const stream = inject(COMMS_STREAM)!
 const canManage = computed(() => auth.isAdmin || auth.role === 'pm')
 const commsError = ref<string | null>(null)
 const showMicCheck = ref(false)
+
+// Create a shareable guest meeting room (gmeet-style) and jump in as host.
+async function newMeeting() {
+  if (!auth.user) return
+  try {
+    const token = await createMeetingRoom(auth.user.id, `${clients.currentClient?.name ?? 'Team'} meeting`)
+    router.push({ name: 'meeting-room', params: { token } })
+  } catch (e) {
+    commsError.value = (e as Error).message
+  }
+}
 
 // ── Channel list ────────────────────────────────────────────────────────────
 // Switching the viewed channel re-binds the shared stream, which would drop an
@@ -364,6 +376,7 @@ function fullscreenScreen() {
         >
           <Headphones class="w-4 h-4" :stroke-width="1.75" /> {{ stream.inHuddle.value ? 'Leave' : 'Huddle' }}
         </button>
+        <button class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center text-base-content/60" title="New meeting link (shareable)" @click="newMeeting"><Video class="w-4 h-4" :stroke-width="1.75" /></button>
         <button class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center text-base-content/60" title="Mic &amp; sound check" @click="showMicCheck = true"><Settings2 class="w-4 h-4" :stroke-width="1.75" /></button>
         <button class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center text-base-content/60" title="Search"><Search class="w-4 h-4" :stroke-width="1.75" /></button>
         <button class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center text-base-content/60" title="Members"><Users class="w-4 h-4" :stroke-width="1.75" /></button>

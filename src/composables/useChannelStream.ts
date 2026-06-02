@@ -17,6 +17,7 @@ import {
   setSoundsMuted,
 } from '@/lib/commsSounds'
 import { createNoisePipeline, type NoisePipeline } from '@/lib/noiseSuppressor'
+import { iceServers } from '@/lib/iceServers'
 
 export interface Attachment {
   kind: 'image' | 'file' | 'link'
@@ -93,10 +94,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
   let rawStream: MediaStream | null = null // the real mic, before processing
   let nsPipeline: NoisePipeline | null = null
 
-  const ICE_SERVERS: RTCIceServer[] = [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-  ]
+  const ICE_SERVERS = iceServers()
   let localStream: MediaStream | null = null
   let huddleSince = 0
   let audioCtx: AudioContext | null = null
