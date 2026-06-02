@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount, inject } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Hash, Plus, Search, Users, Headphones, Mic, MicOff, MonitorUp, PhoneOff,
@@ -9,7 +9,7 @@ import HexAvatar from '@/components/shared/HexAvatar.vue'
 import CommsMessage from '@/components/comms/CommsMessage.vue'
 import MicCheck from '@/components/comms/MicCheck.vue'
 import { useChannelsStore } from '@/stores/channels'
-import { useChannelStream } from '@/composables/useChannelStream'
+import { COMMS_STREAM } from '@/composables/commsStream'
 import { useClientsStore } from '@/stores/clients'
 import { useTasksStore } from '@/stores/tasks'
 import { useAuthStore } from '@/stores/auth'
@@ -23,13 +23,27 @@ const tasks = useTasksStore()
 const auth = useAuthStore()
 
 const currentChannelId = computed(() => channels.currentChannelId)
-const stream = useChannelStream(currentChannelId)
+// Shared with the floating CommsDock + provided by WorkstationLayout so the
+// huddle survives navigation. (Falls back to a local instance if ever rendered
+// outside the workstation shell.)
+const stream = inject(COMMS_STREAM)!
 
 const canManage = computed(() => auth.isAdmin || auth.role === 'pm')
 const commsError = ref<string | null>(null)
 const showMicCheck = ref(false)
 
 // ── Channel list ────────────────────────────────────────────────────────────
+// Switching the viewed channel re-binds the shared stream, which would drop an
+// active huddle (it lives on the channel you joined). Confirm first.
+function chooseChannel(id: string) {
+  if (id === currentChannelId.value) return
+  if (stream.inHuddle.value &&
+      !window.confirm(`Leave the huddle in #${channels.currentChannel?.name} to open another channel?`)) {
+    return
+  }
+  channels.select(id)
+}
+
 const addingChannel = ref(false)
 const newChannelName = ref('')
 async function commitAddChannel() {
@@ -224,7 +238,7 @@ function fullscreenScreen() {
           :key="c.id"
           class="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-left"
           :class="c.id === currentChannelId ? 'bg-primary/10 text-primary font-semibold' : channels.isUnread(c.id) ? 'text-base-content font-semibold hover:bg-base-200' : 'text-base-content/60 hover:bg-base-200'"
-          @click="channels.select(c.id)"
+          @click="chooseChannel(c.id)"
         >
           <Hash class="w-4 h-4 shrink-0" :stroke-width="2" />
           <span class="flex-1 truncate">{{ c.name }}</span>
@@ -237,7 +251,7 @@ function fullscreenScreen() {
           :key="c.id"
           class="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-left"
           :class="c.id === currentChannelId ? 'bg-primary/10 text-primary font-semibold' : channels.isUnread(c.id) ? 'text-base-content font-semibold hover:bg-base-200' : 'text-base-content/60 hover:bg-base-200'"
-          @click="channels.select(c.id)"
+          @click="chooseChannel(c.id)"
         >
           <Hash class="w-4 h-4 shrink-0" :stroke-width="2" />
           <span class="flex-1 truncate">{{ c.name }}</span>
