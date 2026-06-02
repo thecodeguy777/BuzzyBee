@@ -6,6 +6,15 @@ import { useTeamStore } from '@/stores/team'
 import { useTasksStore } from '@/stores/tasks'
 import { useProjectsStore } from '@/stores/projects'
 import { useChannelsStore } from '@/stores/channels'
+import {
+  playSelfJoin,
+  playSelfLeave,
+  playPeerJoin,
+  playPeerLeave,
+  playScreenShare,
+  soundsMuted,
+  setSoundsMuted,
+} from '@/lib/commsSounds'
 
 export interface Attachment {
   kind: 'image' | 'file' | 'link'
@@ -70,6 +79,13 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
   const speaking = ref<Set<string>>(new Set())
   const huddleError = ref<string | null>(null)
 
+  // Browser-native noise cancellation (free, runs in the audio driver path).
+  // User-toggleable; on by default. Echo-cancellation + auto-gain are always on.
+  const NOISE_KEY = 'buzzybee.comms.noise-suppression'
+  const noiseSuppression = ref(
+    typeof window === 'undefined' || window.localStorage.getItem(NOISE_KEY) !== '0',
+  )
+
   const ICE_SERVERS: RTCIceServer[] = [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
@@ -93,6 +109,12 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
   const sharingScreen = ref(false)
   const remoteScreens = ref<Record<string, MediaStream>>({}) // userId -> their shared screen
   let screenStream: MediaStream | null = null
+
+  // Sound cues: remember the last seen huddle membership / sharers so each
+  // presence sync can tell who just joined, left, or started sharing.
+  const soundMuted = ref(soundsMuted())
+  let prevHuddleIds = new Set<string>()
+  let prevSharers = new Set<string>()
 
   let channel: RealtimeChannel | null = null
   let activeId: string | null = null
@@ -214,6 +236,8 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
 
   async function teardown() {
     online.value = []
+    prevHuddleIds = new Set()
+    prevSharers = new Set()
     if (inHuddle.value) stopHuddle()
     if (channel) {
       try {
@@ -249,11 +273,32 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
       }
     }
     online.value = [...seen.values()]
+    const all = [...seen.values()]
     // A shared screen is only valid while its owner's presence says sharing.
-    const sharers = new Set([...seen.values()].filter((p) => p.sharing).map((p) => p.userId))
+    const sharers = new Set(all.filter((p) => p.sharing).map((p) => p.userId))
     for (const uid of Object.keys(remoteScreens.value)) {
       if (!sharers.has(uid)) removeRemoteScreen(uid)
     }
+
+    // Audio cues for huddle activity — only while *you're* in the huddle, and
+    // never for your own presence (self join/leave/share play their own cues).
+    const myId = me()
+    const huddleIds = new Set(all.filter((p) => p.inHuddle).map((p) => p.userId))
+    if (inHuddle.value) {
+      for (const uid of huddleIds) {
+        if (uid !== myId && !prevHuddleIds.has(uid)) playPeerJoin()
+      }
+      for (const uid of prevHuddleIds) {
+        if (uid !== myId && !huddleIds.has(uid)) playPeerLeave()
+      }
+      for (const uid of sharers) {
+        if (uid !== myId && !prevSharers.has(uid)) playScreenShare()
+      }
+    }
+    // Track regardless of membership so joining a busy huddle doesn't replay a
+    // join chime for everyone already in it.
+    prevHuddleIds = huddleIds
+    prevSharers = sharers
   }
 
   async function setup(id: string, token: number) {
@@ -450,11 +495,14 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     // exact device is no longer available.
     const deviceId =
       typeof window !== 'undefined' ? window.localStorage.getItem('buzzybee.comms.mic-device') : null
+    const audio: MediaTrackConstraints = {
+      echoCancellation: true,
+      autoGainControl: true,
+      noiseSuppression: noiseSuppression.value,
+    }
+    if (deviceId) audio.deviceId = { exact: deviceId }
     try {
-      localStream = await navigator.mediaDevices.getUserMedia({
-        audio: deviceId ? { deviceId: { exact: deviceId } } : true,
-        video: false,
-      })
+      localStream = await navigator.mediaDevices.getUserMedia({ audio, video: false })
     } catch {
       localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
     }
@@ -643,6 +691,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
       await ensureLocalStream()
       huddleSince = Date.now()
       inHuddle.value = true
+      playSelfJoin()
       trackPresence()
       reconcilePeers()
     } catch {
@@ -652,6 +701,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
   }
 
   function stopHuddle() {
+    if (inHuddle.value) playSelfLeave()
     inHuddle.value = false
     muted.value = false
     huddleSince = 0
@@ -679,6 +729,29 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     muted.value = !muted.value
     localStream?.getAudioTracks().forEach((t) => (t.enabled = !muted.value))
     trackPresence()
+  }
+  function toggleSounds() {
+    soundMuted.value = !soundMuted.value
+    setSoundsMuted(soundMuted.value)
+  }
+  async function toggleNoise() {
+    noiseSuppression.value = !noiseSuppression.value
+    if (typeof window !== 'undefined')
+      window.localStorage.setItem(NOISE_KEY, noiseSuppression.value ? '1' : '0')
+    // Apply live to the active mic track; if the browser can't retune mid-call,
+    // it just takes effect on the next huddle join.
+    const track = localStream?.getAudioTracks()[0]
+    if (track) {
+      try {
+        await track.applyConstraints({
+          echoCancellation: true,
+          autoGainControl: true,
+          noiseSuppression: noiseSuppression.value,
+        })
+      } catch {
+        /* runtime retune unsupported on this browser */
+      }
+    }
   }
 
   watch(
@@ -713,6 +786,10 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     sharingScreen,
     remoteScreens,
     toggleScreenShare,
+    soundMuted,
+    toggleSounds,
+    noiseSuppression,
+    toggleNoise,
     reactionList,
     profile,
     send,

@@ -3,7 +3,7 @@ import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Hash, Plus, Search, Users, Headphones, Mic, MicOff, MonitorUp, PhoneOff,
-  Paperclip, Image as ImageIcon, Link2, Smile, AtSign, Send, Sparkles, X, ChevronDown, CheckSquare, Settings2, Crown, Maximize2
+  Paperclip, Image as ImageIcon, Link2, Smile, AtSign, Send, Sparkles, X, ChevronDown, CheckSquare, Settings2, Crown, Maximize2, Bell, BellOff, Wand2
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
 import CommsMessage from '@/components/comms/CommsMessage.vue'
@@ -399,6 +399,18 @@ function fullscreenScreen() {
             <button class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" :class="stream.muted.value ? 'bg-error/15 text-error' : 'bg-base-200 text-base-content/70'" :title="stream.muted.value ? 'Unmute (M)' : 'Mute (M)'" @click="stream.toggleMute()">
               <component :is="stream.muted.value ? MicOff : Mic" class="w-4 h-4" :stroke-width="1.75" />
             </button>
+            <button
+              class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+              :class="stream.noiseSuppression.value ? 'bg-primary/15 text-primary' : 'bg-base-200 text-base-content/70'"
+              :title="stream.noiseSuppression.value ? 'Noise cancellation: on' : 'Noise cancellation: off'"
+              @click="stream.toggleNoise()"
+            ><Wand2 class="w-4 h-4" :stroke-width="1.75" /></button>
+            <button
+              class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+              :class="stream.soundMuted.value ? 'bg-base-200 text-base-content/40' : 'bg-base-200 text-base-content/70'"
+              :title="stream.soundMuted.value ? 'Sounds off — join/share chimes muted' : 'Sounds on — join/share chimes'"
+              @click="stream.toggleSounds()"
+            ><component :is="stream.soundMuted.value ? BellOff : Bell" class="w-4 h-4" :stroke-width="1.75" /></button>
             <button class="w-9 h-9 rounded-lg bg-base-200 text-base-content/70 flex items-center justify-center shrink-0" title="Mic &amp; sound" @click="showMicCheck = true"><Settings2 class="w-4 h-4" :stroke-width="1.75" /></button>
             <button
               class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
@@ -412,8 +424,11 @@ function fullscreenScreen() {
         </div>
 
         <!-- shortcut hint -->
-        <div v-if="stream.inHuddle.value" class="mt-1.5 pl-6 text-[0.65rem] text-base-content/40">
-          Press <kbd class="px-1 py-px rounded bg-base-200 font-mono text-base-content/60">M</kbd> to {{ stream.muted.value ? 'unmute' : 'mute' }}
+        <div v-if="stream.inHuddle.value" class="mt-1.5 pl-6 flex items-center gap-2 text-[0.65rem] text-base-content/40">
+          <span>Press <kbd class="px-1 py-px rounded bg-base-200 font-mono text-base-content/60">M</kbd> to {{ stream.muted.value ? 'unmute' : 'mute' }}</span>
+          <span v-if="stream.noiseSuppression.value" class="inline-flex items-center gap-1 text-primary/70 font-medium">
+            <Wand2 class="w-3 h-3" :stroke-width="2" /> Noise cancellation on
+          </span>
         </div>
       </div>
 
