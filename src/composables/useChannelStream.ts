@@ -12,6 +12,7 @@ import {
   playPeerJoin,
   playPeerLeave,
   playScreenShare,
+  playMessage,
   soundsMuted,
   setSoundsMuted,
 } from '@/lib/commsSounds'
@@ -122,6 +123,16 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
   let prevHuddleIds = new Set<string>()
   let prevSharers = new Set<string>()
 
+  // How many UI surfaces are actively showing this channel's messages (the full
+  // Comms page, or the expanded dock). When 0 — or the tab is hidden — an
+  // incoming message is "unseen": it pings + bumps the unread badge.
+  const viewers = ref(0)
+  const registerViewer = () => { viewers.value++ }
+  const unregisterViewer = () => { viewers.value = Math.max(0, viewers.value - 1) }
+  function isViewing() {
+    return viewers.value > 0 && !(typeof document !== 'undefined' && document.hidden)
+  }
+
   let channel: RealtimeChannel | null = null
   let activeId: string | null = null
   let setupToken = 0
@@ -171,8 +182,11 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     if (i === -1) {
       allMessages.value = [...allMessages.value, row]
       if (!team.profiles[row.user_id]) void team.fetchProfiles([row.user_id])
-      // A fresh root message in the active channel → keep it marked read.
-      if (!row.parent_id && row.channel_id === activeId) void channelsStore.markRead(row.channel_id)
+      // A fresh root message in the channel you're actively viewing → keep it
+      // marked read. (If you're not looking, it stays unread — see onChange.)
+      if (!row.parent_id && row.channel_id === activeId && isViewing()) {
+        void channelsStore.markRead(row.channel_id)
+      }
     } else {
       allMessages.value[i] = row
     }
@@ -331,8 +345,19 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
         else applyReactionRow(rec, false)
       } else {
         // messages
-        if (p.operation === 'DELETE' || m.event === 'DELETE') removeMessage(old?.id)
-        else upsertMessage(rec as CommsMessage)
+        if (p.operation === 'DELETE' || m.event === 'DELETE') {
+          removeMessage(old?.id)
+        } else {
+          const incoming = rec as CommsMessage
+          const isNew = !!incoming?.id && !allMessages.value.some((mm) => mm.id === incoming.id)
+          const fromOther = !!incoming?.user_id && incoming.user_id !== me()
+          upsertMessage(incoming)
+          // New message from someone else that you didn't see → ping + bump unread.
+          if (isNew && fromOther && !isViewing()) {
+            playMessage()
+            if (!incoming.parent_id) channelsStore.bumpUnread(incoming.channel_id)
+          }
+        }
       }
     }
     ch.on('broadcast', { event: 'INSERT' }, onChange)
@@ -818,6 +843,8 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     toggleScreenShare,
     soundMuted,
     toggleSounds,
+    registerViewer,
+    unregisterViewer,
     noiseSuppression,
     rnnoiseActive,
     toggleNoise,

@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, inject, nextTick, watch } from 'vue'
+import { ref, computed, inject, nextTick, watch, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   MessagesSquare, Headphones, Mic, MicOff, MonitorUp, PhoneOff, Wand2,
-  Send, ChevronDown, Maximize2, Crown, Hash,
+  Send, ChevronDown, Maximize2, Crown, Hash, Bell, BellOff,
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
 import { COMMS_STREAM } from '@/composables/commsStream'
@@ -88,7 +88,19 @@ function jumpToComms() {
 }
 
 watch(() => messages.value.length, () => { if (expanded.value) scrollToBottom() })
-watch(expanded, (v) => { if (v) scrollToBottom() })
+
+// While expanded, the dock counts as actively viewing the channel — suppress
+// new-message pings and keep it marked read.
+let viewing = false
+watch(expanded, (v) => {
+  if (v) {
+    scrollToBottom()
+    if (!viewing) { viewing = true; stream.registerViewer() }
+  } else if (viewing) {
+    viewing = false; stream.unregisterViewer()
+  }
+})
+onBeforeUnmount(() => { if (viewing) stream.unregisterViewer() })
 </script>
 
 <template>
@@ -109,6 +121,14 @@ watch(expanded, (v) => { if (v) scrollToBottom() })
           </button>
           <span v-if="stream.inHuddle.value && hostName" class="text-[0.65rem] text-base-content/40 truncate">· {{ hostName }} 👑</span>
           <div class="flex-1" />
+          <button
+            class="w-7 h-7 rounded-md hover:bg-base-200 flex items-center justify-center"
+            :class="stream.soundMuted.value ? 'text-base-content/40' : 'text-base-content/60'"
+            :title="stream.soundMuted.value ? 'Comms sounds off' : 'Comms sounds on'"
+            @click="stream.toggleSounds()"
+          >
+            <component :is="stream.soundMuted.value ? BellOff : Bell" class="w-4 h-4" :stroke-width="1.75" />
+          </button>
           <button class="w-7 h-7 rounded-md hover:bg-base-200 flex items-center justify-center text-base-content/50" title="Open full Comms" @click="jumpToComms">
             <Maximize2 class="w-4 h-4" :stroke-width="1.75" />
           </button>

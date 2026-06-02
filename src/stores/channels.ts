@@ -121,6 +121,11 @@ export const useChannelsStore = defineStore('channels', () => {
     void markRead(id)
   }
 
+  // Live unread bump for a message that arrived while the user wasn't looking.
+  function bumpUnread(id: string) {
+    unread.value = { ...unread.value, [id]: (unread.value[id] ?? 0) + 1 }
+  }
+
   async function markRead(id: string) {
     const uid = auth.user?.id
     if (!uid) return
@@ -213,6 +218,7 @@ export const useChannelsStore = defineStore('channels', () => {
     load,
     refreshOverview,
     select,
+    bumpUnread,
     markRead,
     togglePin,
     toggleMute,

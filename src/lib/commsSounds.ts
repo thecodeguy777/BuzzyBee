@@ -92,6 +92,14 @@ export function playPeerLeave() {
   ])
 }
 
+// A new, unseen message from someone else — soft friendly two-note pop.
+export function playMessage() {
+  play([
+    { freq: 880.0, start: 0, dur: 0.08, gain: 0.07 },
+    { freq: 1174.66, start: 0.05, dur: 0.13, gain: 0.07 },
+  ])
+}
+
 // Someone started sharing their screen — distinct triangle three-note rise.
 export function playScreenShare() {
   play([

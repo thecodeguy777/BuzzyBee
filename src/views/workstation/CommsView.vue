@@ -196,8 +196,16 @@ function onHuddleKey(e: KeyboardEvent) {
   e.preventDefault()
   stream.toggleMute()
 }
-onMounted(() => window.addEventListener('keydown', onHuddleKey))
-onBeforeUnmount(() => window.removeEventListener('keydown', onHuddleKey))
+onMounted(() => {
+  window.addEventListener('keydown', onHuddleKey)
+  // Viewing the full channel = "seen": suppress new-message pings + clear unread.
+  stream.registerViewer()
+  if (currentChannelId.value) void channels.markRead(currentChannelId.value)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onHuddleKey)
+  stream.unregisterViewer()
+})
 
 // Screen share: show the first active remote screen in a video tile.
 const screenVideo = ref<HTMLVideoElement | null>(null)
