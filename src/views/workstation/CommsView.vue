@@ -300,7 +300,7 @@ watch(activeScreen, (a) => {
           <div class="flex-1" />
           <button v-if="stream.sharingScreen.value" class="text-error font-medium" @click="stream.toggleScreenShare()">Stop sharing</button>
         </div>
-        <video v-if="activeScreen" ref="screenVideo" autoplay playsinline muted class="w-full max-h-72 bg-black object-contain" />
+        <video v-if="activeScreen" ref="screenVideo" autoplay playsinline muted class="w-full max-h-[65vh] bg-black object-contain" />
         <div v-else class="px-3 py-5 text-center text-xs text-base-content/50">Your screen is visible to everyone in the huddle.</div>
       </div>
 

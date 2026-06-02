@@ -568,12 +568,18 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
   async function startScreenShare() {
     if (!inHuddle.value || sharingScreen.value) return
     try {
-      screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
+      // Cap frame-rate so the encoder spends its bitrate on resolution, not motion.
+      screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: { ideal: 15, max: 30 } },
+        audio: false,
+      })
     } catch {
       return // user cancelled the picker
     }
     const track = screenStream.getVideoTracks()[0]
     if (!track) return
+    // "detail" = prioritize sharp text/UI over smooth motion (vs. the default).
+    if ('contentHint' in track) (track as any).contentHint = 'detail'
     sharingScreen.value = true
     for (const entry of peers.values()) {
       entry.screenSender = entry.pc.addTrack(track, screenStream) // → renegotiation
