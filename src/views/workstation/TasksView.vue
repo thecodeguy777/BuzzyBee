@@ -13,7 +13,6 @@ import {
   Paperclip,
   LayoutDashboard
 } from 'lucide-vue-next'
-import TaskDrawer from '@/components/workstation/TaskDrawer.vue'
 import TaskTableView from '@/components/workstation/TaskTableView.vue'
 import TaskBoardView from '@/components/workstation/TaskBoardView.vue'
 import TaskCalendarView from '@/components/workstation/TaskCalendarView.vue'
@@ -273,7 +272,6 @@ function dueClass(due: string | null) {
       </div>
     </section>
 
-    <TaskDrawer />
     <AddColumnModal :open="showAddColumn" @close="showAddColumn = false" />
   </div>
 </template>

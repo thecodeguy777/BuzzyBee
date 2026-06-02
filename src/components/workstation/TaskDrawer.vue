@@ -20,6 +20,7 @@ import { useTaskChat } from '@/composables/useTaskChat'
 import { useTeamStore, type MemberProfile } from '@/stores/team'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectMembersStore } from '@/stores/projectMembers'
+import { useProjectsStore } from '@/stores/projects'
 import TaskAttachments from '@/components/workstation/TaskAttachments.vue'
 import RichTextEditor from '@/components/workstation/RichTextEditor.vue'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
@@ -29,6 +30,7 @@ const statusesStore = useStatusesStore()
 const team = useTeamStore()
 const auth = useAuthStore()
 const members = useProjectMembersStore()
+const projects = useProjectsStore()
 
 const open = computed(() => tasks.selectedTask !== null)
 const t = computed(() => tasks.selectedTask)
@@ -156,6 +158,26 @@ const currentStatus = computed(() => {
   }
 })
 const currentPriority = computed(() => priorities.find((p) => p.value === priority.value)!)
+
+// Project selector — same-client projects the task can live in. Moving projects
+// resets the status to the new project's default column (columns are per-project).
+const projectOptions = computed(() => {
+  const cid = t.value?.client_id
+  if (!cid) return [] as { id: string; name: string }[]
+  return (projects.projectsByClient[cid] ?? projects.projects.filter((p) => p.client_id === cid)) as {
+    id: string
+    name: string
+  }[]
+})
+const currentProjectName = computed(
+  () => projectOptions.value.find((p) => p.id === t.value?.project_id)?.name ?? 'Project',
+)
+async function pickProject(id: string) {
+  if (!t.value || id === t.value.project_id) return
+  statusesStore.forProject(id) // ensure the new project's columns are loaded
+  const def = statusesStore.defaultKey(id) || 'todo'
+  await patch({ project_id: id, status: def as TaskStatus })
+}
 
 function syncFromTask() {
   if (!t.value) return
@@ -615,6 +637,26 @@ function openDuePicker(triggerEl: HTMLElement) {
 
           <!-- meta row -->
           <div class="px-6 pb-2 flex flex-wrap items-center gap-2">
+            <!-- project -->
+            <div v-if="projectOptions.length" class="dropdown">
+              <div
+                tabindex="0"
+                role="button"
+                class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer hover:bg-base-200 transition-colors text-base-content/70"
+              >
+                <Hash class="w-3 h-3" :stroke-width="2.25" />
+                {{ currentProjectName }}
+              </div>
+              <ul
+                tabindex="0"
+                class="dropdown-content z-10 mt-1 menu p-1 shadow-lg bg-white rounded-lg border border-base-300 w-48 text-sm max-h-64 overflow-y-auto flex-nowrap"
+              >
+                <li v-for="p in projectOptions" :key="p.id">
+                  <a :class="p.id === t?.project_id && 'active'" @click="pickProject(p.id)">{{ p.name }}</a>
+                </li>
+              </ul>
+            </div>
+
             <!-- status -->
             <div class="dropdown">
               <div

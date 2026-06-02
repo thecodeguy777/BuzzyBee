@@ -319,36 +319,16 @@ function isContinuation(i: number) {
   if (prev.user_id !== m.user_id) return false
   return new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() < 5 * 60 * 1000
 }
-// Message → task. If the client has >1 project, ask which one (+ let them tweak
-// the title) before creating; otherwise create straight into the only project.
-const taskPickerMsg = ref<any | null>(null)
-const taskProjects = ref<{ id: string; name: string }[]>([])
-const taskProjectId = ref<string>('')
-const taskTitle = ref<string>('')
-function makeTask(m: any) {
-  const list = stream.projectsForMessage(m) as { id: string; name: string }[]
-  if (list.length > 1) {
-    taskPickerMsg.value = m
-    taskProjects.value = list
-    taskProjectId.value = list[0].id
-    taskTitle.value = (m.body || '').replace(/<[^>]*>/g, '').trim().slice(0, 140)
-    return
-  }
-  void doCreateTask(m, {})
-}
-async function doCreateTask(m: any, opts: { projectId?: string; title?: string }) {
+// Message → task: create it (client's first project by default), then open the
+// full Task drawer over comms — where you can set the project, assignee, due,
+// description, etc. The drawer is mounted globally in the workstation shell.
+async function makeTask(m: any) {
   try {
-    await stream.createTaskFromMessage(m, opts)
+    const id = await stream.createTaskFromMessage(m)
+    if (id) tasks.selectTask(id)
   } catch (e) {
     commsError.value = (e as Error).message
   }
-}
-function confirmTask() {
-  const m = taskPickerMsg.value
-  if (!m) return
-  const opts = { projectId: taskProjectId.value, title: taskTitle.value.trim() || undefined }
-  taskPickerMsg.value = null
-  void doCreateTask(m, opts)
 }
 function openTask(taskId: string) {
   tasks.selectTask(taskId)
@@ -748,36 +728,6 @@ function fullscreenScreen() {
           <HexAvatar :name="p.name" :avatar-url="p.avatarUrl" :color-key="p.id" :size="22" />
           <span class="truncate">{{ p.name }}</span>
         </button>
-      </div>
-    </Teleport>
-
-    <!-- Message → task: choose project when the client has several -->
-    <Teleport to="body">
-      <div v-if="taskPickerMsg" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" @click.self="taskPickerMsg = null">
-        <div class="w-full max-w-sm rounded-2xl bg-base-100 border border-base-300 shadow-xl overflow-hidden">
-          <header class="flex items-center gap-2 px-4 py-3 border-b border-base-300">
-            <CheckSquare class="w-4 h-4 text-primary" :stroke-width="1.75" />
-            <span class="text-sm font-semibold">Turn into task</span>
-            <div class="flex-1" />
-            <button class="w-7 h-7 rounded-md hover:bg-base-200 flex items-center justify-center text-base-content/50" @click="taskPickerMsg = null"><X class="w-4 h-4" :stroke-width="1.75" /></button>
-          </header>
-          <div class="p-4 space-y-3">
-            <div>
-              <label class="block text-[0.7rem] font-medium uppercase tracking-wider text-base-content/50 mb-1">Task</label>
-              <input v-model="taskTitle" class="input input-bordered input-sm w-full" placeholder="Task title" @keydown.enter="confirmTask" />
-            </div>
-            <div>
-              <label class="block text-[0.7rem] font-medium uppercase tracking-wider text-base-content/50 mb-1">Project</label>
-              <select v-model="taskProjectId" class="select select-bordered select-sm w-full">
-                <option v-for="p in taskProjects" :key="p.id" :value="p.id">{{ p.name }}</option>
-              </select>
-            </div>
-          </div>
-          <div class="px-4 py-3 bg-base-200/50 border-t border-base-300 flex justify-end gap-2">
-            <button class="btn btn-ghost btn-sm" @click="taskPickerMsg = null">Cancel</button>
-            <button class="btn btn-primary btn-sm" :disabled="!taskProjectId" @click="confirmTask">Create task</button>
-          </div>
-        </div>
       </div>
     </Teleport>
 
