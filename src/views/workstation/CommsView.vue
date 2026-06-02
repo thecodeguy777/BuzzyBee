@@ -402,7 +402,9 @@ function fullscreenScreen() {
             <button
               class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
               :class="stream.noiseSuppression.value ? 'bg-primary/15 text-primary' : 'bg-base-200 text-base-content/70'"
-              :title="stream.noiseSuppression.value ? 'Noise cancellation: on' : 'Noise cancellation: off'"
+              :title="stream.noiseSuppression.value
+                ? (stream.rnnoiseActive.value ? 'AI noise cancellation: on' : 'Noise cancellation: on')
+                : 'Noise cancellation: off'"
               @click="stream.toggleNoise()"
             ><Wand2 class="w-4 h-4" :stroke-width="1.75" /></button>
             <button
@@ -427,7 +429,7 @@ function fullscreenScreen() {
         <div v-if="stream.inHuddle.value" class="mt-1.5 pl-6 flex items-center gap-2 text-[0.65rem] text-base-content/40">
           <span>Press <kbd class="px-1 py-px rounded bg-base-200 font-mono text-base-content/60">M</kbd> to {{ stream.muted.value ? 'unmute' : 'mute' }}</span>
           <span v-if="stream.noiseSuppression.value" class="inline-flex items-center gap-1 text-primary/70 font-medium">
-            <Wand2 class="w-3 h-3" :stroke-width="2" /> Noise cancellation on
+            <Wand2 class="w-3 h-3" :stroke-width="2" /> {{ stream.rnnoiseActive.value ? 'AI noise cancellation on' : 'Noise cancellation on' }}
           </span>
         </div>
       </div>

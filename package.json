@@ -12,6 +12,7 @@
     "buzzybee:setup": "node scripts/buzzybee-setup.mjs"
   },
   "dependencies": {
+    "@sapphi-red/web-noise-suppressor": "^0.3.5",
     "@supabase/supabase-js": "^2.105.1",
     "@tiptap/extension-bubble-menu": "^3.22.5",
     "@tiptap/extension-link": "^3.22.5",

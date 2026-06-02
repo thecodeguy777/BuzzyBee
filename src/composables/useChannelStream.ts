@@ -15,6 +15,7 @@ import {
   soundsMuted,
   setSoundsMuted,
 } from '@/lib/commsSounds'
+import { createNoisePipeline, type NoisePipeline } from '@/lib/noiseSuppressor'
 
 export interface Attachment {
   kind: 'image' | 'file' | 'link'
@@ -79,12 +80,17 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
   const speaking = ref<Set<string>>(new Set())
   const huddleError = ref<string | null>(null)
 
-  // Browser-native noise cancellation (free, runs in the audio driver path).
+  // Noise cancellation: RNNoise (neural) running in an AudioWorklet, with a
+  // fallback to the browser's native suppressor if RNNoise can't load.
   // User-toggleable; on by default. Echo-cancellation + auto-gain are always on.
   const NOISE_KEY = 'buzzybee.comms.noise-suppression'
   const noiseSuppression = ref(
     typeof window === 'undefined' || window.localStorage.getItem(NOISE_KEY) !== '0',
   )
+  // true once the RNNoise pipeline is live (vs. the native-suppressor fallback).
+  const rnnoiseActive = ref(false)
+  let rawStream: MediaStream | null = null // the real mic, before processing
+  let nsPipeline: NoisePipeline | null = null
 
   const ICE_SERVERS: RTCIceServer[] = [
     { urls: 'stun:stun.l.google.com:19302' },
@@ -495,18 +501,37 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     // exact device is no longer available.
     const deviceId =
       typeof window !== 'undefined' ? window.localStorage.getItem('buzzybee.comms.mic-device') : null
+    // Raw mic: keep echo-cancel + auto-gain (they don't fight RNNoise), but turn
+    // the browser's noise suppressor OFF — RNNoise owns NS now (never stack them).
     const audio: MediaTrackConstraints = {
       echoCancellation: true,
       autoGainControl: true,
-      noiseSuppression: noiseSuppression.value,
+      noiseSuppression: false,
     }
     if (deviceId) audio.deviceId = { exact: deviceId }
     try {
-      localStream = await navigator.mediaDevices.getUserMedia({ audio, video: false })
+      rawStream = await navigator.mediaDevices.getUserMedia({ audio, video: false })
     } catch {
-      localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      rawStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
     }
-    localStream.getAudioTracks().forEach((t) => (t.enabled = !muted.value))
+
+    // Route the mic through RNNoise; fall back to the raw mic if it can't load.
+    nsPipeline = await createNoisePipeline(rawStream, noiseSuppression.value)
+    rnnoiseActive.value = !!nsPipeline
+    if (!nsPipeline) {
+      // No RNNoise → at least honor the toggle via the native suppressor.
+      try {
+        await rawStream.getAudioTracks()[0]?.applyConstraints({
+          echoCancellation: true,
+          autoGainControl: true,
+          noiseSuppression: noiseSuppression.value,
+        })
+      } catch { /* ignore */ }
+    }
+    localStream = nsPipeline ? nsPipeline.stream : rawStream
+
+    // Mute acts on the real mic track so both the processed and raw paths go silent.
+    rawStream.getAudioTracks().forEach((t) => (t.enabled = !muted.value))
     const uid = me()
     if (uid) setupAnalyser(uid, localStream)
     return localStream
@@ -708,6 +733,11 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     stopScreenShare()
     remoteScreens.value = {}
     for (const uid of [...peers.keys()]) closePeer(uid)
+    nsPipeline?.destroy()
+    nsPipeline = null
+    rnnoiseActive.value = false
+    rawStream?.getTracks().forEach((t) => t.stop())
+    rawStream = null
     localStream?.getTracks().forEach((t) => t.stop())
     localStream = null
     analysers.clear()
@@ -727,7 +757,8 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
   }
   function toggleMute() {
     muted.value = !muted.value
-    localStream?.getAudioTracks().forEach((t) => (t.enabled = !muted.value))
+    // Mute the real mic (upstream of RNNoise) so both processed/raw paths silence.
+    ;(rawStream ?? localStream)?.getAudioTracks().forEach((t) => (t.enabled = !muted.value))
     trackPresence()
   }
   function toggleSounds() {
@@ -738,19 +769,18 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     noiseSuppression.value = !noiseSuppression.value
     if (typeof window !== 'undefined')
       window.localStorage.setItem(NOISE_KEY, noiseSuppression.value ? '1' : '0')
-    // Apply live to the active mic track; if the browser can't retune mid-call,
-    // it just takes effect on the next huddle join.
-    const track = localStream?.getAudioTracks()[0]
-    if (track) {
+    if (nsPipeline) {
+      // Instant, pop-free crossfade — no track swap / renegotiation.
+      nsPipeline.setEnabled(noiseSuppression.value)
+    } else {
+      // RNNoise unavailable → fall back to the browser's native suppressor.
       try {
-        await track.applyConstraints({
+        await (rawStream ?? localStream)?.getAudioTracks()[0]?.applyConstraints({
           echoCancellation: true,
           autoGainControl: true,
           noiseSuppression: noiseSuppression.value,
         })
-      } catch {
-        /* runtime retune unsupported on this browser */
-      }
+      } catch { /* runtime retune unsupported */ }
     }
   }
 
@@ -789,6 +819,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     soundMuted,
     toggleSounds,
     noiseSuppression,
+    rnnoiseActive,
     toggleNoise,
     reactionList,
     profile,
