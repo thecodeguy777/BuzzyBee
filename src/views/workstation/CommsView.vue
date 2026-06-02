@@ -3,7 +3,7 @@ import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Hash, Plus, Search, Users, Headphones, Mic, MicOff, MonitorUp, PhoneOff,
-  Paperclip, Image as ImageIcon, Link2, Smile, AtSign, Send, Sparkles, X, ChevronDown, CheckSquare, Settings2, Crown
+  Paperclip, Image as ImageIcon, Link2, Smile, AtSign, Send, Sparkles, X, ChevronDown, CheckSquare, Settings2, Crown, Maximize2
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
 import CommsMessage from '@/components/comms/CommsMessage.vue'
@@ -199,6 +199,9 @@ watch(activeScreen, (a) => {
     if (screenVideo.value) screenVideo.value.srcObject = a?.stream ?? null
   })
 })
+function fullscreenScreen() {
+  screenVideo.value?.requestFullscreen?.()
+}
 </script>
 
 <template>
@@ -298,6 +301,9 @@ watch(activeScreen, (a) => {
             <template v-else>You're sharing your screen</template>
           </span>
           <div class="flex-1" />
+          <button v-if="activeScreen" class="inline-flex items-center gap-1 text-base-content/60 hover:text-primary font-medium" title="Fullscreen" @click="fullscreenScreen">
+            <Maximize2 class="w-3.5 h-3.5" :stroke-width="1.75" /> Fullscreen
+          </button>
           <button v-if="stream.sharingScreen.value" class="text-error font-medium" @click="stream.toggleScreenShare()">Stop sharing</button>
         </div>
         <video v-if="activeScreen" ref="screenVideo" autoplay playsinline muted class="w-full max-h-[65vh] bg-black object-contain" />

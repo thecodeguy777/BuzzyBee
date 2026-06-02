@@ -478,7 +478,10 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     localStream?.getTracks().forEach((t) => pc.addTrack(t, localStream!))
     if (screenStream) {
       const vt = screenStream.getVideoTracks()[0]
-      if (vt) entry.screenSender = pc.addTrack(vt, screenStream)
+      if (vt) {
+        entry.screenSender = pc.addTrack(vt, screenStream)
+        void tuneScreenSender(entry.screenSender)
+      }
     }
 
     pc.onicecandidate = (e) => {
@@ -558,6 +561,20 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     }
   }
 
+  // Push the screen sender to a high bitrate and stop it auto-downscaling, so a
+  // healthy connection keeps text crisp. (Best-effort — not all browsers allow.)
+  async function tuneScreenSender(sender: RTCRtpSender) {
+    try {
+      const params = sender.getParameters()
+      if (!params.encodings || params.encodings.length === 0) params.encodings = [{}]
+      params.encodings[0].maxBitrate = 2_500_000 // 2.5 Mbps
+      params.encodings[0].scaleResolutionDownBy = 1
+      await sender.setParameters(params)
+    } catch {
+      /* setParameters unsupported / not ready on some browsers */
+    }
+  }
+
   function removeRemoteScreen(userId: string) {
     if (!remoteScreens.value[userId]) return
     const next = { ...remoteScreens.value }
@@ -583,6 +600,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     sharingScreen.value = true
     for (const entry of peers.values()) {
       entry.screenSender = entry.pc.addTrack(track, screenStream) // → renegotiation
+      void tuneScreenSender(entry.screenSender)
     }
     track.addEventListener('ended', () => stopScreenShare()) // browser "Stop sharing"
     trackPresence()
