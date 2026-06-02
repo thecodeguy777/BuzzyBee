@@ -95,6 +95,31 @@ async function onFilesChosen(e: Event) {
     }
   }
 }
+// Paste an image straight from the clipboard (e.g. a screenshot) → attach it.
+async function onPaste(e: ClipboardEvent) {
+  const items = Array.from(e.clipboardData?.items ?? [])
+  const imageFiles = items
+    .filter((it) => it.kind === 'file' && it.type.startsWith('image/'))
+    .map((it) => it.getAsFile())
+    .filter((f): f is File => !!f)
+  if (imageFiles.length === 0) return // plain text paste — let it through
+  e.preventDefault()
+  const cid = currentChannelId.value
+  if (!cid) return
+  for (const f of imageFiles) {
+    // Screenshots arrive as a generic "image.png" — give them a unique name.
+    const file =
+      f.name && f.name !== 'image.png'
+        ? f
+        : new File([f], `screenshot-${Date.now()}.png`, { type: f.type || 'image/png' })
+    try {
+      pending.value = [...pending.value, await uploadCommsFile(cid, file)]
+    } catch (err) {
+      commsError.value = (err as Error).message
+    }
+  }
+}
+
 function addLink() {
   const url = window.prompt('Paste a link')
   if (!url) return
@@ -507,6 +532,7 @@ function fullscreenScreen() {
             :placeholder="`Message #${channels.currentChannel?.name ?? ''}`"
             class="w-full resize-none bg-transparent px-4 pt-3 pb-1 text-sm outline-none leading-relaxed min-h-0"
             @keydown.enter.exact.prevent="onSend"
+            @paste="onPaste"
           />
           <div class="flex items-center gap-1 px-2 pb-2">
             <button class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center text-base-content/50" title="Attach file" @click="pickFiles('*/*')"><Paperclip class="w-4 h-4" :stroke-width="1.75" /></button>
