@@ -105,9 +105,27 @@ function addEmoji(e: string) {
   draft.value += e
 }
 
-// Tabbed emoji/GIF picker. Emoji inserts and keeps the picker open; a GIF sends
-// immediately as an image attachment (rendered inline by CommsMessage).
+// Tabbed emoji/GIF picker. Teleported to <body> (the composer column is
+// overflow-hidden, which would clip an in-flow popover) and pinned above the
+// trigger button via fixed coords. Emoji inserts + keeps it open; GIF sends.
 const showPicker = ref(false)
+const pickerBtn = ref<HTMLElement | null>(null)
+const pickerStyle = ref<Record<string, string>>({})
+function positionPicker() {
+  const el = pickerBtn.value
+  if (!el) return
+  const r = el.getBoundingClientRect()
+  const W = 320
+  const left = Math.max(8, Math.min(r.left, window.innerWidth - W - 8))
+  pickerStyle.value = { left: `${left}px`, bottom: `${window.innerHeight - r.top + 8}px` }
+}
+function togglePicker() {
+  showPicker.value = !showPicker.value
+  if (showPicker.value) nextTick(positionPicker)
+}
+function onPickerReposition() {
+  if (showPicker.value) positionPicker()
+}
 async function onPickGif(g: Gif) {
   showPicker.value = false
   try {
@@ -213,12 +231,14 @@ function onHuddleKey(e: KeyboardEvent) {
 }
 onMounted(() => {
   window.addEventListener('keydown', onHuddleKey)
+  window.addEventListener('resize', onPickerReposition)
   // Viewing the full channel = "seen": suppress new-message pings + clear unread.
   stream.registerViewer()
   if (currentChannelId.value) void channels.markRead(currentChannelId.value)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onHuddleKey)
+  window.removeEventListener('resize', onPickerReposition)
   stream.unregisterViewer()
 })
 
@@ -492,12 +512,7 @@ function fullscreenScreen() {
             <button class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center text-base-content/50" title="Attach file" @click="pickFiles('*/*')"><Paperclip class="w-4 h-4" :stroke-width="1.75" /></button>
             <button class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center text-base-content/50" title="Image" @click="pickFiles('image/*')"><ImageIcon class="w-4 h-4" :stroke-width="1.75" /></button>
             <button class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center text-base-content/50" title="Link" @click="addLink"><Link2 class="w-4 h-4" :stroke-width="1.75" /></button>
-            <div class="relative">
-              <button class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center" :class="showPicker ? 'bg-base-200 text-primary' : 'text-base-content/50'" title="Emoji & GIFs" @click="showPicker = !showPicker"><Smile class="w-4 h-4" :stroke-width="1.75" /></button>
-              <div v-if="showPicker" class="absolute bottom-full mb-2 left-0 z-30">
-                <MediaPicker @emoji="addEmoji" @gif="onPickGif" @close="showPicker = false" />
-              </div>
-            </div>
+            <button ref="pickerBtn" class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center" :class="showPicker ? 'bg-base-200 text-primary' : 'text-base-content/50'" title="Emoji & GIFs" @click="togglePicker"><Smile class="w-4 h-4" :stroke-width="1.75" /></button>
             <button class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center text-base-content/50" title="Mention"><AtSign class="w-4 h-4" :stroke-width="1.75" /></button>
             <div class="flex-1" />
             <button
@@ -563,5 +578,15 @@ function fullscreenScreen() {
     </aside>
 
     <MicCheck v-if="showMicCheck" @close="showMicCheck = false" />
+
+    <!-- Emoji/GIF picker — teleported out of the overflow-hidden composer column -->
+    <Teleport to="body">
+      <template v-if="showPicker">
+        <div class="fixed inset-0 z-[55]" @click="showPicker = false" />
+        <div class="fixed z-[60]" :style="pickerStyle">
+          <MediaPicker @emoji="addEmoji" @gif="onPickGif" @close="showPicker = false" />
+        </div>
+      </template>
+    </Teleport>
   </div>
 </template>
