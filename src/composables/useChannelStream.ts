@@ -39,6 +39,8 @@ export interface HuddlePresence {
   avatarUrl: string | null
   inHuddle: boolean
   muted: boolean
+  /** ms timestamp the user joined the huddle; earliest joiner = host. */
+  huddleSince?: number | null
 }
 
 function stripHtml(s: string) {
@@ -72,6 +74,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     { urls: 'stun:stun1.l.google.com:19302' },
   ]
   let localStream: MediaStream | null = null
+  let huddleSince = 0
   let audioCtx: AudioContext | null = null
   const peers = new Map<string, { pc: RTCPeerConnection; audioEl?: HTMLAudioElement }>()
   const analysers = new Map<string, AnalyserNode>() // userId -> analyser (local keyed by me())
@@ -101,6 +104,12 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
   const decisions = computed(() => rootMessages.value.filter((m) => m.is_decision))
   const pinned = computed(() => rootMessages.value.filter((m) => m.is_pinned))
   const huddlePeople = computed(() => online.value.filter((p) => p.inHuddle))
+  // Host = the earliest joiner still in the huddle.
+  const huddleHost = computed(() => {
+    const inH = huddlePeople.value.filter((p) => p.huddleSince)
+    if (!inH.length) return null
+    return inH.reduce((a, b) => ((a.huddleSince ?? 0) <= (b.huddleSince ?? 0) ? a : b)).userId
+  })
 
   function reactionList(messageId: string) {
     const r = reactions.value[messageId]
@@ -212,6 +221,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
       avatarUrl: auth.profile?.avatar_url ?? null,
       inHuddle: inHuddle.value,
       muted: muted.value,
+      huddleSince: inHuddle.value ? huddleSince : null,
     } satisfies HuddlePresence)
   }
   function syncPresence() {
@@ -522,6 +532,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     huddleError.value = null
     try {
       await ensureLocalStream()
+      huddleSince = Date.now()
       inHuddle.value = true
       trackPresence()
       reconcilePeers()
@@ -534,6 +545,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
   function stopHuddle() {
     inHuddle.value = false
     muted.value = false
+    huddleSince = 0
     for (const uid of [...peers.keys()]) closePeer(uid)
     localStream?.getTracks().forEach((t) => t.stop())
     localStream = null
@@ -582,6 +594,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     sending,
     online,
     huddlePeople,
+    huddleHost,
     inHuddle,
     muted,
     speaking,

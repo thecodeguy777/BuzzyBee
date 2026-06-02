@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, watch } from 'vue'
+import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Hash, Plus, Search, Users, Headphones, Mic, MicOff, MonitorUp, PhoneOff,
-  Paperclip, Image as ImageIcon, Link2, Smile, AtSign, Send, Sparkles, X, ChevronDown, CheckSquare, Settings2
+  Paperclip, Image as ImageIcon, Link2, Smile, AtSign, Send, Sparkles, X, ChevronDown, CheckSquare, Settings2, Crown
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
 import CommsMessage from '@/components/comms/CommsMessage.vue'
@@ -166,6 +166,24 @@ async function pinAllToTasks() {
 }
 
 const headerMembers = computed(() => stream.online.value.slice(0, 6))
+const firstName = (n: string) => (n || 'Someone').split(' ')[0]
+const hostName = computed(() => {
+  const h = stream.huddleHost.value
+  return h ? stream.huddlePeople.value.find((p) => p.userId === h)?.name?.split(' ')[0] ?? '' : ''
+})
+
+// Keyboard shortcut: M toggles mute while in a huddle (ignored while typing).
+function onHuddleKey(e: KeyboardEvent) {
+  if (!stream.inHuddle.value || e.metaKey || e.ctrlKey || e.altKey) return
+  if (e.key.toLowerCase() !== 'm') return
+  const el = document.activeElement as HTMLElement | null
+  const tag = el?.tagName?.toLowerCase()
+  if (tag === 'input' || tag === 'textarea' || el?.isContentEditable) return
+  e.preventDefault()
+  stream.toggleMute()
+}
+onMounted(() => window.addEventListener('keydown', onHuddleKey))
+onBeforeUnmount(() => window.removeEventListener('keydown', onHuddleKey))
 </script>
 
 <template>
@@ -306,40 +324,56 @@ const headerMembers = computed(() => stream.online.value.slice(0, 6))
       <!-- huddle bar -->
       <div
         v-if="stream.inHuddle.value || stream.huddlePeople.value.length"
-        class="mx-4 mb-2 flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2"
+        class="mx-4 mb-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2"
       >
-        <span class="relative flex h-2.5 w-2.5">
-          <span class="absolute inline-flex h-full w-full rounded-full bg-success opacity-75 animate-ping" />
-          <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-success" />
-        </span>
-        <div class="leading-tight">
-          <div class="text-xs font-semibold">Huddle</div>
-          <div class="text-[0.65rem] text-base-content/50">in #{{ channels.currentChannel?.name }}</div>
-        </div>
-        <div class="flex -space-x-1">
-          <span
-            v-for="p in stream.huddlePeople.value"
-            :key="p.userId"
-            class="relative inline-flex rounded-xl transition-shadow"
-            :class="stream.speaking.value.has(p.userId) ? 'ring-2 ring-success ring-offset-1 ring-offset-primary/5' : ''"
-            :title="p.name + (p.muted ? ' (muted)' : '')"
-          >
-            <HexAvatar :name="p.name" :avatar-url="p.avatarUrl" :size="30" ring />
-            <span v-if="p.muted" class="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-error flex items-center justify-center ring-1 ring-base-100">
-              <MicOff class="w-2.5 h-2.5 text-white" :stroke-width="2" />
-            </span>
+        <div class="flex items-center gap-3">
+          <span class="relative flex h-2.5 w-2.5 shrink-0">
+            <span class="absolute inline-flex h-full w-full rounded-full bg-success opacity-75 animate-ping" />
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-success" />
           </span>
+          <div class="leading-tight shrink-0">
+            <div class="text-xs font-semibold">Huddle</div>
+            <div class="text-[0.65rem] text-base-content/50">
+              in #{{ channels.currentChannel?.name }}<template v-if="hostName"> · hosted by {{ hostName }}</template>
+            </div>
+          </div>
+
+          <!-- participants -->
+          <div class="flex items-center gap-1.5 overflow-x-auto flex-1 min-w-0 py-0.5">
+            <span
+              v-for="p in stream.huddlePeople.value"
+              :key="p.userId"
+              class="inline-flex items-center gap-1.5 rounded-full border bg-base-100 pl-0.5 pr-2 py-0.5 shrink-0 transition-colors"
+              :class="stream.speaking.value.has(p.userId) ? 'border-success ring-1 ring-success/40' : 'border-base-300'"
+              :title="p.name + (p.muted ? ' (muted)' : '')"
+            >
+              <span class="relative inline-flex">
+                <HexAvatar :name="p.name" :avatar-url="p.avatarUrl" :size="22" />
+                <span v-if="p.muted" class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-error flex items-center justify-center ring-1 ring-base-100">
+                  <MicOff class="w-2 h-2 text-white" :stroke-width="2.5" />
+                </span>
+              </span>
+              <span class="text-xs font-medium">{{ firstName(p.name) }}</span>
+              <Crown v-if="p.userId === stream.huddleHost.value" class="w-3 h-3 text-warning shrink-0" :stroke-width="2" />
+            </span>
+          </div>
+
+          <!-- controls -->
+          <template v-if="stream.inHuddle.value">
+            <button class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" :class="stream.muted.value ? 'bg-error/15 text-error' : 'bg-base-200 text-base-content/70'" :title="stream.muted.value ? 'Unmute (M)' : 'Mute (M)'" @click="stream.toggleMute()">
+              <component :is="stream.muted.value ? MicOff : Mic" class="w-4 h-4" :stroke-width="1.75" />
+            </button>
+            <button class="w-9 h-9 rounded-lg bg-base-200 text-base-content/70 flex items-center justify-center shrink-0" title="Mic &amp; sound" @click="showMicCheck = true"><Settings2 class="w-4 h-4" :stroke-width="1.75" /></button>
+            <button class="w-9 h-9 rounded-lg bg-base-200 text-base-content/40 flex items-center justify-center shrink-0 cursor-not-allowed" title="Share screen — coming next" disabled><MonitorUp class="w-4 h-4" :stroke-width="1.75" /></button>
+            <button class="w-9 h-9 rounded-lg bg-error text-white flex items-center justify-center shrink-0" title="Leave" @click="stream.toggleHuddle()"><PhoneOff class="w-4 h-4" :stroke-width="1.75" /></button>
+          </template>
+          <button v-else class="px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-semibold shrink-0" @click="stream.toggleHuddle()">Join</button>
         </div>
-        <div class="flex-1" />
-        <template v-if="stream.inHuddle.value">
-          <button class="w-9 h-9 rounded-lg flex items-center justify-center" :class="stream.muted.value ? 'bg-error/15 text-error' : 'bg-base-200 text-base-content/70'" :title="stream.muted.value ? 'Unmute' : 'Mute'" @click="stream.toggleMute()">
-            <component :is="stream.muted.value ? MicOff : Mic" class="w-4 h-4" :stroke-width="1.75" />
-          </button>
-          <button class="w-9 h-9 rounded-lg bg-base-200 text-base-content/70 flex items-center justify-center" title="Mic &amp; sound" @click="showMicCheck = true"><Settings2 class="w-4 h-4" :stroke-width="1.75" /></button>
-          <button class="w-9 h-9 rounded-lg bg-base-200 text-base-content/70 flex items-center justify-center" title="Share screen"><MonitorUp class="w-4 h-4" :stroke-width="1.75" /></button>
-          <button class="w-9 h-9 rounded-lg bg-error text-white flex items-center justify-center" title="Leave" @click="stream.toggleHuddle()"><PhoneOff class="w-4 h-4" :stroke-width="1.75" /></button>
-        </template>
-        <button v-else class="px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-semibold" @click="stream.toggleHuddle()">Join</button>
+
+        <!-- shortcut hint -->
+        <div v-if="stream.inHuddle.value" class="mt-1.5 pl-6 text-[0.65rem] text-base-content/40">
+          Press <kbd class="px-1 py-px rounded bg-base-200 font-mono text-base-content/60">M</kbd> to {{ stream.muted.value ? 'unmute' : 'mute' }}
+        </div>
       </div>
 
       <!-- composer -->
