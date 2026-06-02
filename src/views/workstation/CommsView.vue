@@ -184,6 +184,21 @@ function onHuddleKey(e: KeyboardEvent) {
 }
 onMounted(() => window.addEventListener('keydown', onHuddleKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onHuddleKey))
+
+// Screen share: show the first active remote screen in a video tile.
+const screenVideo = ref<HTMLVideoElement | null>(null)
+const activeScreen = computed(() => {
+  const entries = Object.entries(stream.remoteScreens.value)
+  if (!entries.length) return null
+  const [userId, ms] = entries[0]
+  const p = stream.online.value.find((o) => o.userId === userId)
+  return { userId, name: p?.name ?? 'Someone', stream: ms }
+})
+watch(activeScreen, (a) => {
+  nextTick(() => {
+    if (screenVideo.value) screenVideo.value.srcObject = a?.stream ?? null
+  })
+})
 </script>
 
 <template>
@@ -273,6 +288,21 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onHuddleKey))
         {{ commsError || stream.huddleError.value }}
         <button class="underline" @click="commsError = null; stream.huddleError.value = null">dismiss</button>
       </p>
+
+      <!-- screen share viewer -->
+      <div v-if="activeScreen || stream.sharingScreen.value" class="mx-4 mt-2 rounded-xl border border-base-300 overflow-hidden">
+        <div class="flex items-center gap-2 px-3 py-1.5 bg-base-200/60 text-xs">
+          <MonitorUp class="w-3.5 h-3.5 text-primary" :stroke-width="1.75" />
+          <span class="font-medium">
+            <template v-if="activeScreen">{{ firstName(activeScreen.name) }} is sharing their screen</template>
+            <template v-else>You're sharing your screen</template>
+          </span>
+          <div class="flex-1" />
+          <button v-if="stream.sharingScreen.value" class="text-error font-medium" @click="stream.toggleScreenShare()">Stop sharing</button>
+        </div>
+        <video v-if="activeScreen" ref="screenVideo" autoplay playsinline muted class="w-full max-h-72 bg-black object-contain" />
+        <div v-else class="px-3 py-5 text-center text-xs text-base-content/50">Your screen is visible to everyone in the huddle.</div>
+      </div>
 
       <!-- stream -->
       <div class="flex-1 min-h-0 overflow-y-auto py-2">
@@ -364,7 +394,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onHuddleKey))
               <component :is="stream.muted.value ? MicOff : Mic" class="w-4 h-4" :stroke-width="1.75" />
             </button>
             <button class="w-9 h-9 rounded-lg bg-base-200 text-base-content/70 flex items-center justify-center shrink-0" title="Mic &amp; sound" @click="showMicCheck = true"><Settings2 class="w-4 h-4" :stroke-width="1.75" /></button>
-            <button class="w-9 h-9 rounded-lg bg-base-200 text-base-content/40 flex items-center justify-center shrink-0 cursor-not-allowed" title="Share screen — coming next" disabled><MonitorUp class="w-4 h-4" :stroke-width="1.75" /></button>
+            <button
+              class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+              :class="stream.sharingScreen.value ? 'bg-primary/15 text-primary' : 'bg-base-200 text-base-content/70'"
+              :title="stream.sharingScreen.value ? 'Stop sharing screen' : 'Share screen'"
+              @click="stream.toggleScreenShare()"
+            ><MonitorUp class="w-4 h-4" :stroke-width="1.75" /></button>
             <button class="w-9 h-9 rounded-lg bg-error text-white flex items-center justify-center shrink-0" title="Leave" @click="stream.toggleHuddle()"><PhoneOff class="w-4 h-4" :stroke-width="1.75" /></button>
           </template>
           <button v-else class="px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-semibold shrink-0" @click="stream.toggleHuddle()">Join</button>

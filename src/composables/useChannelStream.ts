@@ -39,6 +39,7 @@ export interface HuddlePresence {
   avatarUrl: string | null
   inHuddle: boolean
   muted: boolean
+  sharing?: boolean
   /** ms timestamp the user joined the huddle; earliest joiner = host. */
   huddleSince?: number | null
 }
@@ -76,9 +77,22 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
   let localStream: MediaStream | null = null
   let huddleSince = 0
   let audioCtx: AudioContext | null = null
-  const peers = new Map<string, { pc: RTCPeerConnection; audioEl?: HTMLAudioElement }>()
+  interface PeerEntry {
+    pc: RTCPeerConnection
+    audioEl?: HTMLAudioElement
+    screenSender?: RTCRtpSender
+    makingOffer: boolean
+    ignoreOffer: boolean
+    polite: boolean
+  }
+  const peers = new Map<string, PeerEntry>()
   const analysers = new Map<string, AnalyserNode>() // userId -> analyser (local keyed by me())
   let speakingRaf = 0
+
+  // Screen share
+  const sharingScreen = ref(false)
+  const remoteScreens = ref<Record<string, MediaStream>>({}) // userId -> their shared screen
+  let screenStream: MediaStream | null = null
 
   let channel: RealtimeChannel | null = null
   let activeId: string | null = null
@@ -221,6 +235,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
       avatarUrl: auth.profile?.avatar_url ?? null,
       inHuddle: inHuddle.value,
       muted: muted.value,
+      sharing: sharingScreen.value,
       huddleSince: inHuddle.value ? huddleSince : null,
     } satisfies HuddlePresence)
   }
@@ -234,6 +249,11 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
       }
     }
     online.value = [...seen.values()]
+    // A shared screen is only valid while its owner's presence says sharing.
+    const sharers = new Set([...seen.values()].filter((p) => p.sharing).map((p) => p.userId))
+    for (const uid of Object.keys(remoteScreens.value)) {
+      if (!sharers.has(uid)) removeRemoteScreen(uid)
+    }
   }
 
   async function setup(id: string, token: number) {
@@ -444,76 +464,141 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     return localStream
   }
 
-  function getPeer(userId: string): RTCPeerConnection {
+  // Perfect-negotiation peer. Handles initial audio AND later screen-share
+  // (re)negotiation without glare: the "impolite" side (lower id) ignores a
+  // colliding offer; the "polite" side rolls back.
+  function getPeer(userId: string): PeerEntry {
     const existing = peers.get(userId)
-    if (existing) return existing.pc
+    if (existing) return existing
+    const myId = me() ?? ''
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
+    const entry: PeerEntry = { pc, makingOffer: false, ignoreOffer: false, polite: myId > userId }
+    peers.set(userId, entry)
+
     localStream?.getTracks().forEach((t) => pc.addTrack(t, localStream!))
+    if (screenStream) {
+      const vt = screenStream.getVideoTracks()[0]
+      if (vt) entry.screenSender = pc.addTrack(vt, screenStream)
+    }
+
     pc.onicecandidate = (e) => {
       if (e.candidate) sendRtc(userId, 'ice', e.candidate.toJSON())
     }
-    pc.ontrack = (e) => {
-      const entry = peers.get(userId)
-      let el = entry?.audioEl
-      if (!el) {
-        el = document.createElement('audio')
-        el.autoplay = true
-        ;(el as any).playsInline = true
-        document.body.appendChild(el)
-        if (entry) entry.audioEl = el
+    pc.onnegotiationneeded = async () => {
+      if (pc.signalingState !== 'stable') return
+      try {
+        entry.makingOffer = true
+        await pc.setLocalDescription()
+        sendRtc(userId, 'desc', pc.localDescription)
+      } catch (e) {
+        console.warn('[huddle] negotiate:', (e as Error).message)
+      } finally {
+        entry.makingOffer = false
       }
-      el.srcObject = e.streams[0]
-      void el.play().catch(() => {})
-      if (!analysers.has(userId)) setupAnalyser(userId, e.streams[0])
+    }
+    pc.ontrack = (e) => {
+      if (e.track.kind === 'video') {
+        remoteScreens.value = { ...remoteScreens.value, [userId]: e.streams[0] }
+        e.track.addEventListener('ended', () => removeRemoteScreen(userId))
+      } else {
+        let el = entry.audioEl
+        if (!el) {
+          el = document.createElement('audio')
+          el.autoplay = true
+          ;(el as any).playsInline = true
+          document.body.appendChild(el)
+          entry.audioEl = el
+        }
+        el.srcObject = e.streams[0]
+        void el.play().catch(() => {})
+        if (!analysers.has(userId)) setupAnalyser(userId, e.streams[0])
+      }
     }
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'failed' || pc.connectionState === 'closed') closePeer(userId)
     }
-    peers.set(userId, { pc })
-    return pc
+    return entry
   }
 
-  async function makeOffer(userId: string) {
-    const pc = getPeer(userId)
-    const offer = await pc.createOffer()
-    await pc.setLocalDescription(offer)
-    sendRtc(userId, 'offer', pc.localDescription)
-  }
-
-  // Connect to / disconnect from huddle participants. The lower userId in each
-  // pair is the offerer, so exactly one side initiates.
+  // Open a peer to everyone in the huddle (both sides create one; negotiation
+  // bootstraps via onnegotiationneeded). Close peers who left.
   function reconcilePeers() {
     const myId = me()
     if (!inHuddle.value || !myId) return
     const wanted = new Set(huddlePeople.value.map((p) => p.userId).filter((u) => u !== myId))
-    for (const uid of wanted) {
-      if (!peers.has(uid) && myId < uid) void makeOffer(uid)
-    }
-    for (const uid of [...peers.keys()]) {
-      if (!wanted.has(uid)) closePeer(uid)
-    }
+    for (const uid of wanted) if (!peers.has(uid)) getPeer(uid)
+    for (const uid of [...peers.keys()]) if (!wanted.has(uid)) closePeer(uid)
   }
 
   async function handleSignal(p: any) {
     if (!p || p.to !== me()) return
     const from = p.from as string
+    const entry = getPeer(from)
+    const pc = entry.pc
     try {
-      if (p.kind === 'offer') {
-        const pc = getPeer(from)
-        await pc.setRemoteDescription(p.data)
-        const answer = await pc.createAnswer()
-        await pc.setLocalDescription(answer)
-        sendRtc(from, 'answer', pc.localDescription)
-      } else if (p.kind === 'answer') {
-        const pc = peers.get(from)?.pc
-        if (pc) await pc.setRemoteDescription(p.data)
+      if (p.kind === 'desc') {
+        const desc = p.data as RTCSessionDescriptionInit
+        const collision = desc.type === 'offer' && (entry.makingOffer || pc.signalingState !== 'stable')
+        entry.ignoreOffer = !entry.polite && collision
+        if (entry.ignoreOffer) return
+        await pc.setRemoteDescription(desc)
+        if (desc.type === 'offer') {
+          await pc.setLocalDescription()
+          sendRtc(from, 'desc', pc.localDescription)
+        }
       } else if (p.kind === 'ice') {
-        const pc = peers.get(from)?.pc ?? getPeer(from)
-        await pc.addIceCandidate(p.data).catch(() => {})
+        try {
+          await pc.addIceCandidate(p.data)
+        } catch (e) {
+          if (!entry.ignoreOffer) throw e
+        }
       }
     } catch (e) {
       console.warn('[huddle] signal:', (e as Error).message)
     }
+  }
+
+  function removeRemoteScreen(userId: string) {
+    if (!remoteScreens.value[userId]) return
+    const next = { ...remoteScreens.value }
+    delete next[userId]
+    remoteScreens.value = next
+  }
+
+  async function startScreenShare() {
+    if (!inHuddle.value || sharingScreen.value) return
+    try {
+      screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
+    } catch {
+      return // user cancelled the picker
+    }
+    const track = screenStream.getVideoTracks()[0]
+    if (!track) return
+    sharingScreen.value = true
+    for (const entry of peers.values()) {
+      entry.screenSender = entry.pc.addTrack(track, screenStream) // → renegotiation
+    }
+    track.addEventListener('ended', () => stopScreenShare()) // browser "Stop sharing"
+    trackPresence()
+  }
+
+  function stopScreenShare() {
+    if (!sharingScreen.value && !screenStream) return
+    for (const entry of peers.values()) {
+      if (entry.screenSender) {
+        try { entry.pc.removeTrack(entry.screenSender) } catch { /* ignore */ }
+        entry.screenSender = undefined
+      }
+    }
+    screenStream?.getTracks().forEach((t) => t.stop())
+    screenStream = null
+    sharingScreen.value = false
+    trackPresence()
+  }
+
+  function toggleScreenShare() {
+    if (sharingScreen.value) stopScreenShare()
+    else void startScreenShare()
   }
 
   function closePeer(userId: string) {
@@ -546,6 +631,8 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     inHuddle.value = false
     muted.value = false
     huddleSince = 0
+    stopScreenShare()
+    remoteScreens.value = {}
     for (const uid of [...peers.keys()]) closePeer(uid)
     localStream?.getTracks().forEach((t) => t.stop())
     localStream = null
@@ -599,6 +686,9 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     muted,
     speaking,
     huddleError,
+    sharingScreen,
+    remoteScreens,
+    toggleScreenShare,
     reactionList,
     profile,
     send,
