@@ -16,6 +16,8 @@ const props = defineProps<{
   lastReplyAt?: string | null
   linkedTask?: Task | null
   canManage?: boolean
+  /** Compact follow-up of the previous message from the same author. */
+  continuation?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -38,6 +40,8 @@ const avatarUrl = computed(() => team.profiles[props.message.user_id]?.avatar_ur
 const time = computed(() =>
   new Date(props.message.created_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }),
 )
+// Compact time (no AM/PM) shown on hover in the gutter for grouped follow-ups.
+const shortTime = computed(() => time.value.replace(/\s?(AM|PM)/i, ''))
 function react(e: string) {
   pickerOpen.value = false
   emit('react', e)
@@ -48,7 +52,7 @@ function isImage(a: Attachment) {
 </script>
 
 <template>
-  <div class="group relative flex gap-3 px-4 py-1.5 hover:bg-base-200/40">
+  <div class="group relative flex gap-3 px-4 hover:bg-base-200/40" :class="continuation ? 'py-0.5' : 'py-1.5 mt-1'">
     <!-- hover toolbar -->
     <div
       class="absolute -top-3 right-4 z-10 hidden group-hover:flex items-center gap-0.5 rounded-lg border border-base-300 bg-base-100 shadow-sm p-0.5"
@@ -87,10 +91,13 @@ function isImage(a: Attachment) {
       </button>
     </div>
 
-    <HexAvatar :avatar-url="avatarUrl" :name="name" :size="38" class="mt-0.5" />
+    <div class="w-[38px] shrink-0 flex justify-center" :class="continuation ? '' : 'mt-0.5'">
+      <HexAvatar v-if="!continuation" :avatar-url="avatarUrl" :name="name" :size="38" />
+      <span v-else class="text-[0.6rem] leading-5 text-base-content/40 opacity-0 group-hover:opacity-100 tabular-nums">{{ shortTime }}</span>
+    </div>
 
     <div class="flex-1 min-w-0">
-      <div class="flex items-baseline gap-2">
+      <div v-if="!continuation" class="flex items-baseline gap-2">
         <span class="text-sm font-semibold text-base-content">{{ name }}</span>
         <span class="text-[0.7rem] text-base-content/40">{{ time }}</span>
         <span v-if="message.is_pinned" class="inline-flex items-center gap-1 text-[0.65rem] text-primary"><Pin class="w-3 h-3" :stroke-width="2" /> pinned</span>

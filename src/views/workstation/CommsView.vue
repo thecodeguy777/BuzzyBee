@@ -129,6 +129,19 @@ function linkedTaskFor(id: string | null) {
   if (!id) return null
   return tasks.tasks.find((t) => t.id === id) ?? null
 }
+
+// A message is a compact "continuation" when it's from the same author as the
+// previous one, within 5 minutes, and neither is pinned/flagged as a decision
+// (those keep their own header so the marker shows).
+function isContinuation(i: number) {
+  const list = stream.rootMessages.value
+  const m = list[i]
+  const prev = list[i - 1]
+  if (!prev || !m) return false
+  if (m.is_pinned || m.is_decision || prev.is_pinned || prev.is_decision) return false
+  if (prev.user_id !== m.user_id) return false
+  return new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() < 5 * 60 * 1000
+}
 async function makeTask(m: any) {
   try {
     await stream.createTaskFromMessage(m)
@@ -264,9 +277,10 @@ const headerMembers = computed(() => stream.online.value.slice(0, 6))
         </div>
 
         <CommsMessage
-          v-for="m in stream.rootMessages.value"
+          v-for="(m, i) in stream.rootMessages.value"
           :key="m.id"
           :message="m"
+          :continuation="isContinuation(i)"
           :reactions="stream.reactionList(m.id)"
           :reply-count="(stream.repliesByParent.value[m.id] ?? []).length"
           :last-reply-at="(stream.repliesByParent.value[m.id] ?? []).at(-1)?.created_at"
