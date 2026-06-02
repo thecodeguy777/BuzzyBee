@@ -3,10 +3,11 @@ import { ref, computed, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Hash, Plus, Search, Users, Headphones, Mic, MicOff, MonitorUp, PhoneOff,
-  Paperclip, Image as ImageIcon, Link2, Smile, AtSign, Send, Sparkles, X, ChevronDown, CheckSquare
+  Paperclip, Image as ImageIcon, Link2, Smile, AtSign, Send, Sparkles, X, ChevronDown, CheckSquare, Settings2
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
 import CommsMessage from '@/components/comms/CommsMessage.vue'
+import MicCheck from '@/components/comms/MicCheck.vue'
 import { useChannelsStore } from '@/stores/channels'
 import { useChannelStream } from '@/composables/useChannelStream'
 import { useClientsStore } from '@/stores/clients'
@@ -26,6 +27,7 @@ const stream = useChannelStream(currentChannelId)
 
 const canManage = computed(() => auth.isAdmin || auth.role === 'pm')
 const commsError = ref<string | null>(null)
+const showMicCheck = ref(false)
 
 // ── Channel list ────────────────────────────────────────────────────────────
 const addingChannel = ref(false)
@@ -244,6 +246,7 @@ const headerMembers = computed(() => stream.online.value.slice(0, 6))
         >
           <Headphones class="w-4 h-4" :stroke-width="1.75" /> {{ stream.inHuddle.value ? 'Leave' : 'Huddle' }}
         </button>
+        <button class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center text-base-content/60" title="Mic &amp; sound check" @click="showMicCheck = true"><Settings2 class="w-4 h-4" :stroke-width="1.75" /></button>
         <button class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center text-base-content/60" title="Search"><Search class="w-4 h-4" :stroke-width="1.75" /></button>
         <button class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center text-base-content/60" title="Members"><Users class="w-4 h-4" :stroke-width="1.75" /></button>
       </header>
@@ -332,6 +335,7 @@ const headerMembers = computed(() => stream.online.value.slice(0, 6))
           <button class="w-9 h-9 rounded-lg flex items-center justify-center" :class="stream.muted.value ? 'bg-error/15 text-error' : 'bg-base-200 text-base-content/70'" :title="stream.muted.value ? 'Unmute' : 'Mute'" @click="stream.toggleMute()">
             <component :is="stream.muted.value ? MicOff : Mic" class="w-4 h-4" :stroke-width="1.75" />
           </button>
+          <button class="w-9 h-9 rounded-lg bg-base-200 text-base-content/70 flex items-center justify-center" title="Mic &amp; sound" @click="showMicCheck = true"><Settings2 class="w-4 h-4" :stroke-width="1.75" /></button>
           <button class="w-9 h-9 rounded-lg bg-base-200 text-base-content/70 flex items-center justify-center" title="Share screen"><MonitorUp class="w-4 h-4" :stroke-width="1.75" /></button>
           <button class="w-9 h-9 rounded-lg bg-error text-white flex items-center justify-center" title="Leave" @click="stream.toggleHuddle()"><PhoneOff class="w-4 h-4" :stroke-width="1.75" /></button>
         </template>
@@ -423,5 +427,7 @@ const headerMembers = computed(() => stream.online.value.slice(0, 6))
         </div>
       </div>
     </aside>
+
+    <MicCheck v-if="showMicCheck" @close="showMicCheck = false" />
   </div>
 </template>

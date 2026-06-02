@@ -416,7 +416,18 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
 
   async function ensureLocalStream() {
     if (localStream) return localStream
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+    // Honor the mic chosen in the Mic & sound check; fall back to default if the
+    // exact device is no longer available.
+    const deviceId =
+      typeof window !== 'undefined' ? window.localStorage.getItem('buzzybee.comms.mic-device') : null
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({
+        audio: deviceId ? { deviceId: { exact: deviceId } } : true,
+        video: false,
+      })
+    } catch {
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+    }
     localStream.getAudioTracks().forEach((t) => (t.enabled = !muted.value))
     const uid = me()
     if (uid) setupAnalyser(uid, localStream)
