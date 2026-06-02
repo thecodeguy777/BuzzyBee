@@ -1,11 +1,9 @@
 import { supabase } from '@/lib/supabase'
 import type { Attachment } from '@/composables/useChannelStream'
 
-// Comms file/image uploads reuse the existing task-attachments bucket under a
-// comms/ prefix. Links need no upload. (v1: 7-day signed URLs — a re-sign-on-
-// render pass is a fast follow if links expire.)
-const BUCKET = 'task-attachments'
-const WEEK = 60 * 60 * 24 * 7
+// Comms file/image uploads go to a dedicated public bucket so URLs are stable
+// (no signing/expiry). Paths use unguessable uuids. Links need no upload.
+const BUCKET = 'comms-attachments'
 
 function uuid() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
@@ -16,18 +14,18 @@ function safeName(name: string) {
 }
 
 export async function uploadCommsFile(channelId: string, file: File): Promise<Attachment> {
-  const path = `comms/${channelId}/${uuid()}-${safeName(file.name)}`
+  const path = `${channelId}/${uuid()}-${safeName(file.name)}`
   const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
     cacheControl: '3600',
     contentType: file.type || 'application/octet-stream',
     upsert: false,
   })
   if (error) throw error
-  const { data } = await supabase.storage.from(BUCKET).createSignedUrl(path, WEEK)
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path)
   return {
     kind: file.type.startsWith('image/') ? 'image' : 'file',
     name: file.name,
-    url: data?.signedUrl,
+    url: data.publicUrl,
     size: file.size,
     mime: file.type || 'application/octet-stream',
   }
