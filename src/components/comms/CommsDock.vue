@@ -6,6 +6,7 @@ import {
   Send, ChevronDown, Maximize2, Crown, Hash, Bell, BellOff,
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
+import { userColor } from '@/lib/userColor'
 import { COMMS_STREAM } from '@/composables/commsStream'
 import { useChannelsStore } from '@/stores/channels'
 import { useTeamStore } from '@/stores/team'
@@ -162,7 +163,7 @@ onBeforeUnmount(() => { if (viewing) stream.unregisterViewer() })
             :title="p.name + (p.muted ? ' (muted)' : '')"
           >
             <span class="relative inline-flex">
-              <HexAvatar :name="p.name" :avatar-url="p.avatarUrl" :size="18" />
+              <HexAvatar :name="p.name" :avatar-url="p.avatarUrl" :color-key="p.userId" :size="18" />
               <span v-if="p.muted" class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-error flex items-center justify-center ring-1 ring-base-100">
                 <MicOff class="w-1.5 h-1.5 text-white" :stroke-width="3" />
               </span>
@@ -184,11 +185,11 @@ onBeforeUnmount(() => { if (viewing) stream.unregisterViewer() })
             :class="isContinuation(i) ? 'py-0.5' : 'py-1 mt-1'"
           >
             <div class="w-6 shrink-0 flex justify-center">
-              <HexAvatar v-if="!isContinuation(i)" :name="nameFor(m)" :avatar-url="avatarFor(m.user_id)" :size="24" />
+              <HexAvatar v-if="!isContinuation(i)" :name="nameFor(m)" :avatar-url="avatarFor(m.user_id)" :color-key="m.user_id" :size="24" />
             </div>
             <div class="flex-1 min-w-0">
               <div v-if="!isContinuation(i)" class="flex items-baseline gap-1.5">
-                <span class="text-xs font-semibold truncate">{{ nameFor(m) }}</span>
+                <span class="text-xs font-semibold truncate" :style="{ color: userColor(m.user_id) }">{{ nameFor(m) }}</span>
                 <span class="text-[0.6rem] text-base-content/40 shrink-0">{{ timeFor(m.created_at) }}</span>
               </div>
               <div v-if="m.body" class="text-[0.8rem] text-base-content/90 whitespace-pre-wrap break-words leading-snug">{{ m.body }}</div>
@@ -247,7 +248,7 @@ onBeforeUnmount(() => { if (viewing) stream.unregisterViewer() })
           </span>
           <span class="text-xs font-semibold truncate max-w-[7rem]">#{{ channelName }}</span>
           <span class="flex -space-x-1.5">
-            <HexAvatar v-for="p in stream.huddlePeople.value.slice(0, 3)" :key="p.userId" :name="p.name" :avatar-url="p.avatarUrl" :size="22" ring />
+            <HexAvatar v-for="p in stream.huddlePeople.value.slice(0, 3)" :key="p.userId" :name="p.name" :avatar-url="p.avatarUrl" :color-key="p.userId" :size="22" ring />
           </span>
         </button>
         <button class="w-8 h-8 rounded-full flex items-center justify-center shrink-0" :class="stream.muted.value ? 'bg-error/15 text-error' : 'bg-base-200 text-base-content/70'" :title="stream.muted.value ? 'Unmute' : 'Mute'" @click="stream.toggleMute()">

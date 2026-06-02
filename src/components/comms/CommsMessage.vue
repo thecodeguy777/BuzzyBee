@@ -4,6 +4,7 @@ import {
   Smile, MessageSquare, CheckSquare, Pin, Paperclip, Link2, ArrowUpRight, ChevronRight, Sparkles
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
+import { userColor } from '@/lib/userColor'
 import { useTeamStore } from '@/stores/team'
 import { formatBytes } from '@/lib/commsAttachments'
 import type { CommsMessage, Attachment } from '@/composables/useChannelStream'
@@ -37,6 +38,7 @@ const name = computed(
   () => props.message.user_name || team.profiles[props.message.user_id]?.full_name || 'Someone',
 )
 const avatarUrl = computed(() => team.profiles[props.message.user_id]?.avatar_url ?? null)
+const nameColor = computed(() => userColor(props.message.user_id))
 const time = computed(() =>
   new Date(props.message.created_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }),
 )
@@ -92,13 +94,13 @@ function isImage(a: Attachment) {
     </div>
 
     <div class="w-[38px] shrink-0 flex justify-center" :class="continuation ? '' : 'mt-0.5'">
-      <HexAvatar v-if="!continuation" :avatar-url="avatarUrl" :name="name" :size="38" />
+      <HexAvatar v-if="!continuation" :avatar-url="avatarUrl" :name="name" :color-key="message.user_id" :size="38" />
       <span v-else class="text-[0.6rem] leading-5 text-base-content/40 opacity-0 group-hover:opacity-100 tabular-nums">{{ shortTime }}</span>
     </div>
 
     <div class="flex-1 min-w-0">
       <div v-if="!continuation" class="flex items-baseline gap-2">
-        <span class="text-sm font-semibold text-base-content">{{ name }}</span>
+        <span class="text-sm font-semibold" :style="{ color: nameColor }">{{ name }}</span>
         <span class="text-[0.7rem] text-base-content/40">{{ time }}</span>
         <span v-if="message.is_pinned" class="inline-flex items-center gap-1 text-[0.65rem] text-primary"><Pin class="w-3 h-3" :stroke-width="2" /> pinned</span>
       </div>

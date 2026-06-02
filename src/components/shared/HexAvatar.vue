@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { HEX_CLIP_ID } from '@/lib/hexPath'
+import { userColor } from '@/lib/userColor'
 import HexClipDef from './HexClipDef.vue'
 
 /**
@@ -20,6 +21,9 @@ const props = defineProps<{
   label?: string
   /** Explicit CSS background (e.g. a hashed color). White text. Overrides tint. */
   fill?: string
+  /** Per-user identity key (user id). When set and there's no photo/explicit
+   *  fill, the initials cell gets that user's deterministic color. */
+  colorKey?: string | null
   /** Cell size in px (bounding box). */
   size?: number
   /** White rim — for overlapping avatar stacks. */
@@ -61,6 +65,11 @@ const ringW = computed(() => (props.ring ? Math.max(1.5, size.value * 0.09) : 0)
 const innerSize = computed(() => size.value - ringW.value * 2)
 const fontPx = computed(() => props.fontSize ?? Math.round(size.value * 0.4))
 const label = computed(() => props.label ?? initialsOf(props.name, props.email))
+// Effective fill: explicit fill wins; else derive from colorKey when there's no
+// photo to show. (Photos keep the real avatar; color is only for initials.)
+const effFill = computed(
+  () => props.fill ?? (props.colorKey && !props.avatarUrl ? userColor(props.colorKey) : undefined),
+)
 const tip = computed(() => props.title ?? props.name ?? props.email ?? '')
 const clip = `url(#${HEX_CLIP_ID})`
 const dotPx = computed(() => Math.max(6, Math.round(size.value * 0.26)))
@@ -86,11 +95,11 @@ const dotPx = computed(() => Math.max(6, Math.round(size.value * 0.26)))
       class="flex items-center justify-center font-semibold overflow-hidden"
       :class="placeholder
         ? 'bg-base-200 text-base-content/60'
-        : (fill ? 'text-white' : TINTS[tint ?? 'primary'])"
+        : (effFill ? 'text-white' : TINTS[tint ?? 'primary'])"
       :style="{
         width: innerSize + 'px',
         height: innerSize + 'px',
-        background: !placeholder && fill ? fill : undefined,
+        background: !placeholder && effFill ? effFill : undefined,
         clipPath: clip,
         WebkitClipPath: clip,
         fontSize: fontPx + 'px',

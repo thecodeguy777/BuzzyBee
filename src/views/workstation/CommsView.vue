@@ -295,7 +295,7 @@ function fullscreenScreen() {
         </div>
         <div class="flex-1" />
         <div class="flex -space-x-1.5">
-          <HexAvatar v-for="p in headerMembers" :key="p.userId" :name="p.name" :avatar-url="p.avatarUrl" :size="26" ring />
+          <HexAvatar v-for="p in headerMembers" :key="p.userId" :name="p.name" :avatar-url="p.avatarUrl" :color-key="p.userId" :size="26" ring />
         </div>
         <button
           class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
@@ -406,7 +406,7 @@ function fullscreenScreen() {
               :title="p.name + (p.muted ? ' (muted)' : '')"
             >
               <span class="relative inline-flex">
-                <HexAvatar :name="p.name" :avatar-url="p.avatarUrl" :size="22" />
+                <HexAvatar :name="p.name" :avatar-url="p.avatarUrl" :color-key="p.userId" :size="22" />
                 <span v-if="p.muted" class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-error flex items-center justify-center ring-1 ring-base-100">
                   <MicOff class="w-2 h-2 text-white" :stroke-width="2.5" />
                 </span>
