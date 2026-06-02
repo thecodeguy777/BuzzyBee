@@ -458,15 +458,26 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
   const markDecision = (m: CommsMessage) => patchMessage(m.id, { is_decision: !m.is_decision })
   const toggleDecisionDone = (m: CommsMessage) => patchMessage(m.id, { decision_done: !m.decision_done })
 
-  /** Turn a message into a tracked task (in the channel client's first project). */
-  async function createTaskFromMessage(m: CommsMessage): Promise<string | null> {
+  /** Projects belonging to a message's channel-client (for the task picker). */
+  function projectsForMessage(m: CommsMessage) {
+    const clientId = channelsStore.channels.find((c) => c.id === m.channel_id)?.client_id
+    if (!clientId) return []
+    return projects.projectsByClient[clientId] ?? projects.projects.filter((p) => p.client_id === clientId)
+  }
+
+  /** Turn a message into a tracked task. Defaults to the client's first project;
+   *  pass projectId (and/or a title) to place it explicitly. */
+  async function createTaskFromMessage(
+    m: CommsMessage,
+    opts: { projectId?: string; title?: string } = {},
+  ): Promise<string | null> {
     const channelObj = channelsStore.channels.find((c) => c.id === m.channel_id)
     const clientId = channelObj?.client_id
     if (!clientId) return null
-    const project =
-      (projects.projectsByClient[clientId] ?? [])[0] ?? projects.projects.find((p) => p.client_id === clientId)
+    const list = projectsForMessage(m)
+    const project = opts.projectId ? list.find((p) => p.id === opts.projectId) : list[0]
     if (!project) throw new Error('Create a project for this client before turning messages into tasks.')
-    const title = stripHtml(m.body).slice(0, 140) || 'Task from message'
+    const title = (opts.title ?? stripHtml(m.body)).slice(0, 140) || 'Task from message'
     const task = await tasks.createTask({ title, project_id: project.id, client_id: clientId })
     // Best-effort back-link (works for the author / managers per RLS).
     void patchMessage(m.id, { linked_task_id: task.id })
@@ -854,6 +865,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     markDecision,
     toggleDecisionDone,
     createTaskFromMessage,
+    projectsForMessage,
     toggleHuddle,
     toggleMute,
   }
