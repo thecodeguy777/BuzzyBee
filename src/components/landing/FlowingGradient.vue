@@ -161,8 +161,8 @@ onMounted(() => {
   const mesh = new THREE.Mesh(geometry, material)
   scene.add(mesh)
 
-  // Animation
-  const clock = new THREE.Clock()
+  // Animation (THREE.Clock is deprecated — use a plain timestamp)
+  const startTime = performance.now()
 
   function animate() {
     animationId = requestAnimationFrame(animate)
@@ -171,7 +171,7 @@ onMounted(() => {
     mouse.x += (mouse.targetX - mouse.x) * 0.03
     mouse.y += (mouse.targetY - mouse.y) * 0.03
 
-    uniforms.uTime.value = clock.getElapsedTime()
+    uniforms.uTime.value = (performance.now() - startTime) / 1000
     uniforms.uMouse.value.set(mouse.x, mouse.y)
 
     renderer!.render(scene, camera)

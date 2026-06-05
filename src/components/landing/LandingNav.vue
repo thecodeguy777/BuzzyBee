@@ -14,12 +14,9 @@ const mobileOpen = ref(false)
       </a>
 
       <nav class="hidden md:flex items-center gap-7 text-[13px]">
-        <a href="#how" class="text-base-content/60 hover:text-base-content transition-colors">How It Works</a>
+        <a href="#software-tax" class="text-base-content/60 hover:text-base-content transition-colors">Why HiveMind</a>
         <a href="#platform" class="text-base-content/60 hover:text-base-content transition-colors">Platform</a>
-        <a href="#hivemind-ai" class="text-base-content/60 hover:text-base-content transition-colors inline-flex items-center gap-1">
-          HiveMind AI
-          <span class="text-[8px] font-bold uppercase tracking-wider bg-gradient-to-r from-primary to-purple-500 text-white px-1 py-0.5 rounded">New</span>
-        </a>
+        <a href="#how" class="text-base-content/60 hover:text-base-content transition-colors">How It Works</a>
         <a href="#pricing" class="text-base-content/60 hover:text-base-content transition-colors">Pricing</a>
         <a href="#faq" class="text-base-content/60 hover:text-base-content transition-colors">FAQ</a>
       </nav>
@@ -47,9 +44,9 @@ const mobileOpen = ref(false)
 
     <!-- Mobile menu -->
     <div v-if="mobileOpen" class="md:hidden border-t border-base-300 bg-base-100 px-6 py-4 space-y-1">
-      <a href="#pain" class="block py-2 text-sm text-base-content/70" @click="mobileOpen = false">Problem</a>
+      <a href="#software-tax" class="block py-2 text-sm text-base-content/70" @click="mobileOpen = false">Why HiveMind</a>
+      <a href="#platform" class="block py-2 text-sm text-base-content/70" @click="mobileOpen = false">Platform</a>
       <a href="#how" class="block py-2 text-sm text-base-content/70" @click="mobileOpen = false">How It Works</a>
-      <a href="#services" class="block py-2 text-sm text-base-content/70" @click="mobileOpen = false">Services</a>
       <a href="#pricing" class="block py-2 text-sm text-base-content/70" @click="mobileOpen = false">Pricing</a>
       <a href="#faq" class="block py-2 text-sm text-base-content/70" @click="mobileOpen = false">FAQ</a>
       <a href="#contact" class="block mt-2 text-center bg-primary text-primary-content text-sm font-medium px-4 py-2 rounded-md" @click="mobileOpen = false">Get Started</a>

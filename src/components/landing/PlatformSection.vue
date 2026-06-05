@@ -93,7 +93,7 @@ const tools = [
       </div>
 
       <!-- Tool cards -->
-      <div v-reveal="100" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 stagger-children revealed">
+      <div v-reveal="100" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 stagger-children">
         <div
           v-for="tool in tools"
           :key="tool.name"

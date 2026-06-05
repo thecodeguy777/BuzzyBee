@@ -1,0 +1,60 @@
+<script setup lang="ts">
+import AmbientGradient from './AmbientGradient.vue'
+import vaImg from '@/assets/landing/hero-va-call.webp'
+
+const stats = [
+  { stat: 'Top 3%', label: 'of applicants' },
+  { stat: '7 days', label: 'to onboard' },
+  { stat: '94%', label: 'retention' }
+]
+</script>
+
+<template>
+  <section class="relative py-24 md:py-32 border-t border-base-300 overflow-hidden">
+    <div class="absolute inset-0 pointer-events-none">
+      <AmbientGradient :opacity="0.12" tone="blue" />
+    </div>
+
+    <div class="relative max-w-6xl mx-auto px-6">
+      <div class="grid lg:grid-cols-2 gap-10 lg:gap-14 items-center">
+        <!-- Visual -->
+        <div v-reveal class="relative aspect-[4/3] rounded-2xl overflow-hidden border border-base-300 shadow-lg order-last lg:order-first">
+          <img :src="vaImg" alt="Vetted virtual assistant on a call" class="w-full h-full object-cover" loading="lazy" decoding="async" />
+          <div class="absolute inset-0 bg-gradient-to-tr from-primary/15 via-transparent to-purple-500/10 pointer-events-none"></div>
+          <!-- Recruiter-approved badge -->
+          <div class="absolute top-4 left-4 inline-flex items-center gap-1.5 bg-white/95 backdrop-blur-sm border border-base-300 rounded-full px-3 py-1.5 shadow-lg">
+            <svg class="w-3.5 h-3.5 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+            <span class="text-[10px] font-semibold uppercase tracking-wider text-base-content/70">Recruiter approved</span>
+          </div>
+        </div>
+
+        <!-- Copy -->
+        <div v-reveal="100">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-purple-500"></div>
+            <span class="text-xs font-medium uppercase tracking-wider text-primary">Comes with a human</span>
+          </div>
+          <h2 class="font-display text-3xl md:text-4xl tracking-tight leading-tight text-base-content">
+            Software doesn't do the work. Your VA does.
+          </h2>
+          <p class="mt-4 text-base text-base-content/60 leading-relaxed">
+            Every plan includes a pre-vetted assistant &mdash; top 3% of applicants &mdash; who already lives inside the platform. Pre-interviewed by AI, reviewed by a human recruiter, managed by a PM.
+          </p>
+
+          <div class="mt-8 grid grid-cols-3 gap-3">
+            <div
+              v-for="s in stats"
+              :key="s.label"
+              class="border border-base-300 rounded-lg p-4 bg-base-100 text-center"
+            >
+              <div class="text-xl font-bold tracking-tight bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">{{ s.stat }}</div>
+              <div class="text-[11px] uppercase tracking-wider text-base-content/50 mt-1">{{ s.label }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</template>

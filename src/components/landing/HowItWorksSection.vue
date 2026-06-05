@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { ref, computed } from 'vue'
 import AmbientGradient from './AmbientGradient.vue'
 import { Phone, Users, Rocket, Headphones, TrendingUp } from 'lucide-vue-next'
+import { useInViewProgress } from '@/composables/useInViewProgress'
 import discoveryImg from '@/assets/landing/how-discovery-call.webp'
 import managedImg from '@/assets/landing/how-managed-call.webp'
 import teamImg from '@/assets/landing/how-team-call.webp'
@@ -12,6 +14,23 @@ const steps = [
   { num: '04', title: 'Managed support', body: 'A project manager runs daily check-ins, weekly reports, and quarterly reviews. Problems get caught before you feel them.', icon: Headphones },
   { num: '05', title: 'Scale your team', body: 'Add a transaction coordinator, a marketing VA, or a second admin as your production grows. One platform, unlimited growth.', icon: TrendingUp }
 ]
+
+const stepsEl = ref<HTMLElement | null>(null)
+const { progress } = useInViewProgress(stepsEl)
+
+const prefersReduced =
+  typeof window !== 'undefined' &&
+  !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+const p = computed(() => (prefersReduced ? 1 : progress.value))
+
+const clamp = (v: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v))
+const smooth = (e0: number, e1: number, x: number) => {
+  const t = clamp((x - e0) / (e1 - e0))
+  return t * t * (3 - 2 * t)
+}
+// The connector line draws across, and each step lights up as the line reaches it.
+const lineProgress = computed(() => smooth(0.12, 0.72, p.value))
+const stepActive = (i: number) => p.value > (i + 0.35) / steps.length
 </script>
 
 <template>
@@ -35,22 +54,26 @@ const steps = [
         </p>
       </div>
 
-      <!-- Steps with connecting line -->
-      <div v-reveal="150" class="relative">
-        <!-- Gradient connecting line (desktop) -->
-        <div class="hidden md:block absolute top-8 left-[10%] right-[10%] h-px bg-gradient-to-r from-primary via-purple-500 to-primary/30"></div>
+      <!-- Steps with a connector line that draws on scroll -->
+      <div ref="stepsEl" v-reveal="150" class="relative">
+        <!-- Connector track + animated fill (desktop) -->
+        <div class="hidden md:block absolute top-8 left-[10%] right-[10%] h-0.5 rounded-full bg-base-300"></div>
+        <div class="hidden md:block absolute top-8 left-[10%] h-0.5 rounded-full bg-gradient-to-r from-primary via-purple-500 to-primary origin-left" :style="{ width: '80%', transform: `scaleX(${lineProgress})` }"></div>
 
         <div class="grid gap-6 md:grid-cols-5">
           <div
-            v-for="step in steps"
+            v-for="(step, i) in steps"
             :key="step.num"
             class="relative text-center"
           >
-            <!-- Step icon circle -->
-            <div class="relative mx-auto w-16 h-16 rounded-full border border-base-300 bg-base-100 flex items-center justify-center mb-4 hover:border-primary/40 hover:shadow-md hover:shadow-primary/10 transition-all duration-300">
-              <component :is="step.icon" class="w-6 h-6 text-primary" />
+            <!-- Step icon circle (lights up as the line reaches it) -->
+            <div
+              class="relative mx-auto w-16 h-16 rounded-full border bg-base-100 flex items-center justify-center mb-4 transition-all duration-500"
+              :class="stepActive(i) ? 'border-primary shadow-md shadow-primary/15' : 'border-base-300'"
+            >
+              <component :is="step.icon" class="w-6 h-6 transition-colors duration-500" :class="stepActive(i) ? 'text-primary' : 'text-base-content/35'" />
             </div>
-            <div class="font-mono text-[10px] tracking-wider text-primary/60 mb-1">{{ step.num }}</div>
+            <div class="font-mono text-[10px] tracking-wider mb-1 transition-colors duration-500" :class="stepActive(i) ? 'text-primary' : 'text-primary/40'">{{ step.num }}</div>
             <h3 class="text-sm font-semibold text-base-content mb-2">{{ step.title }}</h3>
             <p class="text-xs text-base-content/55 leading-relaxed">{{ step.body }}</p>
           </div>

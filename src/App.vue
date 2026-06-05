@@ -10,7 +10,10 @@ const layout = computed<'workstation' | 'admin' | 'bare'>(() => {
   const meta = route.meta as { bareLayout?: boolean; layout?: 'workstation' | 'admin' }
   if (meta.bareLayout) return 'bare'
   if (meta.layout === 'workstation') return 'workstation'
-  return 'admin'
+  if (meta.layout === 'admin') return 'admin'
+  // Undetermined route (e.g. before the initial navigation resolves) → render
+  // no chrome rather than flashing the admin layout.
+  return 'bare'
 })
 </script>
 
