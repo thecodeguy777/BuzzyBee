@@ -3,7 +3,7 @@ import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount, inject } fr
 import { useRouter, useRoute } from 'vue-router'
 import {
   Hash, Search, Users, Headphones, Mic, MicOff, MonitorUp, PhoneOff,
-  Paperclip, Image as ImageIcon, Link2, Smile, AtSign, Send, Sparkles, X, CheckSquare,
+  Paperclip, Image as ImageIcon, Link2, Smile, AtSign, Send, X, CheckSquare,
   Settings2, Crown, Maximize2, Bell, BellOff, Wand2, Video, Menu, ArrowDown, Loader2, AlertCircle,
   Slash, BarChart3, MessageSquare
 } from 'lucide-vue-next'
@@ -45,18 +45,27 @@ const huddlePresence = inject(HUDDLE_PRESENCE, null)
 const route = useRoute()
 
 // Jump-to-message (from global search ?m=…): scroll the target line into view
-// and flash it once. Retries briefly while the channel's history loads.
+// and flash it once, then drop ?m so it doesn't re-trigger on the next visit.
 function flashMessage(id: string) {
   let tries = 0
+  let requested = false
   const tick = () => {
     const el = document.querySelector(`[data-mid="${id}"]`) as HTMLElement | null
     if (el) {
       el.scrollIntoView({ block: 'center', behavior: 'smooth' })
       el.classList.add('msg-flash')
       window.setTimeout(() => el.classList.remove('msg-flash'), 1800)
+      const q = { ...route.query }
+      delete q.m
+      void router.replace({ query: q })
       return
     }
-    if (tries++ < 50) window.setTimeout(tick, 100)
+    // Not in the loaded page yet → pull it in (and everything up to now).
+    if (!requested && tries >= 4) {
+      requested = true
+      void stream.loadAround(id)
+    }
+    if (tries++ < 60) window.setTimeout(tick, 100)
   }
   nextTick(tick)
 }
@@ -87,6 +96,90 @@ const huddleByChannel = computed<Record<string, number>>(() => {
 // the current channel's presence if the cross-channel presence isn't available.
 const onlineIds = computed(
   () => huddlePresence?.onlineUsers.value ?? stream.online.value.map((p) => p.userId)
+)
+
+// ── Seen-by (read receipts) ───────────────────────────────────────────────────
+// Reads ride the stream's private broadcast (same fast path as messages), so the
+// honeycomb updates the instant another member catches up.
+const reads = stream.reads
+type SeenMember = { id: string; name: string; avatarUrl: string | null }
+// Everyone (but you) who has caught up to the newest message — rendered as one
+// honeycomb at the bottom, instead of scattering a lone avatar per message.
+const lastMessageId = computed(() => stream.rootMessages.value.at(-1)?.id ?? null)
+const seenMembers = computed<SeenMember[]>(() => {
+  const last = stream.rootMessages.value.at(-1)
+  if (!last) return []
+  const t = new Date(last.created_at).getTime()
+  const out: SeenMember[] = []
+  for (const r of reads.value) {
+    if (r.user_id === auth.user?.id || !r.last_read_at) continue
+    if (new Date(r.last_read_at).getTime() >= t) {
+      const p = team.profiles[r.user_id]
+      out.push({ id: r.user_id, name: p?.full_name ?? 'Member', avatarUrl: p?.avatar_url ?? null })
+    }
+  }
+  return out
+})
+function seenFor(id: string): SeenMember[] {
+  return id === lastMessageId.value ? seenMembers.value : []
+}
+
+// ── Unseen "breathing" highlight ──────────────────────────────────────────────
+// Messages newer than what you'd read on entry, plus live arrivals, pulse softly
+// to catch your eye — then settle after a few seconds.
+const freshIds = ref<Set<string>>(new Set())
+const freshTimers = new Map<string, number>()
+function markFresh(id: string, ttl = 7000) {
+  if (!freshIds.value.has(id)) freshIds.value = new Set(freshIds.value).add(id)
+  if (freshTimers.has(id)) window.clearTimeout(freshTimers.get(id))
+  freshTimers.set(
+    id,
+    window.setTimeout(() => {
+      const next = new Set(freshIds.value)
+      next.delete(id)
+      freshIds.value = next
+      freshTimers.delete(id)
+    }, ttl)
+  )
+}
+function clearFresh() {
+  for (const t of freshTimers.values()) window.clearTimeout(t)
+  freshTimers.clear()
+  freshIds.value = new Set()
+}
+// A message breathes when it's newer than `breatheBaseline` and not ours. The
+// baseline is captured ONCE per channel (not re-derived from Date.now() on each
+// arrival — that races the server clock and silently swallows live messages):
+//   • returning user → your last_read_at, so everything unread since last visit pulses
+//   • first visit    → the newest message at load time, so only genuine new arrivals pulse
+// `seenIds` dedupes so pagination prepends (old messages) never breathe.
+let breatheChannel: string | null = null
+let breatheBaseline = 0
+const seenIds = new Set<string>()
+function isFresh(m: { id: string; user_id: string; created_at: string }) {
+  return m.user_id !== auth.user?.id && new Date(m.created_at).getTime() > breatheBaseline
+}
+function primeBreathing() {
+  const cid = currentChannelId.value ?? ''
+  const list = stream.rootMessages.value
+  breatheChannel = cid
+  seenIds.clear()
+  for (const m of list) seenIds.add(m.id)
+  const entry = channels.entryReadAt[cid]
+  const newest = list.length ? new Date(list[list.length - 1].created_at).getTime() : Date.now()
+  breatheBaseline = entry ? new Date(entry).getTime() : newest
+  if (entry) for (const m of list) if (isFresh(m)) markFresh(m.id) // unread-since-last-visit
+}
+watch(
+  () => stream.rootMessages.value,
+  (list) => {
+    if ((currentChannelId.value ?? '') !== breatheChannel) return // wait for primeBreathing
+    for (const m of list) {
+      if (seenIds.has(m.id)) continue
+      seenIds.add(m.id)
+      if (isFresh(m)) markFresh(m.id)
+    }
+  }
 )
 
 // ── Direct messages ──────────────────────────────────────────────────────────
@@ -185,7 +278,6 @@ const draft = ref('')
 const pending = ref<PendingAtt[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
 const fileAccept = ref('*/*')
-const streamEnd = ref<HTMLElement | null>(null)
 const streamScroller = ref<HTMLElement | null>(null)
 const sendFailed = ref(false)
 let pendKey = 0
@@ -205,23 +297,70 @@ const canSend = computed(
 const atBottom = ref(true)
 const newCount = ref(0)
 function scrollToBottom() {
-  nextTick(() => {
-    streamEnd.value?.scrollIntoView({ block: 'end' })
+  // Pin to the newest message. Scrolls the container AND scrolls the last line
+  // into view (robust to scrollHeight not being final mid-fade/image-load),
+  // re-run across the load window.
+  const go = () => {
+    const el = streamScroller.value
+    if (!el) return
+    const last = displayedMessages.value.at(-1)
+    const node = last ? (el.querySelector(`[data-mid="${last.id}"]`) as HTMLElement | null) : null
+    if (node) node.scrollIntoView({ block: 'end' })
+    el.scrollTop = el.scrollHeight
     atBottom.value = true
     newCount.value = 0
-  })
+  }
+  nextTick(go)
+  requestAnimationFrame(go)
+  for (const ms of [80, 300, 600, 1000]) window.setTimeout(go, ms)
+}
+// Fired when the message list finishes its enter transition — the only moment
+// the content is guaranteed mounted + laid out, so scrollHeight is correct.
+function onStreamRevealed() {
+  if (!stream.loading.value && !route.query.m) scrollToBottom()
+}
+// Prepend older messages while preserving the visual scroll position.
+async function loadOlderAnchored() {
+  const el = streamScroller.value
+  if (!el || !stream.hasMore.value || stream.loadingOlder.value) return
+  const prevH = el.scrollHeight
+  const prevTop = el.scrollTop
+  await stream.loadOlder()
+  await nextTick()
+  const el2 = streamScroller.value
+  if (el2) el2.scrollTop = prevTop + (el2.scrollHeight - prevH)
 }
 function onStreamScroll() {
   const el = streamScroller.value
   if (!el) return
+  const wasBottom = atBottom.value
   atBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight < 80
-  if (atBottom.value) newCount.value = 0
+  if (atBottom.value) {
+    newCount.value = 0
+    if (!wasBottom) markReadSoon() // scrolled down to catch up → mark seen
+  }
+  if (el.scrollTop < 160 && stream.hasMore.value && !stream.loadingOlder.value && !searching.value) {
+    void loadOlderAnchored()
+  }
+}
+// Advance our own read position when a new message lands while we're watching at
+// the bottom — otherwise last_read_at freezes at entry time and other members
+// never see us as having "seen" later messages. Debounced to coalesce bursts.
+let markReadTimer: ReturnType<typeof setTimeout> | undefined
+function markReadSoon() {
+  clearTimeout(markReadTimer)
+  markReadTimer = setTimeout(() => {
+    const id = currentChannelId.value
+    if (id && document.visibilityState === 'visible') void channels.markRead(id)
+  }, 300)
 }
 watch(
   () => stream.rootMessages.value.length,
   (n, old) => {
-    if (atBottom.value) scrollToBottom()
-    else if (n > old) newCount.value += n - old
+    if (atBottom.value) {
+      scrollToBottom()
+      if (n > old) markReadSoon()
+    } else if (n > old) newCount.value += n - old
   }
 )
 watch(currentChannelId, () => {
@@ -231,9 +370,23 @@ watch(currentChannelId, () => {
   mentionedIds.value = new Set()
   mentionOpen.value = false
   searchQuery.value = ''
+  clearFresh()
+  breatheChannel = null // re-baseline once the new channel's history loads
+  atBottom.value = true
   nextTick(autogrow)
-  scrollToBottom()
+  if (!route.query.m) scrollToBottom()
 })
+// When a channel's history finishes loading, anchor the breathing baseline and
+// land at the newest message (unless we're jumping to a specific one from search).
+watch(
+  () => stream.loading.value,
+  (isLoading) => {
+    if (isLoading) return
+    primeBreathing()
+    if (!route.query.m) scrollToBottom()
+  },
+  { immediate: true }
+)
 
 // ── Attachments ────────────────────────────────────────────────────────────────
 function pickFiles(accept: string) {
@@ -632,25 +785,6 @@ function openTask(taskId: string) {
   router.push({ name: 'workstation-tasks' })
 }
 
-// ── Decisions ──────────────────────────────────────────────────────────────────
-const pinningAll = ref(false)
-async function pinAllToTasks() {
-  const todo = stream.decisions.value.filter((d) => !d.linked_task_id)
-  if (!todo.length || pinningAll.value) return
-  pinningAll.value = true
-  let created = 0
-  for (const d of todo) {
-    try {
-      const id = await stream.createTaskFromMessage(d)
-      if (id) created++
-    } catch (e) {
-      commsError.value = (e as Error).message
-    }
-  }
-  pinningAll.value = false
-  if (created) commsError.value = `Created ${created} task${created === 1 ? '' : 's'} from decisions.`
-}
-
 const headerMembers = computed(() => stream.online.value.slice(0, 6))
 const extraMembers = computed(() => Math.max(0, stream.online.value.length - 6))
 const firstName = (n: string) => (n || 'Someone').split(' ')[0]
@@ -669,11 +803,16 @@ function onHuddleKey(e: KeyboardEvent) {
   e.preventDefault()
   stream.toggleMute()
 }
+// Returning to the tab while parked at the bottom = caught up → advance read.
+function onVisibility() {
+  if (document.visibilityState === 'visible' && atBottom.value) markReadSoon()
+}
 onMounted(() => {
   window.addEventListener('keydown', onHuddleKey)
   window.addEventListener('resize', onReposition)
   window.addEventListener('scroll', onReposition, true)
   window.addEventListener('mousedown', onDocMouseDown)
+  document.addEventListener('visibilitychange', onVisibility)
   // Viewing the full channel = "seen": suppress new-message pings + clear unread.
   stream.registerViewer()
   if (currentChannelId.value) void channels.markRead(currentChannelId.value)
@@ -684,6 +823,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', onReposition)
   window.removeEventListener('scroll', onReposition, true)
   window.removeEventListener('mousedown', onDocMouseDown)
+  document.removeEventListener('visibilitychange', onVisibility)
   stream.unregisterViewer()
 })
 
@@ -819,33 +959,7 @@ function fullscreenScreen() {
 
       <!-- stream -->
       <div ref="streamScroller" class="relative flex-1 min-h-0 overflow-y-auto py-2" @scroll="onStreamScroll">
-        <!-- Decisions & action items -->
-        <div v-if="!searching && stream.decisions.value.length" class="mx-4 my-2 rounded-xl border border-primary/30 bg-primary/5 overflow-hidden">
-          <div class="flex items-center gap-2 px-4 py-2">
-            <Sparkles class="w-4 h-4 text-primary" :stroke-width="1.75" />
-            <span class="text-xs font-bold uppercase tracking-wider text-primary">Decisions & action items</span>
-            <div class="flex-1" />
-            <button class="inline-flex items-center gap-1 text-xs font-medium text-primary disabled:opacity-50" :disabled="pinningAll" @click="pinAllToTasks">
-              <Loader2 v-if="pinningAll" class="w-3 h-3 animate-spin" />
-              Pin all to Tasks →
-            </button>
-          </div>
-          <div class="flex flex-wrap gap-2 px-3 pb-3">
-            <div v-for="d in stream.decisions.value" :key="d.id" class="flex items-center gap-2 rounded-lg border border-base-300 bg-base-100 px-3 py-1.5 text-xs">
-              <button
-                class="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0"
-                :class="d.decision_done ? 'bg-success border-success' : 'border-base-300'"
-                :aria-label="d.decision_done ? 'Mark not done' : 'Mark done'"
-                @click="stream.toggleDecisionDone(d)"
-              >
-                <svg v-if="d.decision_done" width="9" height="9" viewBox="0 0 12 12"><path d="M2.5 6.5L5 9l4.5-5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
-              <span :class="d.decision_done ? 'line-through text-base-content/40' : 'text-base-content'">{{ d.body || 'Decision' }}</span>
-            </div>
-          </div>
-        </div>
-
-        <Transition name="comms-fade" mode="out-in">
+        <Transition name="comms-fade" mode="out-in" @after-enter="onStreamRevealed">
           <!-- skeleton: hold until the whole channel's history has landed -->
           <div v-if="stream.loading.value" key="sk" class="pt-1">
             <div v-for="(w, n) in skeletonRows" :key="n" class="px-4 py-2.5 flex gap-3">
@@ -859,6 +973,12 @@ function fullscreenScreen() {
 
           <!-- loaded: the whole stream appears at once -->
           <div v-else key="content">
+            <div v-if="stream.loadingOlder.value" class="py-2 flex justify-center">
+              <Loader2 class="w-4 h-4 animate-spin text-base-content/40" />
+            </div>
+            <div v-else-if="!stream.hasMore.value && !searching" class="py-3 text-center text-[0.68rem] text-base-content/35">
+              Beginning of the conversation
+            </div>
             <template v-for="(m, i) in displayedMessages" :key="m.id">
               <div v-if="showDayDivider(i)" class="flex items-center gap-3 px-[18px] pt-2.5 pb-1.5">
                 <div class="flex-1 h-px bg-base-300/70" />
@@ -869,6 +989,8 @@ function fullscreenScreen() {
                 :message="m"
                 :data-mid="m.id"
                 :continuation="isContinuation(i)"
+                :seen="seenFor(m.id)"
+                :unseen="freshIds.has(m.id)"
                 :reactions="stream.reactionList(m.id)"
                 :reply-count="(stream.repliesByParent.value[m.id] ?? []).length"
                 :last-reply-at="(stream.repliesByParent.value[m.id] ?? []).at(-1)?.created_at"
@@ -880,6 +1002,7 @@ function fullscreenScreen() {
                 @toggle-pin="stream.togglePin(m)"
                 @mark-decision="stream.markDecision(m)"
                 @open-task="openTask"
+                @open-dm="startDm"
               />
             </template>
             <div v-if="searching && displayedMessages.length === 0" class="px-5 py-10 text-center text-sm text-base-content/40">
@@ -890,7 +1013,7 @@ function fullscreenScreen() {
             </div>
           </div>
         </Transition>
-        <div ref="streamEnd" />
+        <div />
       </div>
 
       <!-- new-messages pill -->
@@ -1091,6 +1214,7 @@ function fullscreenScreen() {
           @make-task="makeTask(threadParent!)"
           @toggle-pin="stream.togglePin(threadParent!)"
           @open-task="openTask"
+          @open-dm="startDm"
         />
         <div class="flex items-center gap-3 px-4 py-1 text-[0.7rem] text-base-content/40">
           <span class="flex-1 h-px bg-base-300" />{{ threadReplies.length }} {{ threadReplies.length === 1 ? 'reply' : 'replies' }}<span class="flex-1 h-px bg-base-300" />
@@ -1105,6 +1229,7 @@ function fullscreenScreen() {
           @make-task="makeTask(r)"
           @toggle-pin="stream.togglePin(r)"
           @open-task="openTask"
+          @open-dm="startDm"
         />
       </div>
       <div class="px-3 pb-3">

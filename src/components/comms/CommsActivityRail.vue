@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, inject, ref } from 'vue'
-import { CheckSquare, ArrowUpRight, X, Hash } from 'lucide-vue-next'
+import { CheckSquare, ArrowUpRight, X, Hash, Sparkles } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
 import CommsStatusBadge from '@/components/comms/CommsStatusBadge.vue'
 import { useTasksStore, type Task } from '@/stores/tasks'
@@ -17,6 +17,21 @@ const stream = inject(COMMS_STREAM, null)
 
 type Bucket = 'todo' | 'prog' | 'done'
 const filter = ref<'all' | Bucket>('all')
+
+// Open (uncrossed) action items, surfaced inline above the tasks. Hidden once
+// everything's checked off.
+const openDecisions = computed(() => (stream ? stream.decisions.value.filter((d) => !d.decision_done) : []))
+async function pinAll() {
+  if (!stream) return
+  for (const d of openDecisions.value) {
+    if (d.linked_task_id) continue
+    try {
+      await stream.createTaskFromMessage(d)
+    } catch {
+      /* e.g. no project for this client — skip */
+    }
+  }
+}
 
 // "Tasks created from chat" = tasks linked from any message in this channel.
 const linkedTasks = computed<Task[]>(() => {
@@ -114,6 +129,33 @@ function isNew(t: Task): boolean {
       <div class="flex-1 rounded-[10px] bg-base-100 border border-base-300 px-3 py-2">
         <div class="text-[1.3rem] font-extrabold leading-none tabular-nums tracking-tight text-warning">{{ counts.prog }}</div>
         <div class="text-[0.68rem] text-base-content/50 mt-1">active</div>
+      </div>
+    </div>
+
+    <!-- open action items (uncrossed) -->
+    <div v-if="openDecisions.length" class="px-3.5 pt-1 pb-2">
+      <div class="rounded-[10px] border border-primary/30 bg-primary/5 overflow-hidden">
+        <div class="flex items-center gap-2 px-3 py-2">
+          <Sparkles class="w-3.5 h-3.5 text-primary shrink-0" :stroke-width="1.75" />
+          <span class="text-[0.6rem] font-bold uppercase tracking-wider text-primary">Action items</span>
+          <span class="text-[0.6rem] font-bold text-base-content/40 tabular-nums">{{ openDecisions.length }}</span>
+          <div class="flex-1" />
+          <button class="text-[0.6rem] font-semibold text-primary hover:underline" @click="pinAll">Pin all → Tasks</button>
+        </div>
+        <ul class="px-2 pb-2 space-y-0.5">
+          <li
+            v-for="d in openDecisions"
+            :key="d.id"
+            class="flex items-start gap-2 px-1.5 py-1 rounded-md hover:bg-base-100/70"
+          >
+            <button
+              class="mt-0.5 w-4 h-4 rounded-full border-2 border-base-300 hover:border-success flex items-center justify-center shrink-0 transition-colors"
+              aria-label="Mark done"
+              @click="stream?.toggleDecisionDone(d)"
+            />
+            <span class="text-[0.78rem] leading-snug text-base-content/90">{{ d.body || 'Decision' }}</span>
+          </li>
+        </ul>
       </div>
     </div>
 

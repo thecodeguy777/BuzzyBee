@@ -77,6 +77,16 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
   const loading = ref(false)
   const sending = ref(false)
   const online = ref<HuddlePresence[]>([])
+  // Pagination: load the newest page on entry, fetch older on scroll-up.
+  const PAGE = 40
+  const hasMore = ref(false)
+  const loadingOlder = ref(false)
+
+  // Read receipts: every member's last_read_at for this channel. Kept live off
+  // the SAME private broadcast as messages (the broadcast_channel_member trigger
+  // mirrors broadcast_message), so "seen by" updates instantly instead of
+  // trailing behind on the slower postgres_changes path. Powers the honeycomb.
+  const reads = ref<{ user_id: string; last_read_at: string }[]>([])
 
   // Huddle: WebRTC audio mesh, signaled over the channel's private broadcast.
   const inHuddle = ref(false)
@@ -210,6 +220,23 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     reactions.value = { ...reactions.value, [mid]: { ...byEmoji } }
   }
 
+  // Replies for a set of root messages (threads load with their parents).
+  async function fetchReplies(rootIds: string[]): Promise<CommsMessage[]> {
+    if (!rootIds.length) return []
+    const { data, error } = await supabase.from('messages').select('*').in('parent_id', rootIds)
+    if (error) {
+      console.warn('[comms] replies:', error.message)
+      return []
+    }
+    return (data ?? []) as CommsMessage[]
+  }
+
+  function primeProfiles(msgs: CommsMessage[]) {
+    const ids = [...new Set(msgs.map((m) => m.user_id))].filter((u) => !team.profiles[u])
+    if (ids.length) void team.fetchProfiles(ids)
+  }
+
+  // Initial load: newest PAGE root messages (+ their replies), oldest→newest.
   async function loadHistory(id: string, opts: { silent?: boolean } = {}) {
     if (!opts.silent) loading.value = true
     try {
@@ -217,18 +244,93 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
         .from('messages')
         .select('*')
         .eq('channel_id', id)
-        .order('created_at', { ascending: true })
+        .is('parent_id', null)
+        .order('created_at', { ascending: false })
+        .limit(PAGE)
       if (error) throw error
-      allMessages.value = (data ?? []) as CommsMessage[]
-      const ids = [...new Set(allMessages.value.map((m) => m.user_id))].filter((u) => !team.profiles[u])
-      if (ids.length) void team.fetchProfiles(ids)
+      const roots = ((data ?? []) as CommsMessage[]).reverse()
+      hasMore.value = (data?.length ?? 0) >= PAGE
+      const replies = await fetchReplies(roots.map((r) => r.id))
+      allMessages.value = [...roots, ...replies]
+      primeProfiles(allMessages.value)
       await loadReactions()
     } catch (e) {
       console.warn('[comms] loadHistory:', (e as Error).message)
-      if (!opts.silent) allMessages.value = []
+      if (!opts.silent) {
+        allMessages.value = []
+        hasMore.value = false
+      }
     } finally {
       if (!opts.silent) loading.value = false
     }
+  }
+
+  // Scroll-up: prepend the previous PAGE of root messages before the oldest loaded.
+  async function loadOlder() {
+    if (loadingOlder.value || !hasMore.value || !activeId) return
+    const id = activeId
+    const oldest = rootMessages.value[0]?.created_at
+    if (!oldest) return
+    loadingOlder.value = true
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('channel_id', id)
+        .is('parent_id', null)
+        .lt('created_at', oldest)
+        .order('created_at', { ascending: false })
+        .limit(PAGE)
+      if (error) throw error
+      const older = ((data ?? []) as CommsMessage[]).reverse()
+      hasMore.value = (data?.length ?? 0) >= PAGE
+      const replies = await fetchReplies(older.map((r) => r.id))
+      const existing = new Set(allMessages.value.map((m) => m.id))
+      const add = [...older, ...replies].filter((m) => !existing.has(m.id))
+      if (add.length) {
+        allMessages.value = [...add, ...allMessages.value]
+        primeProfiles(add)
+        await loadReactions()
+      }
+    } catch (e) {
+      console.warn('[comms] loadOlder:', (e as Error).message)
+    } finally {
+      loadingOlder.value = false
+    }
+  }
+
+  // Jump target (from search): ensure a message is loaded by pulling everything
+  // from its timestamp to now — keeps the view contiguous (no gaps).
+  async function loadAround(messageId: string) {
+    if (!activeId) return
+    const id = activeId
+    if (allMessages.value.some((m) => m.id === messageId)) return
+    const { data: target } = await supabase
+      .from('messages')
+      .select('created_at, channel_id')
+      .eq('id', messageId)
+      .maybeSingle()
+    const t = target as { created_at: string; channel_id: string } | null
+    if (!t || t.channel_id !== id) return
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('channel_id', id)
+      .is('parent_id', null)
+      .gte('created_at', t.created_at)
+      .order('created_at', { ascending: true })
+    if (error) return
+    const roots = (data ?? []) as CommsMessage[]
+    if (!roots.length) return
+    const replies = await fetchReplies(roots.map((r) => r.id))
+    const existing = new Set(allMessages.value.map((m) => m.id))
+    const add = [...roots, ...replies].filter((m) => !existing.has(m.id))
+    if (add.length) {
+      allMessages.value = [...add, ...allMessages.value]
+      primeProfiles(add)
+      await loadReactions()
+    }
+    hasMore.value = true
   }
 
   async function loadReactions() {
@@ -256,6 +358,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
 
   async function teardown() {
     online.value = []
+    reads.value = []
     prevHuddleIds = new Set()
     prevSharers = new Set()
     if (inHuddle.value) stopHuddle()
@@ -321,9 +424,41 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     prevSharers = sharers
   }
 
+  // Pull every member's read position once on entry; the broadcast keeps it live.
+  async function loadReads(id: string) {
+    const { data, error } = await supabase
+      .from('channel_members')
+      .select('user_id, last_read_at')
+      .eq('channel_id', id)
+    if (error) {
+      console.warn('[stream] loadReads:', error.message)
+      return
+    }
+    if (activeId !== id) return
+    reads.value = (data ?? []).filter((r) => r.last_read_at) as { user_id: string; last_read_at: string }[]
+    const ids = reads.value.map((r) => r.user_id).filter((u) => u !== me())
+    if (ids.length) {
+      const { useTeamStore } = await import('@/stores/team')
+      void useTeamStore().fetchProfiles(ids)
+    }
+  }
+
+  // Merge a single channel_members row from the broadcast into `reads` (replace
+  // by user_id, newest wins), keeping the array reactive via reassignment.
+  function applyRead(rec: { user_id?: string; last_read_at?: string } | null | undefined) {
+    if (!rec?.user_id || !rec.last_read_at) return
+    const next = reads.value.filter((r) => r.user_id !== rec.user_id)
+    next.push({ user_id: rec.user_id, last_read_at: rec.last_read_at })
+    reads.value = next
+    if (rec.user_id !== me()) {
+      void import('@/stores/team').then(({ useTeamStore }) => useTeamStore().fetchProfiles([rec.user_id!]))
+    }
+  }
+
   async function setup(id: string, token: number) {
     activeId = id
     await loadHistory(id)
+    void loadReads(id)
     if (token !== setupToken) return
     try { await supabase.realtime.setAuth() } catch { /* already set */ }
     if (token !== setupToken) return
@@ -340,7 +475,10 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
       const table = p.table ?? p.schema_table
       const rec = p.record ?? p.new
       const old = p.old_record ?? p.old
-      if (table === 'message_reactions') {
+      if (table === 'channel_members') {
+        // Read receipt — keep the "seen by" honeycomb live. (No deletes matter.)
+        if (p.operation !== 'DELETE' && m.event !== 'DELETE') applyRead(rec)
+      } else if (table === 'message_reactions') {
         if (p.operation === 'DELETE' || m.event === 'DELETE') applyReactionRow(old, true)
         else applyReactionRow(rec, false)
       } else {
@@ -868,7 +1006,12 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     repliesByParent,
     decisions,
     pinned,
+    reads,
     loading,
+    hasMore,
+    loadingOlder,
+    loadOlder,
+    loadAround,
     sending,
     online,
     huddlePeople,

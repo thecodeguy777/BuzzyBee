@@ -33,6 +33,9 @@ export const useChannelsStore = defineStore('channels', () => {
   // DM channel id → the *other* participant's user id.
   const dmOther = ref<Record<string, string>>({})
   const memberships = ref<Record<string, Membership>>({})
+  // The last_read_at a channel had *before* this session first read it — so the
+  // UI can highlight what was unseen on entry. Captured once per channel.
+  const entryReadAt = ref<Record<string, string | null>>({})
   const unread = ref<Record<string, number>>({})
   const lastMessageAt = ref<Record<string, string>>({})
   const currentChannelId = ref<string | null>(null)
@@ -137,6 +140,10 @@ export const useChannelsStore = defineStore('channels', () => {
   async function markRead(id: string) {
     const uid = auth.user?.id
     if (!uid) return
+    // Snapshot the pre-read position the first time we read this channel.
+    if (!(id in entryReadAt.value)) {
+      entryReadAt.value = { ...entryReadAt.value, [id]: memberships.value[id]?.last_read_at ?? null }
+    }
     unread.value = { ...unread.value, [id]: 0 }
     const now = new Date().toISOString()
     memberships.value[id] = { ...(memberships.value[id] ?? { pinned: false, muted: false }), last_read_at: now }
@@ -270,6 +277,7 @@ export const useChannelsStore = defineStore('channels', () => {
     dms,
     dmOther,
     memberships,
+    entryReadAt,
     unread,
     lastMessageAt,
     currentChannelId,
