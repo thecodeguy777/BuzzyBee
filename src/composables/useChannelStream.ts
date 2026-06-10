@@ -359,6 +359,8 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
   async function teardown() {
     online.value = []
     reads.value = []
+    typing.value = []
+    if (typingPrune) { clearInterval(typingPrune); typingPrune = null }
     prevHuddleIds = new Set()
     prevSharers = new Set()
     if (inHuddle.value) stopHuddle()
@@ -422,6 +424,44 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     // join chime for everyone already in it.
     prevHuddleIds = huddleIds
     prevSharers = sharers
+  }
+
+  // Typing indicator: ephemeral + high-frequency → broadcast only, never the DB.
+  // Each received event refreshes a per-user TTL; a 1s sweep drops stale typers.
+  type Typer = { userId: string; name: string; avatarUrl: string | null; at: number }
+  const typing = ref<Typer[]>([])
+  let typingPrune: ReturnType<typeof setInterval> | null = null
+  let lastTypingSent = 0
+
+  function applyTyping(p: { userId?: string; name?: string; avatarUrl?: string | null }) {
+    if (!p?.userId || p.userId === me()) return
+    const next = typing.value.filter((t) => t.userId !== p.userId)
+    next.push({ userId: p.userId, name: p.name || 'Someone', avatarUrl: p.avatarUrl ?? null, at: Date.now() })
+    typing.value = next
+  }
+  function pruneTyping() {
+    if (!typing.value.length) return
+    const cutoff = Date.now() - 4500
+    const next = typing.value.filter((t) => t.at > cutoff)
+    if (next.length !== typing.value.length) typing.value = next
+  }
+  // Someone who just posted is no longer typing — drop them immediately.
+  function clearTyper(userId?: string) {
+    if (!userId || !typing.value.length) return
+    const next = typing.value.filter((t) => t.userId !== userId)
+    if (next.length !== typing.value.length) typing.value = next
+  }
+  // Throttled — fire at most every ~1.8s while the user is actively typing.
+  function sendTyping() {
+    if (!channel) return
+    const now = Date.now()
+    if (now - lastTypingSent < 1800) return
+    lastTypingSent = now
+    void channel.send({
+      type: 'broadcast',
+      event: 'typing',
+      payload: { userId: me(), name: auth.fullName, avatarUrl: auth.profile?.avatar_url ?? null },
+    })
   }
 
   // Pull every member's read position once on entry; the broadcast keeps it live.
@@ -489,6 +529,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
           const incoming = rec as CommsMessage
           const isNew = !!incoming?.id && !allMessages.value.some((mm) => mm.id === incoming.id)
           const fromOther = !!incoming?.user_id && incoming.user_id !== me()
+          if (isNew) clearTyper(incoming.user_id) // posting ends "typing…"
           upsertMessage(incoming)
           // New message from someone else that you didn't see → ping + bump unread.
           if (isNew && fromOther && !isViewing()) {
@@ -514,6 +555,13 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     ch.on('broadcast', { event: 'rtc' }, (m: { payload?: any }) => {
       if (activeId === id) void handleSignal(m.payload)
     })
+
+    // "typing…" — ephemeral, broadcast-only.
+    ch.on('broadcast', { event: 'typing' }, (m: { payload?: any }) => {
+      if (activeId === id) applyTyping(m.payload ?? {})
+    })
+    if (typingPrune) clearInterval(typingPrune)
+    typingPrune = setInterval(pruneTyping, 1000)
 
     ch.subscribe((status) => {
       if (status !== 'SUBSCRIBED') return
@@ -1007,6 +1055,8 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     decisions,
     pinned,
     reads,
+    typing,
+    sendTyping,
     loading,
     hasMore,
     loadingOlder,

@@ -9,6 +9,7 @@ import {
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
 import CommsMessage from '@/components/comms/CommsMessage.vue'
+import TypingIndicator from '@/components/comms/TypingIndicator.vue'
 import MicCheck from '@/components/comms/MicCheck.vue'
 import MediaPicker from '@/components/comms/MediaPicker.vue'
 import CommsChannelList from '@/components/comms/CommsChannelList.vue'
@@ -123,6 +124,11 @@ const seenMembers = computed<SeenMember[]>(() => {
 function seenFor(id: string): SeenMember[] {
   return id === lastMessageId.value ? seenMembers.value : []
 }
+
+// Who's currently typing in this channel (self already excluded by the stream).
+const typingMembers = computed(() =>
+  stream.typing.value.map((t) => ({ id: t.userId, name: t.name, avatarUrl: t.avatarUrl }))
+)
 
 // ── Unseen "breathing" highlight ──────────────────────────────────────────────
 // Messages newer than what you'd read on entry, plus live arrivals, pulse softly
@@ -569,6 +575,7 @@ function positionMention() {
 }
 function onComposerInput() {
   autogrow()
+  if (draft.value.trim()) stream.sendTyping()
   const el = composerEl.value
   if (!el) { mentionOpen.value = false; return }
   const caret = el.selectionStart ?? draft.value.length
@@ -1109,6 +1116,9 @@ function fullscreenScreen() {
 
       <!-- composer -->
       <div class="px-4 pb-4">
+        <!-- typing indicator -->
+        <TypingIndicator :members="typingMembers" class="mb-1" />
+
         <!-- inline send-failure -->
         <div v-if="sendFailed" class="mb-2 flex items-center gap-2 rounded-lg border border-error/30 bg-error/5 px-3 py-1.5 text-xs text-error">
           <AlertCircle class="w-3.5 h-3.5 shrink-0" :stroke-width="2" />
