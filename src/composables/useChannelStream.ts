@@ -20,6 +20,8 @@ import { createNoisePipeline, type NoisePipeline } from '@/lib/noiseSuppressor'
 import { iceServers } from '@/lib/iceServers'
 
 export interface Attachment {
+  /** Stable id assigned at creation — used as the v-for key in the composer. */
+  id?: string
   kind: 'image' | 'file' | 'link'
   name: string
   url?: string
@@ -423,6 +425,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
         .single()
       if (error) throw error
       upsertMessage(data as CommsMessage)
+      return data as CommsMessage
     } catch (e) {
       console.warn('[comms] send:', (e as Error).message)
       throw e
@@ -478,7 +481,14 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
    *  pass projectId (and/or a title) to place it explicitly. */
   async function createTaskFromMessage(
     m: CommsMessage,
-    opts: { projectId?: string; title?: string } = {},
+    opts: {
+      projectId?: string
+      title?: string
+      assignee_id?: string | null
+      due_on?: string | null
+      priority?: 1 | 2 | 3 | 4
+      statusKey?: string
+    } = {},
   ): Promise<string | null> {
     const channelObj = channelsStore.channels.find((c) => c.id === m.channel_id)
     const clientId = channelObj?.client_id
@@ -487,7 +497,18 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     const project = opts.projectId ? list.find((p) => p.id === opts.projectId) : list[0]
     if (!project) throw new Error('Create a project for this client before turning messages into tasks.')
     const title = (opts.title ?? stripHtml(m.body)).slice(0, 140) || 'Task from message'
-    const task = await tasks.createTask({ title, project_id: project.id, client_id: clientId })
+    const task = await tasks.createTask({
+      title,
+      project_id: project.id,
+      client_id: clientId,
+      assignee_id: opts.assignee_id ?? null,
+      due_on: opts.due_on ?? null,
+      priority: opts.priority,
+    })
+    // Optional non-default status (the composer lets you pick a column).
+    if (opts.statusKey && opts.statusKey !== task.status) {
+      void tasks.setStatus(task.id, opts.statusKey)
+    }
     // Best-effort back-link (works for the author / managers per RLS).
     void patchMessage(m.id, { linked_task_id: task.id })
     return task.id

@@ -7,10 +7,12 @@ import { useClientsStore } from '@/stores/clients'
 
 export interface Channel {
   id: string
-  client_id: string
+  client_id: string | null
   name: string
   topic: string | null
   is_private: boolean
+  is_dm: boolean
+  dm_key: string | null
   created_by: string | null
   created_at: string
   updated_at: string
@@ -27,6 +29,9 @@ export const useChannelsStore = defineStore('channels', () => {
   const clients = useClientsStore()
 
   const channels = ref<Channel[]>([])
+  const dms = ref<Channel[]>([])
+  // DM channel id → the *other* participant's user id.
+  const dmOther = ref<Record<string, string>>({})
   const memberships = ref<Record<string, Membership>>({})
   const unread = ref<Record<string, number>>({})
   const lastMessageAt = ref<Record<string, string>>({})
@@ -34,8 +39,11 @@ export const useChannelsStore = defineStore('channels', () => {
   const loading = ref(false)
   let metaChannel: RealtimeChannel | null = null
 
-  const currentChannel = computed(() =>
-    channels.value.find((c) => c.id === currentChannelId.value) ?? null,
+  const currentChannel = computed(
+    () =>
+      channels.value.find((c) => c.id === currentChannelId.value) ??
+      dms.value.find((c) => c.id === currentChannelId.value) ??
+      null,
   )
 
   // Pinned channels first, then alphabetical.
@@ -171,6 +179,58 @@ export const useChannelsStore = defineStore('channels', () => {
     return ch
   }
 
+  // ── Direct messages ─────────────────────────────────────────────────────────
+  // DMs are private 2-person channels (is_dm). RLS scopes them to my memberships,
+  // so a plain is_dm query returns exactly my DMs (not client-scoped).
+  async function loadDms() {
+    if (!auth.isAuthenticated) {
+      dms.value = []
+      dmOther.value = {}
+      return
+    }
+    const { data, error } = await supabase
+      .from('channels')
+      .select('*')
+      .eq('is_dm', true)
+    if (error) {
+      console.warn('[channels] loadDms:', error.message)
+      return
+    }
+    const list = (data ?? []) as Channel[]
+    dms.value = list
+    if (!list.length) {
+      dmOther.value = {}
+      return
+    }
+    const { data: mem } = await supabase
+      .from('channel_members')
+      .select('channel_id, user_id')
+      .in('channel_id', list.map((c) => c.id))
+    const me = auth.user?.id
+    const other: Record<string, string> = {}
+    for (const row of (mem ?? []) as { channel_id: string; user_id: string }[]) {
+      if (row.user_id !== me) other[row.channel_id] = row.user_id
+    }
+    dmOther.value = other
+    const ids = [...new Set(Object.values(other))]
+    if (ids.length) {
+      const { useTeamStore } = await import('@/stores/team')
+      void useTeamStore().fetchProfiles(ids)
+    }
+  }
+
+  /** Find-or-create a DM with another user, returning its channel id. */
+  async function openDm(otherUserId: string): Promise<string | null> {
+    const { data, error } = await supabase.rpc('open_dm', { p_other: otherUserId })
+    if (error) {
+      console.warn('[channels] openDm:', error.message)
+      throw error
+    }
+    const id = data as string
+    await loadDms()
+    return id
+  }
+
   // Light meta sync: when channels are added/removed for this client elsewhere,
   // reload the list. (Per-message unread is refreshed on channel switch.)
   function startMeta() {
@@ -192,9 +252,12 @@ export const useChannelsStore = defineStore('channels', () => {
     ([authed]) => {
       if (authed) {
         void load()
+        void loadDms()
         startMeta()
       } else {
         channels.value = []
+        dms.value = []
+        dmOther.value = {}
         currentChannelId.value = null
         void stopMeta()
       }
@@ -204,6 +267,8 @@ export const useChannelsStore = defineStore('channels', () => {
 
   return {
     channels,
+    dms,
+    dmOther,
     memberships,
     unread,
     lastMessageAt,
@@ -216,6 +281,8 @@ export const useChannelsStore = defineStore('channels', () => {
     loading,
     isUnread,
     load,
+    loadDms,
+    openDm,
     refreshOverview,
     select,
     bumpUnread,

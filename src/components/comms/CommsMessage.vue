@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import {
-  Smile, MessageSquare, CheckSquare, Pin, Paperclip, Link2, ArrowUpRight, ChevronRight, Sparkles
+  Smile, MessageSquare, CheckSquare, Pin, Paperclip, Link2, ChevronRight, Sparkles
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
+import CommsLinkedTask from '@/components/comms/CommsLinkedTask.vue'
+import CommsRichText from '@/components/comms/CommsRichText.vue'
 import { userColor } from '@/lib/userColor'
 import { useTeamStore } from '@/stores/team'
 import { formatBytes } from '@/lib/commsAttachments'
@@ -39,6 +41,9 @@ const name = computed(
 )
 const avatarUrl = computed(() => team.profiles[props.message.user_id]?.avatar_url ?? null)
 const nameColor = computed(() => userColor(props.message.user_id))
+const mentionNames = computed(
+  () => (props.message.mentioned_user_ids ?? []).map((id) => team.profiles[id]?.full_name).filter(Boolean) as string[]
+)
 const time = computed(() =>
   new Date(props.message.created_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }),
 )
@@ -54,7 +59,7 @@ function isImage(a: Attachment) {
 </script>
 
 <template>
-  <div class="group relative flex gap-3 px-4 hover:bg-base-200/40" :class="continuation ? 'py-0.5' : 'py-1.5 mt-1'">
+  <div class="group relative flex gap-2.5 px-[18px] hover:bg-base-200/40" :class="continuation ? 'py-px' : 'pt-1.5 pb-0.5 mt-0.5'">
     <!-- hover toolbar -->
     <div
       class="absolute -top-3 right-4 z-10 hidden group-hover:flex items-center gap-0.5 rounded-lg border border-base-300 bg-base-100 shadow-sm p-0.5"
@@ -93,19 +98,21 @@ function isImage(a: Attachment) {
       </button>
     </div>
 
-    <div class="w-[38px] shrink-0 flex justify-center" :class="continuation ? '' : 'mt-0.5'">
-      <HexAvatar v-if="!continuation" :avatar-url="avatarUrl" :name="name" :color-key="message.user_id" :size="38" />
-      <span v-else class="text-[0.6rem] leading-5 text-base-content/40 opacity-0 group-hover:opacity-100 tabular-nums">{{ shortTime }}</span>
+    <div class="w-[34px] shrink-0 flex justify-center" :class="continuation ? '' : 'mt-0.5'">
+      <HexAvatar v-if="!continuation" :avatar-url="avatarUrl" :name="name" :color-key="message.user_id" :size="32" />
+      <span v-else class="text-[0.6rem] leading-[18px] text-base-content/40 opacity-0 group-hover:opacity-100 tabular-nums">{{ shortTime }}</span>
     </div>
 
     <div class="flex-1 min-w-0">
-      <div v-if="!continuation" class="flex items-baseline gap-2">
-        <span class="text-sm font-semibold" :style="{ color: nameColor }">{{ name }}</span>
+      <div v-if="!continuation" class="flex items-baseline gap-2 -mt-0.5">
+        <span class="text-sm font-bold" :style="{ color: nameColor }">{{ name }}</span>
         <span class="text-[0.7rem] text-base-content/40">{{ time }}</span>
         <span v-if="message.is_pinned" class="inline-flex items-center gap-1 text-[0.65rem] text-primary"><Pin class="w-3 h-3" :stroke-width="2" /> pinned</span>
       </div>
 
-      <div v-if="message.body" class="text-sm text-base-content/90 whitespace-pre-wrap break-words leading-relaxed">{{ message.body }}</div>
+      <div v-if="message.body" class="text-sm text-base-content/90 whitespace-pre-wrap break-words leading-[1.46]">
+        <CommsRichText :text="message.body" :mention-names="mentionNames" />
+      </div>
 
       <!-- attachments -->
       <div v-if="message.attachments?.length" class="mt-1.5 flex flex-col gap-2 items-start">
@@ -130,17 +137,8 @@ function isImage(a: Attachment) {
         </template>
       </div>
 
-      <!-- linked task -->
-      <button
-        v-if="linkedTask"
-        class="mt-1.5 inline-flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-1.5 text-left hover:bg-primary/10"
-        @click="emit('open-task', linkedTask.id)"
-      >
-        <CheckSquare class="w-3.5 h-3.5 text-primary shrink-0" :stroke-width="1.75" />
-        <span class="text-xs font-medium text-base-content truncate max-w-[16rem]">{{ linkedTask.title }}</span>
-        <span class="text-[0.65rem] uppercase tracking-wider text-primary">View in Tasks</span>
-        <ArrowUpRight class="w-3.5 h-3.5 text-primary" :stroke-width="1.75" />
-      </button>
+      <!-- linked task — embedded card / pill -->
+      <CommsLinkedTask v-if="linkedTask" :task="linkedTask" @open="emit('open-task', $event)" />
 
       <!-- reactions -->
       <div v-if="reactions.length" class="mt-1.5 flex items-center gap-1.5 flex-wrap">

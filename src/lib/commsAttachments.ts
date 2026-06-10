@@ -23,6 +23,7 @@ export async function uploadCommsFile(channelId: string, file: File): Promise<At
   if (error) throw error
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(path)
   return {
+    id: uuid(),
     kind: file.type.startsWith('image/') ? 'image' : 'file',
     name: file.name,
     url: data.publicUrl,
@@ -41,7 +42,7 @@ export function linkAttachment(rawUrl: string): Attachment | null {
   } catch {
     return null
   }
-  return { kind: 'link', name: host, url }
+  return { id: uuid(), kind: 'link', name: host, url }
 }
 
 export function formatBytes(n: number | undefined) {
