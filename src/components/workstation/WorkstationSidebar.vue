@@ -13,12 +13,21 @@ import {
   MessagesSquare
 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
+import { useChannelsStore } from '@/stores/channels'
 import SidebarProjectTree from '@/components/workstation/SidebarProjectTree.vue'
 import SidebarUser from '@/components/workstation/SidebarUser.vue'
 
 const auth = useAuthStore()
+const channels = useChannelsStore()
 
 type NavItem = { to: string; label: string; icon: FunctionalComponent; exact?: boolean }
+
+// Live unread badge per nav item. Comms unread bumps app-wide because the
+// comms stream is provided at the workstation shell, so this updates even when
+// you're on another page.
+function badgeFor(item: NavItem): number {
+  return item.to === '/app/comms' ? channels.totalUnread : 0
+}
 
 const topNavItems = computed<NavItem[]>(() => {
   const items: NavItem[] = [
@@ -74,11 +83,21 @@ function togglePin() {
     <div
       @mouseenter="hovering = true"
       @mouseleave="hovering = false"
+      :style="{
+        background: 'linear-gradient(180deg, #1e2a6e 0%, #211a52 50%, #14102f 100%)',
+        '--color-base-100': '#1a1645',
+        '--color-base-200': 'rgba(255,255,255,0.08)',
+        '--color-base-300': 'rgba(255,255,255,0.14)',
+        '--color-base-content': 'rgba(255,255,255,0.88)',
+        '--color-primary': '#a5b4fc',
+        '--color-primary-content': '#161335',
+        color: 'rgba(255,255,255,0.88)'
+      }"
       :class="[
-        'absolute inset-y-0 left-0 z-30 bg-base-100 border border-base-300 rounded-xl overflow-hidden flex flex-col',
+        'absolute inset-y-0 left-0 z-30 border-0 overflow-hidden flex flex-col',
         'transition-[width,box-shadow] duration-300 ease-in-out',
         effectiveOpen ? 'w-60' : 'w-14',
-        effectiveOpen && !pinned ? 'shadow-xl' : 'shadow-sm'
+        effectiveOpen && !pinned ? 'shadow-xl rounded-r-xl' : ''
       ]"
     >
       <div class="h-14 flex items-center px-2.5 border-b border-base-300 gap-3 shrink-0">
@@ -97,7 +116,7 @@ function togglePin() {
             effectiveOpen ? 'opacity-100 delay-100' : 'opacity-0'
           ]"
         >
-          <div class="font-display text-base font-semibold">BuzzyBee</div>
+          <div class="font-display text-base font-semibold">HiveMind</div>
           <div class="text-xs text-base-content/60">Workstation</div>
         </div>
       </div>
@@ -134,7 +153,13 @@ function togglePin() {
             active-class="bg-primary/10 text-primary font-medium"
             :exact-active-class="item.exact ? 'bg-primary/10 text-primary font-medium' : ''"
           >
-            <component :is="item.icon" class="w-5 h-5 shrink-0" :stroke-width="1.75" />
+            <span class="relative shrink-0">
+              <component :is="item.icon" class="w-5 h-5" :stroke-width="1.75" />
+              <span
+                v-if="badgeFor(item) > 0 && !effectiveOpen"
+                class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-error ring-2 ring-base-100"
+              />
+            </span>
             <span
               :class="[
                 'transition-opacity duration-200 whitespace-nowrap',
@@ -142,6 +167,12 @@ function togglePin() {
               ]"
             >
               {{ item.label }}
+            </span>
+            <span
+              v-if="badgeFor(item) > 0 && effectiveOpen"
+              class="ml-auto min-w-[1.15rem] h-[1.15rem] px-1 rounded-full bg-error text-white text-[0.65rem] font-bold flex items-center justify-center"
+            >
+              {{ badgeFor(item) > 99 ? '99+' : badgeFor(item) }}
             </span>
           </RouterLink>
         </div>

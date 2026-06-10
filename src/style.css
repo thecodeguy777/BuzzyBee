@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&family=Hanken+Grotesk:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 @plugin "daisyui" {
   themes: light --default, dark;
@@ -21,9 +21,9 @@
   --color-base-300: oklch(92% 0.01 250);       /* border gray */
   --color-base-content: oklch(15% 0.01 250);   /* near-black */
 
-  /* Royal blue primary */
-  --color-primary: oklch(55% 0.22 260);        /* #2563eb */
-  --color-primary-content: oklch(99% 0.005 250);
+  /* Aubergine primary (Slack-caliber comms redesign) */
+  --color-primary: #611f69;
+  --color-primary-content: #ffffff;
 
   /* Coral red accent */
   --color-secondary: oklch(55% 0.2 25);        /* #ef4444 */
@@ -68,7 +68,7 @@
   --color-base-200: oklch(19% 0.015 250);
   --color-base-300: oklch(24% 0.015 250);
   --color-base-content: oklch(95% 0.005 250);
-  --color-primary: oklch(65% 0.2 260);
+  --color-primary: #b266bb;
   --color-primary-content: oklch(15% 0.015 250);
   --color-neutral: oklch(95% 0.005 250);
   --color-neutral-content: oklch(15% 0.015 250);
@@ -101,12 +101,62 @@
   --hm-shadow-md: 0 4px 6px rgba(15, 23, 42, 0.05), 0 2px 4px rgba(15, 23, 42, 0.03);
 }
 
+/* ── Comms redesign tokens — aubergine, Slack-caliber ──────────────
+   A small named palette the reskinned shell + Comms surface use directly
+   (var(--accent), status chips, rail). Light is default; dark overrides
+   below hook into daisyUI's [data-theme="dark"]. */
+:root {
+  --accent:      #611f69;
+  --accent-fg:   #611f69;
+  --accent-soft: color-mix(in oklab, #611f69 8%, #ffffff);
+  --accent-bord: color-mix(in oklab, #611f69 24%, #ffffff);
+
+  --rail-bg:     #45134a;
+  --rail-fg:     rgba(255, 255, 255, 0.62);
+  --rail-fg-on:  #ffffff;
+  --rail-active: rgba(255, 255, 255, 0.16);
+
+  --mention-bg: #fdf4d7;
+  --mention-fg: #8a6d12;
+
+  /* task status chips */
+  --st-todo-fg: #5b5b63; --st-todo-bg: #ececed;
+  --st-prog-fg: #b45309; --st-prog-bg: #fdf0d9;
+  --st-rev-fg:  #1d4ed8; --st-rev-bg:  #e4ecfe;
+  --st-done-fg: #15803d; --st-done-bg: #e2f3e7;
+  --st-block-fg:#c2253c; --st-block-bg:#fce8eb;
+
+  --sh-pop:  0 1px 2px rgba(20, 12, 22, 0.04), 0 12px 32px -8px rgba(33, 18, 38, 0.22);
+  --sh-card: 0 1px 2px rgba(20, 12, 22, 0.05), 0 1px 1px rgba(20, 12, 22, 0.04);
+}
+
+[data-theme="dark"] {
+  --accent:      #8a3a93;
+  --accent-fg:   color-mix(in oklab, #8a3a93 40%, #ffffff);
+  --accent-soft: color-mix(in oklab, #8a3a93 22%, #16141a);
+  --accent-bord: color-mix(in oklab, #8a3a93 40%, #16141a);
+
+  --rail-bg:     #1a0a1c;
+  --rail-fg:     rgba(255, 255, 255, 0.52);
+  --rail-fg-on:  #ffffff;
+  --rail-active: rgba(255, 255, 255, 0.14);
+
+  --mention-bg: #3a3115;
+  --mention-fg: #e6c85a;
+
+  --st-todo-fg: #b9b7c0; --st-todo-bg: #2a282f;
+  --st-prog-fg: #e3a24a; --st-prog-bg: #3a2c15;
+  --st-rev-fg:  #8fb0f7; --st-rev-bg:  #1f2a44;
+  --st-done-fg: #6cc788; --st-done-bg: #16301f;
+  --st-block-fg:#ef8497; --st-block-bg:#3a1d23;
+}
+
 body {
   margin: 0;
-  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  font-feature-settings: 'cv11', 'ss01';
+  font-family: 'Hanken Grotesk', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 ::selection {
@@ -114,16 +164,16 @@ body {
   color: var(--hm-gray-900);
 }
 
-/* Display font — Inter bold for headlines (no serif, pure tech) */
+/* Display font — Hanken Grotesk for headlines */
 .font-display,
 .font-serif {
-  font-family: 'Inter', system-ui, sans-serif;
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  font-family: 'Hanken Grotesk', 'Inter', system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 .font-mono {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: 'Geist Mono', 'JetBrains Mono', ui-monospace, monospace;
 }
 
 /* Shadow utilities */

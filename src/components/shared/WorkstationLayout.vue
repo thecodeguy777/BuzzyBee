@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, provide, defineAsyncComponent } from 'vue'
+import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useClientsStore } from '@/stores/clients'
 import { useProjectsStore } from '@/stores/projects'
 import { useChannelsStore } from '@/stores/channels'
 import { useChannelStream } from '@/composables/useChannelStream'
-import { COMMS_STREAM } from '@/composables/commsStream'
+import { useHuddlePresence } from '@/composables/useHuddlePresence'
+import { COMMS_STREAM, HUDDLE_PRESENCE } from '@/composables/commsStream'
 import WorkstationSidebar from '@/components/workstation/WorkstationSidebar.vue'
 import WorkstationTopbar from '@/components/workstation/WorkstationTopbar.vue'
 import ActivityRail from '@/components/workstation/ActivityRail.vue'
@@ -17,14 +19,27 @@ import CommsDock from '@/components/comms/CommsDock.vue'
 const TaskDrawer = defineAsyncComponent(() => import('@/components/workstation/TaskDrawer.vue'))
 
 const auth = useAuthStore()
+const route = useRoute()
 const clients = useClientsStore()
 const projects = useProjectsStore()
 const channels = useChannelsStore()
+
+// Comms runs edge-to-edge (flush panels with dividers); other pages keep the
+// padded, scrollable content area.
+const fullBleed = computed(() => route.path.startsWith('/app/comms'))
 
 // The comms/huddle stream lives here (the shell stays mounted across all
 // workstation routes), so a call keeps running as you move between pages.
 const commsStream = useChannelStream(computed(() => channels.currentChannelId))
 provide(COMMS_STREAM, commsStream)
+
+// Cross-channel huddle presence so the channel list can flag huddles anywhere.
+const huddlePresence = useHuddlePresence({
+  clientId: computed(() => clients.currentClientId),
+  inHuddle: commsStream.inHuddle,
+  channelId: computed(() => channels.currentChannelId)
+})
+provide(HUDDLE_PRESENCE, huddlePresence)
 
 // Prime the stores the sidebar/topbar depend on once the user is authenticated.
 if (auth.isAuthenticated && !clients.loaded) {
@@ -36,18 +51,21 @@ if (auth.isAuthenticated && !projects.loaded) {
 </script>
 
 <template>
-  <div class="h-screen overflow-hidden flex bg-base-200 text-base-content gap-2 p-2">
+  <div class="h-screen overflow-hidden flex bg-base-100 text-base-content">
     <WorkstationSidebar />
 
-    <div class="flex-1 flex flex-col min-w-0 gap-2">
+    <div class="flex-1 flex flex-col min-w-0">
       <WorkstationTopbar />
 
-      <main class="flex-1 min-h-0 overflow-y-auto px-6 py-6">
+      <main
+        class="flex-1 min-h-0"
+        :class="fullBleed ? 'overflow-hidden bg-base-100' : 'overflow-y-auto px-6 py-6 bg-base-200'"
+      >
         <slot />
       </main>
     </div>
 
-    <ActivityRail />
+    <ActivityRail v-if="!fullBleed" />
 
     <SwitchClientModal />
     <ReportButton />
