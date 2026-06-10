@@ -15,12 +15,6 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: false, bareLayout: true }
   },
   {
-    path: '/seen-preview',
-    name: 'seen-preview',
-    component: () => import('@/views/dev/SeenClusterPreview.vue'),
-    meta: { requiresAuth: false, bareLayout: true }
-  },
-  {
     path: '/industries/:slug',
     name: 'industry-page',
     component: () => import('@/views/shared/IndustryPage.vue'),
