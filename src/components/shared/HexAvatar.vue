@@ -28,6 +28,8 @@ const props = defineProps<{
   size?: number
   /** White rim — for overlapping avatar stacks. */
   ring?: boolean
+  /** Override the rim thickness in px (default ~size×0.09). */
+  ringWidth?: number
   /** Green "online" dot, bottom-right. */
   online?: boolean
   /** Muted styling for "+N" overflow / empty cells. */
@@ -61,7 +63,9 @@ function initialsOf(name?: string | null, email?: string | null): string {
 }
 
 const size = computed(() => props.size ?? 32)
-const ringW = computed(() => (props.ring ? Math.max(1.5, size.value * 0.09) : 0))
+const ringW = computed(() =>
+  props.ring ? (props.ringWidth ?? Math.max(1.5, size.value * 0.09)) : 0,
+)
 const innerSize = computed(() => size.value - ringW.value * 2)
 const fontPx = computed(() => props.fontSize ?? Math.round(size.value * 0.4))
 const label = computed(() => props.label ?? initialsOf(props.name, props.email))
