@@ -8,6 +8,7 @@ import { useTeamStore } from '@/stores/team'
 import { displayName } from '@/lib/format'
 import ClientSwitcher from '@/components/workstation/ClientSwitcher.vue'
 import GlobalSearch from '@/components/workstation/GlobalSearch.vue'
+import ThemeToggle from '@/components/workstation/ThemeToggle.vue'
 import RefreshButton from '@/components/workstation/RefreshButton.vue'
 import NotificationBell from '@/components/workstation/NotificationBell.vue'
 import TimerChip from '@/components/workstation/TimerChip.vue'
@@ -50,6 +51,7 @@ const channelLabel = computed(() => {
       <GlobalSearch />
     </div>
     <div class="flex items-center gap-2 shrink-0">
+      <ThemeToggle />
       <RefreshButton />
       <NotificationBell />
       <TimerChip v-if="auth.role === 'va'" />

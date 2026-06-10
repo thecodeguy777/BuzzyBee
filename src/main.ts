@@ -5,6 +5,8 @@ import App from './App.vue'
 import { vReveal } from './directives/reveal'
 import { useAuthStore } from './stores/auth'
 import { installDiagnostics, recordRoute } from './lib/diagnostics'
+// Side-effect import: applies the persisted light/dark theme before first paint.
+import './composables/useTheme'
 import './style.css'
 
 installDiagnostics()
