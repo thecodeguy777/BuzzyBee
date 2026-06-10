@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import {
-  Smile, MessageSquare, CheckSquare, Pin, Paperclip, Link2, ChevronRight, Sparkles, Mail, Clock
+  Smile, MessageSquare, CheckSquare, Pin, Paperclip, Link2, ChevronRight, Sparkles
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
 import CommsLinkedTask from '@/components/comms/CommsLinkedTask.vue'
 import CommsRichText from '@/components/comms/CommsRichText.vue'
 import SeenCluster from '@/components/comms/SeenCluster.vue'
+import CommsProfilePopover from '@/components/comms/CommsProfilePopover.vue'
 import { userColor } from '@/lib/userColor'
 import { useTeamStore } from '@/stores/team'
-import { useAuthStore } from '@/stores/auth'
+import { useProfileHover } from '@/composables/useProfileHover'
 import { formatBytes } from '@/lib/commsAttachments'
 import type { CommsMessage, Attachment } from '@/composables/useChannelStream'
 import type { Task } from '@/stores/tasks'
@@ -40,62 +41,14 @@ const emit = defineEmits<{
 }>()
 
 const team = useTeamStore()
-const auth = useAuthStore()
 const QUICK = ['🐝', '🔥', '🙌', '✅', '👀', '🚀', '👍', '❤️']
 const pickerOpen = ref(false)
 
-// ── Hover profile card ───────────────────────────────────────────────────
-const profile = computed(() => team.profiles[props.message.user_id] ?? null)
-const isSelf = computed(() => props.message.user_id === auth.user?.id)
-const role = computed(() => {
-  const r = (profile.value as { role?: string } | null)?.role
-  return r ? r.replace(/_/g, ' ') : 'Member'
-})
-const localTime = computed(() => {
-  const tz = (profile.value as { timezone?: string } | null)?.timezone
-  if (!tz) return ''
-  try {
-    return new Date().toLocaleTimeString(undefined, { timeZone: tz, hour: 'numeric', minute: '2-digit' })
-  } catch {
-    return ''
-  }
-})
-const email = computed(() => (profile.value as { email?: string } | null)?.email ?? '')
-
-const profileOpen = ref(false)
-const profileStyle = ref<Record<string, string>>({})
-let openTimer: ReturnType<typeof setTimeout> | undefined
-let closeTimer: ReturnType<typeof setTimeout> | undefined
-
-function placeCard(el: HTMLElement) {
-  const r = el.getBoundingClientRect()
-  const W = 256
-  const left = Math.max(8, Math.min(r.left, window.innerWidth - W - 8))
-  // Prefer below the anchor; flip above if it would overflow the viewport.
-  const below = r.bottom + 6
-  const flipUp = below + 180 > window.innerHeight
-  profileStyle.value = flipUp
-    ? { left: `${left}px`, bottom: `${window.innerHeight - r.top + 6}px` }
-    : { left: `${left}px`, top: `${below}px` }
-}
-function openProfile(ev: MouseEvent) {
-  clearTimeout(closeTimer)
-  const el = ev.currentTarget as HTMLElement
-  openTimer = setTimeout(() => {
-    placeCard(el)
-    profileOpen.value = true
-  }, 320)
-}
-function scheduleClose() {
-  clearTimeout(openTimer)
-  closeTimer = setTimeout(() => (profileOpen.value = false), 180)
-}
-function cancelClose() {
-  clearTimeout(closeTimer)
-}
-function startDm() {
-  profileOpen.value = false
-  emit('open-dm', props.message.user_id)
+// Hover profile card — shared with the Comms dock (see CommsProfilePopover).
+const hover = useProfileHover()
+function onStartDm(id: string) {
+  hover.close()
+  emit('open-dm', id)
 }
 
 const name = computed(
@@ -165,9 +118,9 @@ function isImage(a: Attachment) {
         v-if="!continuation"
         type="button"
         class="rounded-md transition hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-        @mouseenter="openProfile"
-        @mouseleave="scheduleClose"
-        @click="openProfile"
+        @mouseenter="hover.open(message.user_id, $event)"
+        @mouseleave="hover.scheduleClose"
+        @click="hover.open(message.user_id, $event)"
       >
         <HexAvatar :avatar-url="avatarUrl" :name="name" :color-key="message.user_id" :size="32" />
       </button>
@@ -180,9 +133,9 @@ function isImage(a: Attachment) {
           type="button"
           class="text-sm font-bold hover:underline focus:outline-none"
           :style="{ color: nameColor }"
-          @mouseenter="openProfile"
-          @mouseleave="scheduleClose"
-          @click="openProfile"
+          @mouseenter="hover.open(message.user_id, $event)"
+          @mouseleave="hover.scheduleClose"
+          @click="hover.open(message.user_id, $event)"
         >{{ name }}</button>
         <span class="text-[0.7rem] text-base-content/40">{{ time }}</span>
         <span v-if="message.is_pinned" class="inline-flex items-center gap-1 text-[0.65rem] text-primary"><Pin class="w-3 h-3" :stroke-width="2" /> pinned</span>
@@ -253,46 +206,13 @@ function isImage(a: Attachment) {
     </div>
 
     <!-- Hover profile card -->
-    <Teleport to="body">
-      <Transition name="profile-pop">
-        <div
-          v-if="profileOpen"
-          class="fixed z-[80] w-64 rounded-2xl border border-base-300 bg-base-100 shadow-2xl shadow-black/20 p-4"
-          :style="profileStyle"
-          @mouseenter="cancelClose"
-          @mouseleave="scheduleClose"
-        >
-          <div class="flex items-center gap-3">
-            <HexAvatar :avatar-url="avatarUrl" :name="name" :color-key="message.user_id" :size="52" />
-            <div class="min-w-0">
-              <div class="text-base font-bold truncate" :style="{ color: nameColor }">{{ name }}</div>
-              <div class="text-[0.72rem] text-base-content/50 capitalize">{{ role }}</div>
-            </div>
-          </div>
-
-          <div class="mt-3 space-y-1.5 text-[0.72rem] text-base-content/60">
-            <div v-if="email" class="flex items-center gap-2 min-w-0">
-              <Mail class="w-3.5 h-3.5 shrink-0 text-base-content/40" :stroke-width="1.75" />
-              <span class="truncate">{{ email }}</span>
-            </div>
-            <div v-if="localTime" class="flex items-center gap-2">
-              <Clock class="w-3.5 h-3.5 shrink-0 text-base-content/40" :stroke-width="1.75" />
-              <span>{{ localTime }} local time</span>
-            </div>
-          </div>
-
-          <button
-            v-if="!isSelf"
-            type="button"
-            class="mt-3.5 w-full inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-content hover:opacity-90"
-            @click="startDm"
-          >
-            <MessageSquare class="w-4 h-4" :stroke-width="2" /> Message
-          </button>
-          <div v-else class="mt-3.5 text-center text-[0.7rem] text-base-content/40">This is you</div>
-        </div>
-      </Transition>
-    </Teleport>
+    <CommsProfilePopover
+      :user-id="hover.userId.value"
+      :card-style="hover.style.value"
+      @start-dm="onStartDm"
+      @hover="hover.cancelClose"
+      @leave="hover.scheduleClose"
+    />
   </div>
 </template>
 
@@ -324,20 +244,5 @@ function isImage(a: Attachment) {
 @media (prefers-reduced-motion: reduce) {
   .msg-unseen { animation: none; background-color: color-mix(in oklab, var(--accent) 10%, transparent); }
   .msg-unseen::before { animation: none; opacity: 0.8; }
-}
-
-/* Profile card pop */
-.profile-pop-enter-active {
-  transition: opacity 0.12s ease, transform 0.12s ease;
-}
-.profile-pop-leave-active {
-  transition: opacity 0.1s ease;
-}
-.profile-pop-enter-from {
-  opacity: 0;
-  transform: translateY(4px) scale(0.98);
-}
-.profile-pop-leave-to {
-  opacity: 0;
 }
 </style>

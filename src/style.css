@@ -118,6 +118,7 @@
 
   --mention-bg: #fdf4d7;
   --mention-fg: #8a6d12;
+  --link: #2563c9;
 
   /* task status chips */
   --st-todo-fg: #5b5b63; --st-todo-bg: #ececed;
@@ -143,6 +144,7 @@
 
   --mention-bg: #3a3115;
   --mention-fg: #e6c85a;
+  --link: #7aa7f0;
 
   --st-todo-fg: #b9b7c0; --st-todo-bg: #2a282f;
   --st-prog-fg: #e3a24a; --st-prog-bg: #3a2c15;

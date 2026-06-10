@@ -798,12 +798,23 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     const entry: PeerEntry = { pc, makingOffer: false, ignoreOffer: false, polite: myId > userId }
     peers.set(userId, entry)
 
-    localStream?.getTracks().forEach((t) => pc.addTrack(t, localStream!))
+    // Fixed transceiver layout — created in the SAME order on both peers so the
+    // SDP m-lines never reorder across renegotiation: [audio, video]. Screen
+    // share is done with replaceTrack on the video sender (never
+    // addTrack/removeTrack), so there's no per-share renegotiation and the
+    // "order of m-lines doesn't match" glare can't occur.
+    const micTrack = localStream?.getAudioTracks()[0] ?? null
+    pc.addTransceiver(micTrack ?? 'audio', {
+      direction: 'sendrecv',
+      streams: localStream ? [localStream] : [],
+    })
+    const videoTx = pc.addTransceiver('video', { direction: 'sendrecv' })
+    entry.screenSender = videoTx.sender
     if (screenStream) {
       const vt = screenStream.getVideoTracks()[0]
       if (vt) {
-        entry.screenSender = pc.addTrack(vt, screenStream)
-        void tuneScreenSender(entry.screenSender)
+        void videoTx.sender.replaceTrack(vt)
+        void tuneScreenSender(videoTx.sender)
       }
     }
 
@@ -824,8 +835,16 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     }
     pc.ontrack = (e) => {
       if (e.track.kind === 'video') {
-        remoteScreens.value = { ...remoteScreens.value, [userId]: e.streams[0] }
-        e.track.addEventListener('ended', () => removeRemoteScreen(userId))
+        // The video m-line always exists (fixed layout) but only carries frames
+        // while the peer is actually sharing. Their replaceTrack(track|null)
+        // mutes/unmutes the remote track — use that to show/hide their screen.
+        const stream = e.streams[0]
+        const show = () => { remoteScreens.value = { ...remoteScreens.value, [userId]: stream } }
+        const hide = () => removeRemoteScreen(userId)
+        if (!e.track.muted) show()
+        e.track.addEventListener('unmute', show)
+        e.track.addEventListener('mute', hide)
+        e.track.addEventListener('ended', hide)
       } else {
         let el = entry.audioEl
         if (!el) {
@@ -921,8 +940,11 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     // "detail" = prioritize sharp text/UI over smooth motion (vs. the default).
     if ('contentHint' in track) (track as any).contentHint = 'detail'
     sharingScreen.value = true
+    // Push the track onto each peer's pre-created video sender — starts media on
+    // the existing m-line. No addTrack, so no renegotiation and no m-line churn.
     for (const entry of peers.values()) {
-      entry.screenSender = entry.pc.addTrack(track, screenStream) // → renegotiation
+      if (!entry.screenSender) continue
+      void entry.screenSender.replaceTrack(track)
       void tuneScreenSender(entry.screenSender)
     }
     track.addEventListener('ended', () => stopScreenShare()) // browser "Stop sharing"
@@ -931,11 +953,10 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
 
   function stopScreenShare() {
     if (!sharingScreen.value && !screenStream) return
+    // Stop sending frames but KEEP the sender + its m-line — the remote sees the
+    // track mute and hides our screen. No removeTrack, so no renegotiation.
     for (const entry of peers.values()) {
-      if (entry.screenSender) {
-        try { entry.pc.removeTrack(entry.screenSender) } catch { /* ignore */ }
-        entry.screenSender = undefined
-      }
+      try { void entry.screenSender?.replaceTrack(null) } catch { /* ignore */ }
     }
     screenStream?.getTracks().forEach((t) => t.stop())
     screenStream = null

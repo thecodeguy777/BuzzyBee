@@ -6,14 +6,20 @@ import {
   Send, ChevronDown, Maximize2, Crown, Hash, Bell, BellOff,
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
+import SeenCluster from '@/components/comms/SeenCluster.vue'
+import TypingIndicator from '@/components/comms/TypingIndicator.vue'
+import CommsProfilePopover from '@/components/comms/CommsProfilePopover.vue'
 import { userColor } from '@/lib/userColor'
+import { useProfileHover } from '@/composables/useProfileHover'
 import { COMMS_STREAM } from '@/composables/commsStream'
 import { useChannelsStore } from '@/stores/channels'
 import { useTeamStore } from '@/stores/team'
+import { useAuthStore } from '@/stores/auth'
 
 const stream = inject(COMMS_STREAM)!
 const channels = useChannelsStore()
 const team = useTeamStore()
+const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 
@@ -56,6 +62,100 @@ function isContinuation(i: number) {
     new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() < 5 * 60 * 1000
 }
 
+// ── Hover profile (shared with the full Comms stream) ────────────────────────
+const hover = useProfileHover()
+async function startDm(userId: string) {
+  hover.close()
+  if (userId === auth.user?.id) return
+  try {
+    const id = await channels.openDm(userId)
+    if (id) { channels.select(id); scrollToBottom() }
+  } catch { /* ignore */ }
+}
+
+// ── Typing indicator ─────────────────────────────────────────────────────────
+const typingMembers = computed(() =>
+  stream.typing.value.map((t) => ({ id: t.userId, name: t.name, avatarUrl: t.avatarUrl }))
+)
+function onInput() {
+  if (draft.value.trim()) stream.sendTyping()
+}
+
+// ── Seen-by (read receipts) ──────────────────────────────────────────────────
+const lastMsg = computed(() => messages.value.at(-1) ?? null)
+const seenMembers = computed(() => {
+  const last = lastMsg.value
+  if (!last) return []
+  const t = new Date(last.created_at).getTime()
+  const out: { id: string; name: string; avatarUrl: string | null }[] = []
+  for (const r of stream.reads.value) {
+    if (r.user_id === auth.user?.id || !r.last_read_at) continue
+    if (new Date(r.last_read_at).getTime() >= t) {
+      const p = team.profiles[r.user_id]
+      out.push({ id: r.user_id, name: p?.full_name ?? 'Member', avatarUrl: p?.avatar_url ?? null })
+    }
+  }
+  return out
+})
+
+// ── Unseen "breathing" highlight ─────────────────────────────────────────────
+const freshIds = ref<Set<string>>(new Set())
+const freshTimers = new Map<string, number>()
+function markFresh(id: string, ttl = 7000) {
+  if (!freshIds.value.has(id)) freshIds.value = new Set(freshIds.value).add(id)
+  if (freshTimers.has(id)) window.clearTimeout(freshTimers.get(id))
+  freshTimers.set(id, window.setTimeout(() => {
+    const next = new Set(freshIds.value)
+    next.delete(id)
+    freshIds.value = next
+    freshTimers.delete(id)
+  }, ttl))
+}
+function clearFresh() {
+  for (const t of freshTimers.values()) window.clearTimeout(t)
+  freshTimers.clear()
+  freshIds.value = new Set()
+}
+// Stable per-channel baseline (mirrors the full Comms view) so live messages
+// don't race the server clock and get swallowed.
+let breatheChannel: string | null = null
+let breatheBaseline = 0
+const breatheSeen = new Set<string>()
+function isFresh(m: { user_id: string; created_at: string }) {
+  return m.user_id !== auth.user?.id && new Date(m.created_at).getTime() > breatheBaseline
+}
+function primeBreathing() {
+  const cid = channels.currentChannelId ?? ''
+  const list = messages.value
+  breatheChannel = cid
+  clearFresh()
+  breatheSeen.clear()
+  for (const m of list) breatheSeen.add(m.id)
+  const entry = channels.entryReadAt[cid]
+  const newest = list.length ? new Date(list[list.length - 1].created_at).getTime() : Date.now()
+  breatheBaseline = entry ? new Date(entry).getTime() : newest
+  if (entry) for (const m of list) if (isFresh(m)) markFresh(m.id)
+}
+watch(() => messages.value, (list) => {
+  if ((channels.currentChannelId ?? '') !== breatheChannel) { primeBreathing(); return }
+  for (const m of list) {
+    if (breatheSeen.has(m.id)) continue
+    breatheSeen.add(m.id)
+    if (isFresh(m)) markFresh(m.id)
+  }
+})
+
+// Advance our read position when a message lands while the dock is open at the
+// bottom — same fix as the full Comms view, so others see us catch up.
+let markReadTimer: ReturnType<typeof setTimeout> | undefined
+function markReadSoon() {
+  clearTimeout(markReadTimer)
+  markReadTimer = setTimeout(() => {
+    const id = channels.currentChannelId
+    if (id && expanded.value && document.visibilityState === 'visible') void channels.markRead(id)
+  }, 300)
+}
+
 function scrollToBottom() {
   nextTick(() => {
     if (listEl.value) listEl.value.scrollTop = listEl.value.scrollHeight
@@ -88,7 +188,7 @@ function jumpToComms() {
   router.push({ name: 'workstation-comms' })
 }
 
-watch(() => messages.value.length, () => { if (expanded.value) scrollToBottom() })
+watch(() => messages.value.length, () => { if (expanded.value) { scrollToBottom(); markReadSoon() } })
 
 // While expanded, the dock counts as actively viewing the channel — suppress
 // new-message pings and keep it marked read.
@@ -181,22 +281,47 @@ onBeforeUnmount(() => { if (viewing) stream.unregisterViewer() })
           <div
             v-for="(m, i) in messages"
             :key="m.id"
-            class="flex gap-2 px-3"
-            :class="isContinuation(i) ? 'py-0.5' : 'py-1 mt-1'"
+            class="relative flex gap-2 px-3"
+            :class="[isContinuation(i) ? 'py-0.5' : 'py-1 mt-1', freshIds.has(m.id) ? 'dock-unseen' : '']"
           >
             <div class="w-6 shrink-0 flex justify-center">
-              <HexAvatar v-if="!isContinuation(i)" :name="nameFor(m)" :avatar-url="avatarFor(m.user_id)" :color-key="m.user_id" :size="24" />
+              <button
+                v-if="!isContinuation(i)"
+                type="button"
+                class="rounded-md transition hover:opacity-90 focus:outline-none"
+                @mouseenter="hover.open(m.user_id, $event)"
+                @mouseleave="hover.scheduleClose"
+                @click="hover.open(m.user_id, $event)"
+              >
+                <HexAvatar :name="nameFor(m)" :avatar-url="avatarFor(m.user_id)" :color-key="m.user_id" :size="24" />
+              </button>
             </div>
             <div class="flex-1 min-w-0">
               <div v-if="!isContinuation(i)" class="flex items-baseline gap-1.5">
-                <span class="text-xs font-semibold truncate" :style="{ color: userColor(m.user_id) }">{{ nameFor(m) }}</span>
+                <button
+                  type="button"
+                  class="text-xs font-semibold truncate hover:underline focus:outline-none"
+                  :style="{ color: userColor(m.user_id) }"
+                  @mouseenter="hover.open(m.user_id, $event)"
+                  @mouseleave="hover.scheduleClose"
+                  @click="hover.open(m.user_id, $event)"
+                >{{ nameFor(m) }}</button>
                 <span class="text-[0.6rem] text-base-content/40 shrink-0">{{ timeFor(m.created_at) }}</span>
               </div>
               <div v-if="m.body" class="text-[0.8rem] text-base-content/90 whitespace-pre-wrap break-words leading-snug">{{ m.body }}</div>
               <div v-if="m.attachments?.length" class="text-[0.7rem] text-base-content/50 italic">📎 {{ m.attachments.length }} attachment{{ m.attachments.length > 1 ? 's' : '' }} — open in Comms</div>
             </div>
           </div>
+
+          <!-- seen-by honeycomb -->
+          <div v-if="seenMembers.length" class="flex items-center justify-end gap-1.5 px-3 pt-1 pb-0.5">
+            <span class="text-[0.55rem] font-medium text-base-content/40">Seen</span>
+            <SeenCluster :members="seenMembers" :size="14" :max="4" />
+          </div>
         </div>
+
+        <!-- typing indicator -->
+        <TypingIndicator :members="typingMembers" class="px-3 pt-1" />
 
         <!-- composer -->
         <div class="px-2 py-2 border-t border-base-300">
@@ -205,6 +330,7 @@ onBeforeUnmount(() => { if (viewing) stream.unregisterViewer() })
               v-model="draft"
               :placeholder="`Message #${channelName}`"
               class="flex-1 bg-transparent text-sm outline-none min-w-0"
+              @input="onInput"
               @keydown.enter.prevent="send"
             />
             <button class="w-7 h-7 rounded-lg bg-primary text-white flex items-center justify-center disabled:opacity-40" :disabled="!draft.trim()" @click="send">
@@ -271,6 +397,41 @@ onBeforeUnmount(() => { if (viewing) stream.unregisterViewer() })
           {{ channels.totalUnread > 99 ? '99+' : channels.totalUnread }}
         </span>
       </button>
+
+      <!-- Hover profile card (shared with the full Comms stream) -->
+      <CommsProfilePopover
+        :user-id="hover.userId.value"
+        :card-style="hover.style.value"
+        @start-dm="startDm"
+        @hover="hover.cancelClose"
+        @leave="hover.scheduleClose"
+      />
     </div>
   </Teleport>
 </template>
+
+<style scoped>
+/* Unseen "breathing" highlight — matches the full Comms stream, trimmed for the dock. */
+@keyframes dock-breathe {
+  0%, 100% { background-color: color-mix(in oklab, var(--accent) 4%, transparent); }
+  50% { background-color: color-mix(in oklab, var(--accent) 14%, transparent); }
+}
+.dock-unseen {
+  animation: dock-breathe 2.2s ease-in-out infinite;
+}
+.dock-unseen::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2.5px;
+  border-radius: 0 2px 2px 0;
+  background: var(--accent);
+  opacity: 0.7;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dock-unseen { animation: none; background-color: color-mix(in oklab, var(--accent) 10%, transparent); }
+  .dock-unseen::before { opacity: 0.8; }
+}
+</style>

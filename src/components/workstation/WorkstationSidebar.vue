@@ -10,7 +10,8 @@ import {
   CheckSquare,
   Bug,
   UsersRound,
-  MessagesSquare
+  MessagesSquare,
+  Handshake
 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useChannelsStore } from '@/stores/channels'
@@ -42,6 +43,7 @@ const topNavItems = computed<NavItem[]>(() => {
 const bottomNavItems = computed<NavItem[]>(() => {
   const items: NavItem[] = [
     { to: '/app/comms', label: 'Comms', icon: MessagesSquare },
+    { to: '/app/crm', label: 'CRM', icon: Handshake },
     { to: '/app/clients', label: 'Clients', icon: Users }
   ]
   if (auth.role === 'pm' || auth.isAdmin) {

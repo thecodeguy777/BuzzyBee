@@ -24,9 +24,11 @@ const clients = useClientsStore()
 const projects = useProjectsStore()
 const channels = useChannelsStore()
 
-// Comms runs edge-to-edge (flush panels with dividers); other pages keep the
-// padded, scrollable content area.
-const fullBleed = computed(() => route.path.startsWith('/app/comms'))
+// Comms + CRM run edge-to-edge (own tabs/board manage scroll); other pages keep
+// the padded, scrollable content area.
+const fullBleed = computed(
+  () => route.path.startsWith('/app/comms') || route.path.startsWith('/app/crm'),
+)
 
 // The comms/huddle stream lives here (the shell stays mounted across all
 // workstation routes), so a call keeps running as you move between pages.
