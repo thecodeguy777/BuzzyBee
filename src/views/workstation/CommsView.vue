@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount, inject } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import {
   Hash, Search, Users, Headphones, Mic, MicOff, MonitorUp, PhoneOff,
   Paperclip, Image as ImageIcon, Link2, Smile, AtSign, Send, Sparkles, X, CheckSquare,
@@ -42,6 +42,25 @@ if (!injectedStream) {
 }
 const stream = injectedStream
 const huddlePresence = inject(HUDDLE_PRESENCE, null)
+const route = useRoute()
+
+// Jump-to-message (from global search ?m=…): scroll the target line into view
+// and flash it once. Retries briefly while the channel's history loads.
+function flashMessage(id: string) {
+  let tries = 0
+  const tick = () => {
+    const el = document.querySelector(`[data-mid="${id}"]`) as HTMLElement | null
+    if (el) {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      el.classList.add('msg-flash')
+      window.setTimeout(() => el.classList.remove('msg-flash'), 1800)
+      return
+    }
+    if (tries++ < 50) window.setTimeout(tick, 100)
+  }
+  nextTick(tick)
+}
+watch(() => route.query.m, (m) => { if (m) flashMessage(String(m)) }, { immediate: true })
 
 const canManage = computed(() => auth.isAdmin || auth.role === 'pm')
 const commsError = ref<string | null>(null)
@@ -848,6 +867,7 @@ function fullscreenScreen() {
               </div>
               <CommsMessage
                 :message="m"
+                :data-mid="m.id"
                 :continuation="isContinuation(i)"
                 :reactions="stream.reactionList(m.id)"
                 :reply-count="(stream.repliesByParent.value[m.id] ?? []).length"
@@ -1233,5 +1253,14 @@ function fullscreenScreen() {
 .comms-toast-leave-to {
   opacity: 0;
   transform: translate(-50%, 10px);
+}
+
+/* Jump-to-message flash (child component root → :deep). */
+@keyframes msg-flash {
+  0% { background-color: color-mix(in oklab, var(--accent) 22%, transparent); }
+  100% { background-color: transparent; }
+}
+:deep(.msg-flash) {
+  animation: msg-flash 1.8s ease-out;
 }
 </style>

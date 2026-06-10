@@ -2,21 +2,17 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  Search,
-  ListTodo,
-  Users,
-  Paperclip,
-  Hash,
-  Loader,
-  CornerDownLeft
+  Search, ListTodo, Hash, Loader, CornerDownLeft, MessageSquare, User, Briefcase
 } from 'lucide-vue-next'
 import { supabase } from '@/lib/supabase'
 import { useTasksStore } from '@/stores/tasks'
 import { useClientsStore } from '@/stores/clients'
+import { useChannelsStore } from '@/stores/channels'
 
 const router = useRouter()
 const tasksStore = useTasksStore()
 const clients = useClientsStore()
+const channels = useChannelsStore()
 
 const query = ref('')
 const open = ref(false)
@@ -25,30 +21,26 @@ const inputEl = ref<HTMLInputElement | null>(null)
 const rootEl = ref<HTMLElement | null>(null)
 const focusedIndex = ref(0)
 
-interface ResultBase {
-  id: string
-  type: 'task' | 'attachment' | 'client'
+type RType = 'task' | 'message' | 'channel' | 'person' | 'client'
+interface SearchRow {
+  rtype: RType
+  rid: string
   label: string
   sub: string
+  score: number
+  task_id: string | null
+  message_id: string | null
+  channel_id: string | null
+  client_id: string | null
+  user_id: string | null
+  is_dm: boolean | null
 }
-interface TaskResult extends ResultBase {
-  type: 'task'
-  taskId: string
-  clientId: string | null
-}
-interface AttachmentResult extends ResultBase {
-  type: 'attachment'
-  taskId: string
-  clientId: string | null
-}
-interface ClientResult extends ResultBase {
-  type: 'client'
-  clientId: string
-}
-type Result = TaskResult | AttachmentResult | ClientResult
 
-const results = ref<Result[]>([])
+const results = ref<SearchRow[]>([])
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
+// Monotonic token so a slow earlier request can't overwrite a newer one.
+let searchToken = 0
+
 const isMac =
   typeof navigator !== 'undefined' &&
   /Mac|iPad|iPhone|iPod/.test(navigator.platform || navigator.userAgent || '')
@@ -63,126 +55,75 @@ watch(query, (val) => {
     return
   }
   open.value = true
-  debounceTimer = setTimeout(() => runSearch(q), 250)
+  debounceTimer = setTimeout(() => runSearch(q), 220)
 })
 
 async function runSearch(q: string) {
+  const token = ++searchToken
   loading.value = true
   focusedIndex.value = 0
   try {
-    const pattern = `%${q.split(/\s+/).filter(Boolean).join('%')}%`
-
-    // Tasks: title / description / reference_number
-    const tasksReq = supabase
-      .from('tasks')
-      .select('id, title, description, reference_number, status, client_id, client_name, attachments')
-      .or(
-        [
-          `title.ilike.${pattern}`,
-          `description.ilike.${pattern}`,
-          `reference_number.ilike.${pattern}`
-        ].join(',')
-      )
-      .order('updated_at', { ascending: false })
-      .limit(10)
-
-    // Clients: name / notes
-    const clientsReq = supabase
-      .from('clients')
-      .select('id, name, notes, status')
-      .or([`name.ilike.${pattern}`, `notes.ilike.${pattern}`].join(','))
-      .limit(5)
-
-    const [tasksRes, clientsRes] = await Promise.all([tasksReq, clientsReq])
-
-    const out: Result[] = []
-
-    for (const c of clientsRes.data ?? []) {
-      out.push({
-        id: `c:${c.id}`,
-        type: 'client',
-        clientId: c.id,
-        label: c.name,
-        sub: c.status === 'active' ? 'Client' : `Client · ${c.status}`
-      })
-    }
-
-    for (const t of tasksRes.data ?? []) {
-      out.push({
-        id: `t:${t.id}`,
-        type: 'task',
-        taskId: t.id,
-        clientId: t.client_id,
-        label: t.title,
-        sub: `${t.reference_number} · ${t.client_name ?? 'No client'} · ${t.status.replace('_', ' ')}`
-      })
-    }
-
-    // Attachment search: tasks whose attachments JSONB array contains a file
-    // whose name matches the query. We over-fetch and filter client-side.
-    const ql = q.toLowerCase()
-    const attachReq = await supabase
-      .from('tasks')
-      .select('id, reference_number, client_name, client_id, attachments')
-      .not('attachments', 'eq', '[]')
-      .limit(50)
-
-    for (const t of attachReq.data ?? []) {
-      const atts = (t.attachments ?? []) as Array<{
-        id?: string
-        name?: string
-        mime_type?: string
-      }>
-      for (const a of atts) {
-        if (!a.name) continue
-        if (a.name.toLowerCase().includes(ql)) {
-          out.push({
-            id: `a:${t.id}:${a.id ?? a.name}`,
-            type: 'attachment',
-            taskId: t.id,
-            clientId: t.client_id,
-            label: a.name,
-            sub: `${t.reference_number} · ${t.client_name ?? 'No client'}`
-          })
-        }
-      }
-    }
-
-    results.value = out.slice(0, 20)
+    const { data, error } = await supabase.rpc('search_global', {
+      q,
+      p_client: clients.currentClientId,
+      max_per: 6
+    })
+    if (token !== searchToken) return // a newer search superseded this one
+    if (error) throw error
+    results.value = (data ?? []) as SearchRow[]
     focusedIndex.value = 0
   } catch (e) {
-    console.warn('[search] failed:', (e as Error).message)
-    results.value = []
+    if (token === searchToken) {
+      console.warn('[search] failed:', (e as Error).message)
+      results.value = []
+    }
   } finally {
-    loading.value = false
+    if (token === searchToken) loading.value = false
   }
 }
 
-const grouped = computed(() => {
-  const g: { type: Result['type']; label: string; items: Result[] }[] = [
-    { type: 'task', label: 'Tasks', items: [] },
-    { type: 'attachment', label: 'Files', items: [] },
-    { type: 'client', label: 'Clients', items: [] }
-  ]
-  for (const r of results.value) {
-    g.find((x) => x.type === r.type)?.items.push(r)
-  }
-  return g.filter((x) => x.items.length > 0)
-})
-
+const GROUPS: { type: RType; label: string }[] = [
+  { type: 'message', label: 'Messages' },
+  { type: 'task', label: 'Tasks' },
+  { type: 'channel', label: 'Channels' },
+  { type: 'person', label: 'People' },
+  { type: 'client', label: 'Clients' }
+]
+const grouped = computed(() =>
+  GROUPS.map((g) => ({ ...g, items: results.value.filter((r) => r.rtype === g.type) })).filter(
+    (g) => g.items.length > 0
+  )
+)
 const flatResults = computed(() => grouped.value.flatMap((g) => g.items))
 
-async function activate(r: Result) {
+async function activate(r: SearchRow) {
   open.value = false
   query.value = ''
-  if (r.type === 'task' || r.type === 'attachment') {
-    if (r.clientId && r.clientId !== clients.currentClientId) {
-      clients.setCurrentClient(r.clientId)
-    }
+  results.value = []
+  if (r.rtype === 'task' && r.task_id) {
+    if (r.client_id && r.client_id !== clients.currentClientId) clients.setCurrentClient(r.client_id)
     await router.push({ name: 'workstation-tasks' })
-    tasksStore.selectTask(r.taskId)
-  } else if (r.type === 'client') {
-    clients.setCurrentClient(r.clientId)
+    tasksStore.selectTask(r.task_id)
+  } else if (r.rtype === 'message' && r.channel_id) {
+    if (r.client_id && r.client_id !== clients.currentClientId) clients.setCurrentClient(r.client_id)
+    channels.select(r.channel_id)
+    await router.push({ path: '/app/comms', query: r.message_id ? { m: r.message_id } : {} })
+  } else if (r.rtype === 'channel' && r.channel_id) {
+    if (r.client_id && r.client_id !== clients.currentClientId) clients.setCurrentClient(r.client_id)
+    channels.select(r.channel_id)
+    await router.push({ path: '/app/comms' })
+  } else if (r.rtype === 'person' && r.user_id) {
+    try {
+      const id = await channels.openDm(r.user_id)
+      if (id) {
+        channels.select(id)
+        await router.push({ path: '/app/comms' })
+      }
+    } catch {
+      /* surfaced elsewhere */
+    }
+  } else if (r.rtype === 'client' && r.client_id) {
+    clients.setCurrentClient(r.client_id)
     await router.push({ name: 'workstation-tasks' })
   }
 }
@@ -195,7 +136,6 @@ function close() {
 }
 
 function onKeyDown(e: KeyboardEvent) {
-  // ⌘K / Ctrl+K to focus search anywhere in the app.
   if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
     e.preventDefault()
     focus()
@@ -236,8 +176,25 @@ onBeforeUnmount(() => {
   document.removeEventListener('click', onDocClick)
 })
 
-const iconFor = (type: Result['type']) =>
-  type === 'task' ? ListTodo : type === 'attachment' ? Paperclip : Users
+const iconFor = (type: RType) =>
+  type === 'message' ? MessageSquare
+    : type === 'task' ? ListTodo
+    : type === 'channel' ? Hash
+    : type === 'person' ? User
+    : Briefcase
+
+// Single-occurrence highlight of the matched query in the label.
+function parts(text: string) {
+  const q = query.value.trim()
+  if (!q) return [{ t: text, hit: false }]
+  const idx = text.toLowerCase().indexOf(q.toLowerCase())
+  if (idx === -1) return [{ t: text, hit: false }]
+  return [
+    { t: text.slice(0, idx), hit: false },
+    { t: text.slice(idx, idx + q.length), hit: true },
+    { t: text.slice(idx + q.length), hit: false }
+  ]
+}
 </script>
 
 <template>
@@ -250,7 +207,11 @@ const iconFor = (type: Result['type']) =>
         ref="inputEl"
         v-model="query"
         type="text"
-        placeholder="Search tasks, files, clients…"
+        role="combobox"
+        aria-controls="global-search-list"
+        :aria-expanded="open"
+        :aria-activedescendant="open && flatResults.length ? `gs-opt-${focusedIndex}` : undefined"
+        placeholder="Search messages, tasks, people…"
         class="flex-1 bg-transparent outline-none text-sm placeholder:text-base-content/40"
         @focus="open = query.length > 0 || flatResults.length > 0"
       />
@@ -263,23 +224,18 @@ const iconFor = (type: Result['type']) =>
 
     <div
       v-if="open"
-      class="absolute left-0 right-0 mt-1 rounded-lg border border-base-300 bg-white shadow-xl overflow-hidden z-30 max-h-[60vh] overflow-y-auto"
+      id="global-search-list"
+      class="absolute left-0 right-0 mt-1 rounded-lg border border-base-300 bg-base-100 shadow-xl overflow-hidden z-30 max-h-[60vh] overflow-y-auto"
       role="listbox"
     >
       <div v-if="loading" class="px-4 py-3 flex items-center gap-2 text-sm text-base-content/60">
         <Loader class="w-3.5 h-3.5 animate-spin" :stroke-width="1.75" />
         Searching…
       </div>
-      <div
-        v-else-if="query.trim().length < 2"
-        class="px-4 py-3 text-xs text-base-content/50"
-      >
+      <div v-else-if="query.trim().length < 2" class="px-4 py-3 text-xs text-base-content/50">
         Keep typing… (min 2 characters)
       </div>
-      <div
-        v-else-if="flatResults.length === 0"
-        class="px-4 py-6 text-center text-sm text-base-content/60"
-      >
+      <div v-else-if="flatResults.length === 0" class="px-4 py-6 text-center text-sm text-base-content/60">
         No matches for <span class="font-medium">"{{ query }}"</span>
       </div>
       <div v-else>
@@ -288,23 +244,26 @@ const iconFor = (type: Result['type']) =>
             {{ g.label }}
           </div>
           <ul>
-            <li v-for="r in g.items" :key="r.id">
+            <li v-for="r in g.items" :key="r.rid">
               <button
                 type="button"
+                role="option"
+                :id="`gs-opt-${flatResults.indexOf(r)}`"
+                :aria-selected="flatResults.indexOf(r) === focusedIndex"
                 :class="[
                   'w-full flex items-center gap-3 px-3 py-2 text-left transition-colors',
-                  flatResults.indexOf(r) === focusedIndex
-                    ? 'bg-primary/5'
-                    : 'hover:bg-base-200/60'
+                  flatResults.indexOf(r) === focusedIndex ? 'bg-primary/5' : 'hover:bg-base-200/60'
                 ]"
                 @click="activate(r)"
                 @mouseenter="focusedIndex = flatResults.indexOf(r)"
               >
-                <component :is="iconFor(r.type)" class="w-4 h-4 text-base-content/50 shrink-0" :stroke-width="1.75" />
+                <component :is="iconFor(r.rtype)" class="w-4 h-4 text-base-content/50 shrink-0" :stroke-width="1.75" />
                 <div class="flex-1 min-w-0">
-                  <div class="text-sm font-medium truncate">{{ r.label }}</div>
+                  <div class="text-sm font-medium truncate">
+                    <template v-for="(p, i) in parts(r.label)" :key="i"><span v-if="p.hit" class="bg-primary/20 text-primary rounded px-0.5">{{ p.t }}</span><template v-else>{{ p.t }}</template></template>
+                  </div>
                   <div class="text-xs text-base-content/60 truncate flex items-center gap-1">
-                    <Hash v-if="r.type === 'task'" class="w-3 h-3" :stroke-width="1.75" />
+                    <Hash v-if="r.rtype === 'channel'" class="w-3 h-3" :stroke-width="1.75" />
                     {{ r.sub }}
                   </div>
                 </div>
