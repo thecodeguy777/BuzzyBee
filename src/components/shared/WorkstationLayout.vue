@@ -35,10 +35,15 @@ const fullBleed = computed(
 const commsStream = useChannelStream(computed(() => channels.currentChannelId))
 provide(COMMS_STREAM, commsStream)
 
-// Cross-channel huddle presence so the channel list can flag huddles anywhere.
+// Cross-channel huddle + occupancy presence so the channel list can flag
+// huddles anywhere and show who's sitting in which channel.
 const huddlePresence = useHuddlePresence({
   inHuddle: commsStream.inHuddle,
-  channelId: computed(() => channels.currentChannelId)
+  channelId: computed(() => channels.currentChannelId),
+  // "Viewing" = the selected channel while the Comms surface is on screen.
+  viewingChannelId: computed(() =>
+    route.path.startsWith('/app/comms') ? channels.currentChannelId : null,
+  )
 })
 provide(HUDDLE_PRESENCE, huddlePresence)
 

@@ -4,44 +4,59 @@ import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth'
 
 /**
- * ONE global realtime topic for the workstation, carrying two signals:
+ * ONE global realtime topic for the workstation, carrying three signals:
  *
  *  • onlineUsers — via PRESENCE. Presence is right for "who is connected":
  *    it carries no claim beyond the connection itself, so it can't go stale.
  *
- *  • byChannel (huddle indicators) — via BROADCAST heartbeats with a TTL.
- *    Presence proved wrong for this: "I'm huddling on channel X" is a claim,
- *    and any missed "I left" (raced reconnect, dropped frame, dev hot-reload
- *    zombie) left a live connection serving a stale flag forever. Heartbeats
- *    invert the failure mode: a huddler pings every 10s, receivers expire
- *    entries after 25s — no ping, no indicator, by construction. Graceful
- *    leaves also send an explicit stop for an instant clear.
+ *  • byChannel (huddle indicators) and viewersByChannel (who is sitting in
+ *    which channel) — via BROADCAST heartbeats with a TTL. Presence proved
+ *    wrong for claims like "I'm huddling on X": any missed "I left" (raced
+ *    reconnect, dropped frame, dev hot-reload zombie) left a live connection
+ *    serving a stale flag forever. Heartbeats invert the failure mode: every
+ *    client pings its state every 10s, receivers expire entries after 25s —
+ *    no ping, no indicator, by construction. Transitions also send an
+ *    immediate ping for an instant update.
  */
 const HEARTBEAT_MS = 10_000
 const TTL_MS = 25_000
 
 interface HuddlePing {
   user_id: string
-  // null = explicit "I left the huddle".
+  // Channel the user is huddling on (null = not in a huddle).
   channel_id: string | null
+  // Channel the user is viewing in Comms (null = elsewhere in the app).
+  viewing: string | null
 }
 
 export function useHuddlePresence(opts: {
   inHuddle: Ref<boolean>
   channelId: Ref<string | null | undefined>
+  /** Channel currently on screen (only when the Comms surface is open). */
+  viewingChannelId?: Ref<string | null | undefined>
 }) {
   const auth = useAuthStore()
   const onlineUsers = ref<string[]>([])
-  // user_id → { channelId, at } — last heartbeat seen, pruned past TTL.
-  const lastPing = ref<Record<string, { channelId: string; at: number }>>({})
+  // user_id → last heartbeat seen, pruned past TTL.
+  const lastPing = ref<Record<string, { huddle: string | null; viewing: string | null; at: number }>>({})
 
   const byChannel = computed<Record<string, number>>(() => {
     const sets: Record<string, Set<string>> = {}
     for (const [uid, p] of Object.entries(lastPing.value)) {
-      ;(sets[p.channelId] ??= new Set()).add(uid)
+      if (p.huddle) (sets[p.huddle] ??= new Set()).add(uid)
     }
     const out: Record<string, number> = {}
     for (const [cid, set] of Object.entries(sets)) out[cid] = set.size
+    return out
+  })
+
+  /** Who (besides me) is sitting in each channel right now. */
+  const viewersByChannel = computed<Record<string, string[]>>(() => {
+    const me = auth.user?.id
+    const out: Record<string, string[]> = {}
+    for (const [uid, p] of Object.entries(lastPing.value)) {
+      if (p.viewing && uid !== me) (out[p.viewing] ??= []).push(uid)
+    }
     return out
   })
 
@@ -63,8 +78,11 @@ export function useHuddlePresence(opts: {
 
   function onPing(payload: HuddlePing | undefined) {
     if (!payload?.user_id) return
-    if (payload.channel_id) {
-      lastPing.value = { ...lastPing.value, [payload.user_id]: { channelId: payload.channel_id, at: Date.now() } }
+    if (payload.channel_id || payload.viewing) {
+      lastPing.value = {
+        ...lastPing.value,
+        [payload.user_id]: { huddle: payload.channel_id, viewing: payload.viewing ?? null, at: Date.now() },
+      }
     } else if (lastPing.value[payload.user_id]) {
       const next = { ...lastPing.value }
       delete next[payload.user_id]
@@ -82,14 +100,14 @@ export function useHuddlePresence(opts: {
   function sendPing(leaving = false) {
     const uid = auth.user?.id
     if (!channel || !uid) return
-    const channelId = !leaving && opts.inHuddle.value ? opts.channelId.value ?? null : null
-    void channel.send({
-      type: 'broadcast',
-      event: 'huddle',
-      payload: { user_id: uid, channel_id: channelId } satisfies HuddlePing,
-    })
+    const payload: HuddlePing = {
+      user_id: uid,
+      channel_id: !leaving && opts.inHuddle.value ? opts.channelId.value ?? null : null,
+      viewing: !leaving ? opts.viewingChannelId?.value ?? null : null,
+    }
+    void channel.send({ type: 'broadcast', event: 'huddle', payload })
     // Our own indicator shouldn't wait for the round trip (self-broadcast is off).
-    onPing({ user_id: uid, channel_id: channelId })
+    onPing(payload)
   }
 
   async function close() {
@@ -122,13 +140,11 @@ export function useHuddlePresence(opts: {
       if (status === 'SUBSCRIBED') {
         void ch.track({ user_id: auth.user?.id })
         // Announce current state on every (re)join, so a reconnect can't lose us.
-        if (opts.inHuddle.value) sendPing()
+        sendPing()
       }
     })
     channel = ch
-    heartbeatTimer = setInterval(() => {
-      if (opts.inHuddle.value) sendPing()
-    }, HEARTBEAT_MS)
+    heartbeatTimer = setInterval(() => sendPing(), HEARTBEAT_MS)
     pruneTimer = setInterval(prune, 5_000)
   }
 
@@ -141,11 +157,13 @@ export function useHuddlePresence(opts: {
     { immediate: true }
   )
 
-  // Joining/leaving a huddle (or carrying it to another channel) announces
-  // immediately — the heartbeat is just the keep-alive between transitions.
-  watch([() => opts.inHuddle.value, () => opts.channelId.value], () => sendPing())
+  // State transitions announce immediately — the heartbeat is the keep-alive.
+  watch(
+    [() => opts.inHuddle.value, () => opts.channelId.value, () => opts.viewingChannelId?.value],
+    () => sendPing(),
+  )
 
   onUnmounted(close)
 
-  return { byChannel, onlineUsers }
+  return { byChannel, viewersByChannel, onlineUsers }
 }

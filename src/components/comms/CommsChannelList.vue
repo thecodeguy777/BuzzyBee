@@ -2,6 +2,7 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import { Hash, Plus, ChevronDown, Check, Headphones } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
+import SeenCluster from '@/components/comms/SeenCluster.vue'
 import { useChannelsStore } from '@/stores/channels'
 import { useClientsStore } from '@/stores/clients'
 import { useTeamStore } from '@/stores/team'
@@ -13,6 +14,8 @@ const props = defineProps<{
   currentChannelId: string | null
   /** Map of channel id → huddle participant count (cross-channel presence). */
   huddleByChannel?: Record<string, number>
+  /** Map of channel id → people (besides you) currently sitting in it. */
+  viewersByChannel?: Record<string, { id: string; name: string; avatarUrl: string | null }[]>
   /** User ids currently online (for DM presence dots). */
   onlineIds?: string[]
 }>()
@@ -22,6 +25,11 @@ const channels = useChannelsStore()
 const clients = useClientsStore()
 const team = useTeamStore()
 const auth = useAuthStore()
+
+const viewersTitle = (id: string) => {
+  const v = props.viewersByChannel?.[id] ?? []
+  return v.map((m) => m.name.split(' ')[0]).join(', ') + (v.length === 1 ? ' is' : ' are') + ' here now'
+}
 
 // Direct messages list = the people on *this* client workspace (its assigned
 // VAs + PMs), plus anyone you already have a DM with. Each row carries its
@@ -166,6 +174,9 @@ async function commitAddChannel() {
       >
         <Hash class="w-4 h-4 shrink-0" :stroke-width="2" />
         <span class="flex-1 truncate">{{ c.name }}</span>
+        <span v-if="viewersByChannel?.[c.id]?.length" class="shrink-0" :title="viewersTitle(c.id)">
+          <SeenCluster :members="viewersByChannel[c.id]" :size="14" :max="3" />
+        </span>
         <span v-if="huddleByChannel?.[c.id]" class="inline-flex items-center gap-0.5 text-success shrink-0 animate-pulse" title="Huddle in progress">
           <Headphones class="w-3.5 h-3.5" :stroke-width="2" />
           <span class="text-[0.6rem] font-bold tabular-nums">{{ huddleByChannel[c.id] }}</span>
@@ -184,6 +195,9 @@ async function commitAddChannel() {
       >
         <Hash class="w-4 h-4 shrink-0" :stroke-width="2" />
         <span class="flex-1 truncate">{{ c.name }}</span>
+        <span v-if="viewersByChannel?.[c.id]?.length" class="shrink-0" :title="viewersTitle(c.id)">
+          <SeenCluster :members="viewersByChannel[c.id]" :size="14" :max="3" />
+        </span>
         <span v-if="huddleByChannel?.[c.id]" class="inline-flex items-center gap-0.5 text-success shrink-0 animate-pulse" title="Huddle in progress">
           <Headphones class="w-3.5 h-3.5" :stroke-width="2" />
           <span class="text-[0.6rem] font-bold tabular-nums">{{ huddleByChannel[c.id] }}</span>

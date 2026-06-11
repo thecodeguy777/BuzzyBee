@@ -128,6 +128,25 @@ const onlineIds = computed(
   () => huddlePresence?.onlineUsers.value ?? stream.online.value.map((p) => p.userId)
 )
 
+// Channel occupancy — who (besides you) is sitting in each channel right now,
+// resolved to profiles for the mini honeycombs in the channel list.
+type ViewerMember = { id: string; name: string; avatarUrl: string | null }
+const channelViewers = computed<Record<string, ViewerMember[]>>(() => {
+  const src = huddlePresence?.viewersByChannel.value ?? {}
+  const out: Record<string, ViewerMember[]> = {}
+  for (const [cid, ids] of Object.entries(src)) {
+    out[cid] = ids.map((id) => {
+      const p = team.profiles[id]
+      return { id, name: p?.full_name ?? 'Member', avatarUrl: p?.avatar_url ?? null }
+    })
+  }
+  return out
+})
+watch(channelViewers, (map) => {
+  const missing = Object.values(map).flat().filter((m) => !team.profiles[m.id]).map((m) => m.id)
+  if (missing.length) void team.fetchProfiles(missing)
+})
+
 // ── Seen-by (read receipts) ───────────────────────────────────────────────────
 // Reads ride the stream's private broadcast (same fast path as messages), so the
 // honeycomb updates the instant another member catches up.
@@ -894,6 +913,7 @@ function fullscreenScreen() {
         :online-count="stream.online.value.length"
         :current-channel-id="currentChannelId"
         :huddle-by-channel="huddleByChannel"
+        :viewers-by-channel="channelViewers"
         :online-ids="onlineIds"
         @choose="chooseChannel"
         @error="commsError = $event"
@@ -909,7 +929,8 @@ function fullscreenScreen() {
             :online-count="stream.online.value.length"
             :current-channel-id="currentChannelId"
             :huddle-by-channel="huddleByChannel"
-        :online-ids="onlineIds"
+            :viewers-by-channel="channelViewers"
+            :online-ids="onlineIds"
             @choose="chooseChannel"
             @error="commsError = $event"
           />
