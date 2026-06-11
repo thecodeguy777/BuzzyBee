@@ -579,7 +579,7 @@ function openDuePicker(triggerEl: HTMLElement) {
 
     <aside
       :class="[
-        'fixed top-0 right-0 z-40 h-full w-full max-w-xl bg-white shadow-2xl flex flex-col',
+        'fixed top-0 right-0 z-40 h-full w-full max-w-xl bg-base-100 shadow-2xl flex flex-col',
         'transition-transform duration-300 ease-out will-change-transform',
         open ? 'translate-x-0' : 'translate-x-full pointer-events-none'
       ]"
@@ -649,7 +649,7 @@ function openDuePicker(triggerEl: HTMLElement) {
               </div>
               <ul
                 tabindex="0"
-                class="dropdown-content z-10 mt-1 menu p-1 shadow-lg bg-white rounded-lg border border-base-300 w-48 text-sm max-h-64 overflow-y-auto flex-nowrap"
+                class="dropdown-content z-10 mt-1 menu p-1 shadow-lg bg-base-100 rounded-lg border border-base-300 w-48 text-sm max-h-64 overflow-y-auto flex-nowrap"
               >
                 <li v-for="p in projectOptions" :key="p.id">
                   <a :class="p.id === t?.project_id && 'active'" @click="pickProject(p.id)">{{ p.name }}</a>
@@ -670,7 +670,7 @@ function openDuePicker(triggerEl: HTMLElement) {
               </div>
               <ul
                 tabindex="0"
-                class="dropdown-content z-10 mt-1 menu p-1 shadow-lg bg-white rounded-lg border border-base-300 w-44 text-sm"
+                class="dropdown-content z-10 mt-1 menu p-1 shadow-lg bg-base-100 rounded-lg border border-base-300 w-44 text-sm"
               >
                 <li v-for="s in statuses" :key="s.value">
                   <a
@@ -698,7 +698,7 @@ function openDuePicker(triggerEl: HTMLElement) {
               </div>
               <ul
                 tabindex="0"
-                class="dropdown-content z-10 mt-1 menu p-1 shadow-lg bg-white rounded-lg border border-base-300 w-32 text-sm"
+                class="dropdown-content z-10 mt-1 menu p-1 shadow-lg bg-base-100 rounded-lg border border-base-300 w-32 text-sm"
               >
                 <li v-for="p in priorities" :key="p.value">
                   <a
@@ -818,7 +818,7 @@ function openDuePicker(triggerEl: HTMLElement) {
               >
                 <div
                   v-if="assigneeMenuOpen"
-                  class="absolute left-0 top-full mt-1 z-30 w-72 rounded-xl bg-white border border-base-300 shadow-hc-2 overflow-hidden"
+                  class="absolute left-0 top-full mt-1 z-30 w-72 rounded-xl bg-base-100 border border-base-300 shadow-hc-2 overflow-hidden"
                 >
                   <div class="p-2 border-b border-base-300/60">
                     <label class="flex items-center gap-2 px-2 py-1 rounded-md bg-base-200/50">

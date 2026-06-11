@@ -89,7 +89,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onEsc))
       aria-modal="true"
       @click.self="close"
     >
-      <div class="w-full max-w-md rounded-xl bg-white border border-base-300 shadow-2xl overflow-hidden">
+      <div class="w-full max-w-md rounded-xl bg-base-100 border border-base-300 shadow-2xl overflow-hidden">
         <header class="flex items-center justify-between gap-3 px-4 py-3 border-b border-base-300">
           <div class="flex items-center gap-2">
             <UserPlus class="w-4 h-4 text-base-content/60" :stroke-width="1.75" />

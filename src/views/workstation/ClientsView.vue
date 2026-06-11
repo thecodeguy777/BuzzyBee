@@ -104,7 +104,7 @@ function statusBadge(status: string) {
     >
       <form
         v-if="creating"
-        class="bg-white rounded-xl border-2 border-primary/40 shadow-md p-4 space-y-3"
+        class="bg-base-100 rounded-xl border-2 border-primary/40 shadow-md p-4 space-y-3"
         @submit.prevent="submitCreate"
       >
         <div class="flex items-center justify-between">

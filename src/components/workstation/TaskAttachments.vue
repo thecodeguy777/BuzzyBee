@@ -238,7 +238,7 @@ onUnmounted(() => document.removeEventListener('paste', onPaste))
         <li
           v-for="a in list"
           :key="a.id"
-          class="group relative rounded-md border border-base-300 bg-white overflow-hidden"
+          class="group relative rounded-md border border-base-300 bg-base-100 overflow-hidden"
         >
           <button
             type="button"
@@ -264,7 +264,7 @@ onUnmounted(() => document.removeEventListener('paste', onPaste))
             </div>
           </button>
 
-          <div class="px-2 py-1.5 border-t border-base-300/60 bg-white">
+          <div class="px-2 py-1.5 border-t border-base-300/60 bg-base-100">
             <div class="text-xs font-medium truncate" :title="a.name">{{ a.name }}</div>
             <div class="text-[0.65rem] text-base-content/50 flex items-center gap-1.5 justify-between">
               <span>{{ formatBytes(a.size) }}</span>

@@ -418,7 +418,7 @@ watch(open, (is) => {
 
     <aside
       :class="[
-        'fixed top-0 right-0 z-40 h-full w-full max-w-xl bg-white shadow-2xl flex flex-col',
+        'fixed top-0 right-0 z-40 h-full w-full max-w-xl bg-base-100 shadow-2xl flex flex-col',
         'transition-transform duration-300 ease-out will-change-transform',
         open ? 'translate-x-0' : 'translate-x-full pointer-events-none'
       ]"
@@ -566,7 +566,7 @@ watch(open, (is) => {
               <button
                 type="button"
                 class="px-2 py-0.5 rounded text-[0.65rem] font-medium uppercase tracking-wider transition-colors"
-                :class="channel === 'slack' ? 'bg-white shadow-sm text-base-content' : 'text-base-content/50 hover:text-base-content/80'"
+                :class="channel === 'slack' ? 'bg-base-100 shadow-sm text-base-content' : 'text-base-content/50 hover:text-base-content/80'"
                 @click="channel = 'slack'; saveChannel()"
               >
                 Slack
@@ -574,7 +574,7 @@ watch(open, (is) => {
               <button
                 type="button"
                 class="px-2 py-0.5 rounded text-[0.65rem] font-medium uppercase tracking-wider transition-colors"
-                :class="channel === 'email' ? 'bg-white shadow-sm text-base-content' : 'text-base-content/50 hover:text-base-content/80'"
+                :class="channel === 'email' ? 'bg-base-100 shadow-sm text-base-content' : 'text-base-content/50 hover:text-base-content/80'"
                 @click="channel = 'email'; saveChannel()"
               >
                 Email
@@ -704,7 +704,7 @@ watch(open, (is) => {
             leave-to-class="opacity-0 -translate-y-1"
           >
             <div v-if="showAddPm" class="rounded-lg border border-base-300 bg-base-100/40 p-2 space-y-2">
-              <label class="flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-base-300 bg-white focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/40">
+              <label class="flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-base-300 bg-base-100 focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/40">
                 <Search class="w-3.5 h-3.5 text-base-content/50" :stroke-width="1.75" />
                 <input
                   v-model="pmSearch"
@@ -846,7 +846,7 @@ watch(open, (is) => {
             leave-to-class="opacity-0 -translate-y-1"
           >
             <div v-if="showAddVa" class="rounded-lg border border-base-300 bg-base-100/40 p-2 space-y-2">
-              <label class="flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-base-300 bg-white focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/40">
+              <label class="flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-base-300 bg-base-100 focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/40">
                 <Search class="w-3.5 h-3.5 text-base-content/50" :stroke-width="1.75" />
                 <input
                   v-model="vaSearch"

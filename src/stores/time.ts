@@ -39,6 +39,11 @@ export const useTimeStore = defineStore('time', () => {
     return Math.max(0, Math.floor((tick.value - new Date(e.started_at).getTime()) / 1000))
   })
 
+  // Session-health thresholds: nudge at 6h, treat as "forgot to clock out"
+  // at 12h (the server auto-closes at 12h too — see close_stale_time_entries).
+  const isLongSession = computed(() => isRunning.value && elapsedSeconds.value > 6 * 3600)
+  const isStaleSession = computed(() => isRunning.value && elapsedSeconds.value > 12 * 3600)
+
   let timerId: number | undefined
   function startTicker() {
     if (timerId !== undefined) return
@@ -55,11 +60,15 @@ export const useTimeStore = defineStore('time', () => {
   }
 
   async function fetchCurrent() {
-    if (!auth.isAuthenticated) return
+    if (!auth.user) return
     try {
+      // Scoped to MY entries: PMs/admins can see other people's rows through
+      // RLS, and an unscoped query made them "adopt" someone else's running
+      // timer (the stuck client-switch modal).
       const { data, error: err } = await supabase
         .from('time_entries')
         .select('*')
+        .eq('va_id', auth.user.id)
         .eq('status', 'running')
         .order('started_at', { ascending: false })
         .limit(1)
@@ -74,13 +83,14 @@ export const useTimeStore = defineStore('time', () => {
   }
 
   async function fetchRecent(days = 7) {
-    if (!auth.isAuthenticated) return
+    if (!auth.user) return
     const since = new Date()
     since.setDate(since.getDate() - days)
     try {
       const { data, error: err } = await supabase
         .from('time_entries')
         .select('*')
+        .eq('va_id', auth.user.id)
         .gte('started_at', since.toISOString())
         .order('started_at', { ascending: false })
       if (err) throw err
@@ -118,14 +128,16 @@ export const useTimeStore = defineStore('time', () => {
     }
   }
 
-  async function clockOut() {
+  async function clockOut(note?: string) {
     if (!currentEntry.value) return null
     loading.value = true
     error.value = null
     try {
+      const patch: Record<string, unknown> = { ended_at: new Date().toISOString(), status: 'closed' }
+      if (note?.trim()) patch.notes = note.trim()
       const { data, error: err } = await supabase
         .from('time_entries')
-        .update({ ended_at: new Date().toISOString(), status: 'closed' })
+        .update(patch)
         .eq('id', currentEntry.value.id)
         .select('*')
         .single()
@@ -140,6 +152,57 @@ export const useTimeStore = defineStore('time', () => {
     } finally {
       loading.value = false
     }
+  }
+
+  // ── Corrections ──────────────────────────────────────────────────────────────
+  // RLS scopes who may touch a row (VA: own; admin/superadmin: anyone's).
+  async function updateEntry(
+    id: string,
+    patch: { started_at?: string; ended_at?: string | null; notes?: string | null },
+  ): Promise<boolean> {
+    error.value = null
+    const db: Record<string, unknown> = {}
+    if (patch.started_at !== undefined) db.started_at = patch.started_at
+    if (patch.ended_at !== undefined) {
+      db.ended_at = patch.ended_at
+      if (patch.ended_at) db.status = 'closed'
+    }
+    if (patch.notes !== undefined) db.notes = patch.notes?.trim() || null
+    if (!Object.keys(db).length) return true
+    const { data, error: err } = await supabase
+      .from('time_entries')
+      .update(db)
+      .eq('id', id)
+      .select('*')
+      .single()
+    if (err) {
+      error.value = /check constraint|ended_after_started/i.test(err.message)
+        ? 'End time must be after the start time.'
+        : err.message
+      return false
+    }
+    const row = data as TimeEntry
+    recentEntries.value = recentEntries.value.map((e) => (e.id === id ? row : e))
+    if (currentEntry.value?.id === id) {
+      currentEntry.value = row.status === 'running' ? row : null
+      if (row.status !== 'running') stopTicker()
+    }
+    return true
+  }
+
+  async function deleteEntry(id: string): Promise<boolean> {
+    error.value = null
+    const { error: err } = await supabase.from('time_entries').delete().eq('id', id)
+    if (err) {
+      error.value = err.message
+      return false
+    }
+    recentEntries.value = recentEntries.value.filter((e) => e.id !== id)
+    if (currentEntry.value?.id === id) {
+      currentEntry.value = null
+      stopTicker()
+    }
+    return true
   }
 
   async function switchClient(newClientId: string) {
@@ -179,8 +242,15 @@ export const useTimeStore = defineStore('time', () => {
     const newId = pendingSwitchClientId.value
     if (!newId) return
     pendingSwitchClientId.value = null
-    await switchClient(newId)
-    clients.setCurrentClient(newId)
+    try {
+      await switchClient(newId)
+      clients.setCurrentClient(newId)
+    } catch (e) {
+      // Don't die silently (the old behavior): surface why, and re-sync the
+      // running entry in case our local copy was stale.
+      error.value = "Couldn't switch the timer — " + (e as Error).message
+      void fetchCurrent()
+    }
   }
 
   function cancelSwitch() {
@@ -191,6 +261,8 @@ export const useTimeStore = defineStore('time', () => {
     currentEntry,
     recentEntries,
     isRunning,
+    isLongSession,
+    isStaleSession,
     elapsedSeconds,
     loading,
     error,
@@ -199,6 +271,8 @@ export const useTimeStore = defineStore('time', () => {
     fetchRecent,
     clockIn,
     clockOut,
+    updateEntry,
+    deleteEntry,
     switchClient,
     requestSwitch,
     confirmSwitch,

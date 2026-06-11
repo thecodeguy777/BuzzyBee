@@ -153,7 +153,7 @@ const connectors = [
     <!-- Empty -->
     <div
       v-if="allFiles.length === 0"
-      class="bg-white rounded-xl border border-base-300 shadow-md px-6 py-12 text-center text-sm text-base-content/60"
+      class="bg-base-100 rounded-xl border border-base-300 shadow-md px-6 py-12 text-center text-sm text-base-content/60"
     >
       No files attached to any task yet for {{ clients.currentClient?.name ?? 'this client' }}.
       <div class="text-xs text-base-content/40 mt-2">
@@ -166,7 +166,7 @@ const connectors = [
       <li
         v-for="f in allFiles"
         :key="`${f.taskId}:${f.id}`"
-        class="relative bg-white rounded-xl border border-base-300 shadow-sm hover:shadow-md hover:border-base-content/20 transition-shadow"
+        class="relative bg-base-100 rounded-xl border border-base-300 shadow-sm hover:shadow-md hover:border-base-content/20 transition-shadow"
       >
         <div class="flex items-stretch gap-3 p-2">
           <!-- thumb -->
@@ -241,7 +241,7 @@ const connectors = [
         <!-- share popover (positioned to bottom-right of card) -->
         <div
           v-if="openShareId === f.id"
-          class="absolute right-2 top-full mt-1 w-48 rounded-lg bg-white border border-base-300 shadow-lg z-20 py-1"
+          class="absolute right-2 top-full mt-1 w-48 rounded-lg bg-base-100 border border-base-300 shadow-lg z-20 py-1"
           role="menu"
           @click.stop
         >

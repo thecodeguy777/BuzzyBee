@@ -188,7 +188,7 @@ function submit() {
               :class="link ? 'bg-primary' : 'bg-base-300'"
               @click="link = !link"
             >
-              <span class="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all" :class="link ? 'left-[18px]' : 'left-0.5'" />
+              <span class="absolute top-0.5 w-4 h-4 rounded-full bg-base-100 shadow transition-all" :class="link ? 'left-[18px]' : 'left-0.5'" />
             </button>
             <div class="flex-1">
               <div class="text-xs font-semibold">Link to the task board</div>

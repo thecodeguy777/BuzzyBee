@@ -5,6 +5,7 @@ import { Hash, ChevronRight } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useChannelsStore } from '@/stores/channels'
 import { useTeamStore } from '@/stores/team'
+import { useTimeStore } from '@/stores/time'
 import { displayName } from '@/lib/format'
 import ClientSwitcher from '@/components/workstation/ClientSwitcher.vue'
 import GlobalSearch from '@/components/workstation/GlobalSearch.vue'
@@ -17,6 +18,7 @@ const auth = useAuthStore()
 const route = useRoute()
 const channels = useChannelsStore()
 const team = useTeamStore()
+const time = useTimeStore()
 
 // Breadcrumb channel segment — only meaningful on the comms surface.
 const showChannelCrumb = computed(() => route.path.startsWith('/app/comms') && !!channels.currentChannel)
@@ -54,7 +56,9 @@ const channelLabel = computed(() => {
       <ThemeToggle />
       <RefreshButton />
       <NotificationBell />
-      <TimerChip v-if="auth.role === 'va'" />
+      <!-- Always show a RUNNING timer (any role) — otherwise a non-VA with a
+           live entry has no way to see or stop it. -->
+      <TimerChip v-if="auth.role === 'va' || time.isRunning" />
     </div>
   </header>
 </template>

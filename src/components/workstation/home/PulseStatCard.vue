@@ -44,7 +44,7 @@ const areaPath = computed(() => (linePath.value ? `${linePath.value} L ${W} ${H}
   <component
     :is="clickable ? 'button' : 'div'"
     :type="clickable ? 'button' : undefined"
-    class="text-left bg-white border rounded-2xl p-4 shadow-hc-1 transition-all w-full"
+    class="text-left bg-base-100 border rounded-2xl p-4 shadow-hc-1 transition-all w-full"
     :class="[
       clickable ? 'hover:shadow-hc-2 hover:border-base-content/15' : '',
       isError ? 'border-error/30' : 'border-base-300'

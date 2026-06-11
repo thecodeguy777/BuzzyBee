@@ -39,6 +39,9 @@ export const useChannelsStore = defineStore('channels', () => {
   const unread = ref<Record<string, number>>({})
   // Unread messages that @-mention me, per channel (subset of unread + replies).
   const mentions = ref<Record<string, number>>({})
+  // Cross-workspace totals (client_id → counts; DMs under 'dm') so the client
+  // switcher can show that ANOTHER workspace is pinging you.
+  const unreadByClient = ref<Record<string, { unread: number; mentions: number }>>({})
   const lastMessageAt = ref<Record<string, string>>({})
   const currentChannelId = ref<string | null>(null)
   const loading = ref(false)
@@ -136,6 +139,36 @@ export const useChannelsStore = defineStore('channels', () => {
     lastMessageAt.value = lm
   }
 
+  // ── Cross-workspace totals ───────────────────────────────────────────────────
+  let crossTimer: ReturnType<typeof setTimeout> | undefined
+  async function refreshCrossClient() {
+    if (!auth.isAuthenticated) return
+    const { data, error } = await supabase.rpc('comms_unread_by_client')
+    if (error) {
+      console.warn('[channels] cross-client overview:', error.message)
+      return
+    }
+    const next: Record<string, { unread: number; mentions: number }> = {}
+    for (const row of (data ?? []) as any[]) {
+      next[row.client_id ?? 'dm'] = { unread: row.unread ?? 0, mentions: row.mentions ?? 0 }
+    }
+    unreadByClient.value = next
+  }
+  // Debounced: WAL events can arrive in bursts.
+  function scheduleCrossRefresh(delay = 1500) {
+    clearTimeout(crossTimer)
+    crossTimer = setTimeout(() => void refreshCrossClient(), delay)
+  }
+  /** Unread total in workspaces OTHER than the selected one (DMs excluded —
+   *  those are visible from any workspace's channel list). */
+  const otherClientsUnread = computed(() => {
+    let n = 0
+    for (const [cid, v] of Object.entries(unreadByClient.value)) {
+      if (cid !== 'dm' && cid !== clients.currentClientId) n += v.unread
+    }
+    return n
+  })
+
   function select(id: string) {
     currentChannelId.value = id
     void markRead(id)
@@ -164,6 +197,7 @@ export const useChannelsStore = defineStore('channels', () => {
       .from('channel_members')
       .upsert({ channel_id: id, user_id: uid, last_read_at: now }, { onConflict: 'channel_id,user_id' })
     if (error) console.warn('[channels] markRead:', error.message)
+    else scheduleCrossRefresh(800)
   }
 
   async function setMembershipFlag(id: string, patch: { pinned?: boolean; muted?: boolean }) {
@@ -251,13 +285,34 @@ export const useChannelsStore = defineStore('channels', () => {
     return id
   }
 
-  // Light meta sync: when channels are added/removed for this client elsewhere,
-  // reload the list. (Per-message unread is refreshed on channel switch.)
+  // Light meta sync: channel add/remove reloads the list, and every message
+  // INSERT I'm allowed to see (RLS-scoped WAL) keeps badges live — including
+  // channels I'm not subscribed to and workspaces I don't have selected.
   function startMeta() {
     if (metaChannel) return
     metaChannel = supabase
       .channel('bb-channels-meta')
       .on('postgres_changes', { event: '*', schema: 'buzzybee', table: 'channels' }, () => void load())
+      .on('postgres_changes', { event: 'INSERT', schema: 'buzzybee', table: 'messages' }, (p: any) => {
+        const row = p.new
+        if (!row?.channel_id || row.user_id === auth.user?.id) return
+        // The active channel is handled by the live stream (with proper
+        // "is the user looking?" logic) — leave it alone here.
+        if (row.channel_id === currentChannelId.value) return
+        const known =
+          channels.value.some((c) => c.id === row.channel_id) ||
+          dms.value.some((c) => c.id === row.channel_id)
+        if (known) {
+          if (!row.parent_id) bumpUnread(row.channel_id)
+          const me = auth.user?.id
+          if (me && (row.mentioned_user_ids ?? []).includes(me)) bumpMention(row.channel_id)
+          lastMessageAt.value = { ...lastMessageAt.value, [row.channel_id]: row.created_at }
+        } else {
+          // Unknown channel — could be a brand-new DM aimed at me.
+          void loadDms()
+        }
+        scheduleCrossRefresh()
+      })
       .subscribe()
   }
   async function stopMeta() {
@@ -273,11 +328,13 @@ export const useChannelsStore = defineStore('channels', () => {
       if (authed) {
         void load()
         void loadDms()
+        void refreshCrossClient()
         startMeta()
       } else {
         channels.value = []
         dms.value = []
         dmOther.value = {}
+        unreadByClient.value = {}
         currentChannelId.value = null
         void stopMeta()
       }
@@ -293,6 +350,8 @@ export const useChannelsStore = defineStore('channels', () => {
     entryReadAt,
     unread,
     mentions,
+    unreadByClient,
+    otherClientsUnread,
     lastMessageAt,
     currentChannelId,
     currentChannel,
@@ -306,6 +365,7 @@ export const useChannelsStore = defineStore('channels', () => {
     loadDms,
     openDm,
     refreshOverview,
+    refreshCrossClient,
     select,
     bumpUnread,
     bumpMention,

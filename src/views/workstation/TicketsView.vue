@@ -191,7 +191,7 @@ const typeOptions: { value: 'all' | TicketType; label: string }[] = [
 
       <ul
         v-if="filteredList.length"
-        class="bg-white rounded-xl border border-base-300 shadow-md overflow-hidden divide-y divide-base-300/60"
+        class="bg-base-100 rounded-xl border border-base-300 shadow-md overflow-hidden divide-y divide-base-300/60"
       >
         <li v-for="t in filteredList" :key="t.id">
           <button
@@ -231,7 +231,7 @@ const typeOptions: { value: 'all' | TicketType; label: string }[] = [
           </button>
         </li>
       </ul>
-      <div v-else class="bg-white rounded-xl border border-base-300 shadow-md px-6 py-10 text-center text-sm text-base-content/60">
+      <div v-else class="bg-base-100 rounded-xl border border-base-300 shadow-md px-6 py-10 text-center text-sm text-base-content/60">
         No tickets match your filters.
       </div>
     </div>
@@ -240,13 +240,13 @@ const typeOptions: { value: 'all' | TicketType; label: string }[] = [
     <aside class="lg:sticky lg:top-4 self-start min-w-0">
       <div
         v-if="!detail"
-        class="bg-white rounded-xl border border-base-300 shadow-md px-6 py-12 text-center text-sm text-base-content/50"
+        class="bg-base-100 rounded-xl border border-base-300 shadow-md px-6 py-12 text-center text-sm text-base-content/50"
       >
         Select a ticket to view its details.
       </div>
       <div
         v-else
-        class="bg-white rounded-xl border border-base-300 shadow-md flex flex-col max-h-[calc(100vh-6rem)]"
+        class="bg-base-100 rounded-xl border border-base-300 shadow-md flex flex-col max-h-[calc(100vh-6rem)]"
       >
         <header class="px-4 py-3 border-b border-base-300 shrink-0">
           <div class="flex items-center gap-2 text-xs text-base-content/60">

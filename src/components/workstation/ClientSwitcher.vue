@@ -4,9 +4,14 @@ import { ChevronDown, Check, Settings2 } from 'lucide-vue-next'
 import { RouterLink } from 'vue-router'
 import { useClientsStore, type Client } from '@/stores/clients'
 import { useTimeStore } from '@/stores/time'
+import { useChannelsStore } from '@/stores/channels'
 
 const clients = useClientsStore()
 const time = useTimeStore()
+const channels = useChannelsStore()
+
+// Per-workspace message badges so a ping in an unselected client is visible.
+const badge = (c: Client) => channels.unreadByClient[c.id] ?? null
 
 const open = ref(false)
 const rootEl = ref<HTMLElement | null>(null)
@@ -67,6 +72,12 @@ function statusDot(c: Client) {
       >
         {{ empty ? 'No clients assigned' : label }}
       </span>
+      <!-- another workspace has unread messages -->
+      <span
+        v-if="channels.otherClientsUnread > 0"
+        class="min-w-[1.05rem] h-[1.05rem] px-1 rounded-full bg-error text-white text-[0.62rem] font-bold flex items-center justify-center"
+        :title="channels.otherClientsUnread + ' unread in other workspaces'"
+      >{{ channels.otherClientsUnread > 99 ? '99+' : channels.otherClientsUnread }}</span>
       <ChevronDown class="w-3.5 h-3.5" :stroke-width="1.75" />
     </button>
 
@@ -105,6 +116,16 @@ function statusDot(c: Client) {
                 {{ c.tier ?? '—' }} · {{ c.preferred_channel ?? 'no channel' }}
               </div>
             </div>
+            <span
+              v-if="badge(c)?.mentions"
+              class="min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-error text-white text-[0.65rem] font-bold flex items-center justify-center shrink-0"
+              title="You were mentioned"
+            >@{{ badge(c)!.mentions }}</span>
+            <span
+              v-else-if="badge(c)?.unread"
+              class="min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-primary text-primary-content text-[0.65rem] font-bold flex items-center justify-center shrink-0"
+              :title="badge(c)!.unread + ' unread messages'"
+            >{{ badge(c)!.unread }}</span>
             <Check
               v-if="c.id === clients.currentClientId"
               class="w-4 h-4 text-primary shrink-0"

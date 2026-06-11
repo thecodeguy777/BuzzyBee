@@ -591,11 +591,11 @@ thead .bb-frozen-col {
   z-index: 11; /* > thead's z-10 default, so it stays opaque on horizontal scroll */
   background: var(--hc-surface-warm);
 }
-/* Body rows — frozen cells take the row's bg, fall back to white. Hover bg
-   is applied at the row level; we mirror it on the frozen cells so they don't
-   show a different color while hovering. */
-tbody .bb-frozen-col { background: white; }
-tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 50%, white); }
+/* Body rows — frozen cells take the row's bg, fall back to the theme surface.
+   Hover bg is applied at the row level; we mirror it on the frozen cells so
+   they don't show a different color while hovering. */
+tbody .bb-frozen-col { background: var(--color-base-100); }
+tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 50%, var(--color-base-100)); }
 /* Group header rows + spacer + adder are colspanning, not affected by frozen cols. */
 </style>
 
@@ -603,15 +603,15 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
   <div class="space-y-3">
     <!-- Toolbar -->
     <div class="flex items-center gap-2 flex-wrap">
-      <button type="button" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-base-300 bg-white text-xs font-medium hover:bg-base-200/60 transition-colors">
+      <button type="button" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 text-xs font-medium hover:bg-base-200/60 transition-colors">
         <Filter class="w-3.5 h-3.5" :stroke-width="1.75" />
         Filter
       </button>
-      <button type="button" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-base-300 bg-white text-xs font-medium hover:bg-base-200/60 transition-colors">
+      <button type="button" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 text-xs font-medium hover:bg-base-200/60 transition-colors">
         <ArrowUpDown class="w-3.5 h-3.5" :stroke-width="1.75" />
         Sort
       </button>
-      <button type="button" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-base-300 bg-white text-xs font-medium hover:bg-base-200/60 transition-colors">
+      <button type="button" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 text-xs font-medium hover:bg-base-200/60 transition-colors">
         <GroupIcon class="w-3.5 h-3.5" :stroke-width="1.75" />
         Group: <span class="text-base-content/60">Status</span>
       </button>
@@ -620,7 +620,7 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
 
       <button
         type="button"
-        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-base-300 text-xs font-medium hover:bg-base-200/60 transition-colors shadow-hc-1"
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-base-100 border border-base-300 text-xs font-medium hover:bg-base-200/60 transition-colors shadow-hc-1"
       >
         <Sparkles class="w-3.5 h-3.5" :stroke-width="1.75" style="color: var(--hc-accent)" />
         Ask HiveMindAI
@@ -637,7 +637,7 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
     </div>
 
     <!-- Table card -->
-    <div class="bg-white rounded-2xl border border-base-300 shadow-hc-1 overflow-hidden">
+    <div class="bg-base-100 rounded-2xl border border-base-300 shadow-hc-1 overflow-hidden">
       <div class="overflow-x-auto">
         <!--
           table-layout: fixed honors column widths set via inline style on

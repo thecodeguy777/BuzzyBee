@@ -233,7 +233,7 @@ async function destroy() {
     <!-- No project selected -->
     <div
       v-if="!p"
-      class="bg-white rounded-xl border border-base-300 shadow-md px-6 py-10 text-center"
+      class="bg-base-100 rounded-xl border border-base-300 shadow-md px-6 py-10 text-center"
     >
       <Folder class="w-8 h-8 mx-auto text-base-content/30" :stroke-width="1.5" />
       <h2 class="font-display text-xl font-semibold mt-3">No project selected</h2>
@@ -265,7 +265,7 @@ async function destroy() {
     <!-- Main content column (left cell of the grid on lg+) -->
     <div v-else class="space-y-6 min-w-0">
       <!-- Project header / editor -->
-      <div class="bg-white rounded-xl border border-base-300 shadow-md p-5 space-y-3">
+      <div class="bg-base-100 rounded-xl border border-base-300 shadow-md p-5 space-y-3">
         <div class="flex items-start justify-between gap-3">
           <div class="flex-1 min-w-0">
             <div class="text-xs text-base-content/50 mb-1 flex items-center gap-2">
@@ -312,7 +312,7 @@ async function destroy() {
 
       <!-- Stats -->
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div class="bg-white rounded-xl border border-base-300 shadow-sm p-4">
+        <div class="bg-base-100 rounded-xl border border-base-300 shadow-sm p-4">
           <div class="flex items-center justify-between">
             <span class="text-xs uppercase tracking-wider text-base-content/60 font-semibold">Active</span>
             <ListTodo class="w-4 h-4 text-base-content/40" :stroke-width="1.75" />
@@ -325,7 +325,7 @@ async function destroy() {
           </div>
         </div>
 
-        <div class="bg-white rounded-xl border border-base-300 shadow-sm p-4">
+        <div class="bg-base-100 rounded-xl border border-base-300 shadow-sm p-4">
           <div class="flex items-center justify-between">
             <span class="text-xs uppercase tracking-wider text-base-content/60 font-semibold">Done</span>
             <CheckCircle2 class="w-4 h-4 text-success" :stroke-width="1.75" />
@@ -335,7 +335,7 @@ async function destroy() {
           </div>
         </div>
 
-        <div class="bg-white rounded-xl border border-base-300 shadow-sm p-4">
+        <div class="bg-base-100 rounded-xl border border-base-300 shadow-sm p-4">
           <div class="flex items-center justify-between">
             <span class="text-xs uppercase tracking-wider text-base-content/60 font-semibold">Due this week</span>
             <CalendarDays class="w-4 h-4 text-info" :stroke-width="1.75" />
@@ -345,7 +345,7 @@ async function destroy() {
           </div>
         </div>
 
-        <div class="bg-white rounded-xl border border-base-300 shadow-sm p-4">
+        <div class="bg-base-100 rounded-xl border border-base-300 shadow-sm p-4">
           <div class="flex items-center justify-between">
             <span class="text-xs uppercase tracking-wider text-base-content/60 font-semibold">Overdue</span>
             <CircleAlert class="w-4 h-4 text-error" :stroke-width="1.75" />
@@ -360,7 +360,7 @@ async function destroy() {
       </div>
 
       <!-- Members -->
-      <div class="bg-white rounded-xl border border-base-300 shadow-sm">
+      <div class="bg-base-100 rounded-xl border border-base-300 shadow-sm">
         <header class="flex items-center justify-between px-5 py-3 border-b border-base-300/60">
           <div class="text-xs uppercase tracking-wider text-base-content/60 font-semibold">
             Members
@@ -414,7 +414,7 @@ async function destroy() {
             <select
               v-if="canManageMembers"
               :value="m.role"
-              class="text-xs px-2 py-1 rounded-md border border-base-300 bg-white hover:border-base-content/30 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 capitalize shrink-0 cursor-pointer"
+              class="text-xs px-2 py-1 rounded-md border border-base-300 bg-base-100 hover:border-base-content/30 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 capitalize shrink-0 cursor-pointer"
               @change="changeRole(m.user_id, ($event.target as HTMLSelectElement).value as ProjectMemberRole)"
             >
               <option value="lead">Lead</option>

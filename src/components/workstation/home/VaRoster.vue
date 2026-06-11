@@ -9,7 +9,7 @@ defineEmits<{ open: [id: string]; 'see-all': [] }>()
 </script>
 
 <template>
-  <section class="bg-white border border-base-300 rounded-2xl p-4 shadow-hc-1">
+  <section class="bg-base-100 border border-base-300 rounded-2xl p-4 shadow-hc-1">
     <div class="flex items-center justify-between mb-3">
       <h2 class="text-sm font-semibold flex items-center gap-2">
         <UsersRound class="w-4 h-4 text-base-content/60" :stroke-width="1.75" />

@@ -285,7 +285,7 @@ function statusLabel(t: Task) {
 <template>
   <div class="flex gap-4 -mx-4 px-4">
     <!-- Calendar grid -->
-    <div class="flex-1 min-w-0 bg-white rounded-xl border border-base-300 shadow-md overflow-hidden">
+    <div class="flex-1 min-w-0 bg-base-100 rounded-xl border border-base-300 shadow-md overflow-hidden">
       <!-- overdue banner -->
       <div
         v-if="overdueCount > 0"
@@ -384,7 +384,7 @@ function statusLabel(t: Task) {
               v-for="t in isVisibleSlice(cell.key, tasksByDate[cell.key] ?? [])"
               :key="t.id"
               :data-task-id="t.id"
-              class="group/card relative rounded-md border border-base-300 bg-white hover:border-base-content/20 hover:shadow-sm transition-shadow cursor-grab active:cursor-grabbing select-text overflow-hidden"
+              class="group/card relative rounded-md border border-base-300 bg-base-100 hover:border-base-content/20 hover:shadow-sm transition-shadow cursor-grab active:cursor-grabbing select-text overflow-hidden"
             >
               <div class="flex items-stretch">
                 <span
@@ -450,7 +450,7 @@ function statusLabel(t: Task) {
               data-no-cell-click
               type="text"
               placeholder="New task…"
-              class="w-full text-[0.7rem] px-1.5 py-1 rounded-md border border-primary/40 bg-white outline-none focus:ring-1 focus:ring-primary"
+              class="w-full text-[0.7rem] px-1.5 py-1 rounded-md border border-primary/40 bg-base-100 outline-none focus:ring-1 focus:ring-primary"
               @keydown.enter.prevent="submitQuickAdd(cell.key)"
               @keydown.escape.prevent="cancelQuickAdd"
               @blur="submitQuickAdd(cell.key)"
@@ -462,7 +462,7 @@ function statusLabel(t: Task) {
     </div>
 
     <!-- Undated tasks rail -->
-    <aside class="hidden lg:flex w-64 shrink-0 flex-col bg-white rounded-xl border border-base-300 shadow-md max-h-[calc(100vh-12rem)]">
+    <aside class="hidden lg:flex w-64 shrink-0 flex-col bg-base-100 rounded-xl border border-base-300 shadow-md max-h-[calc(100vh-12rem)]">
       <header class="px-4 py-3 border-b border-base-300">
         <h3 class="text-xs uppercase tracking-wider font-semibold text-base-content/70">
           Unscheduled
@@ -480,7 +480,7 @@ function statusLabel(t: Task) {
           v-for="t in undatedTasks"
           :key="t.id"
           :data-task-id="t.id"
-          class="group/card relative rounded-md border border-base-300 bg-white hover:border-base-content/20 hover:shadow-sm transition-shadow cursor-grab active:cursor-grabbing select-text overflow-hidden"
+          class="group/card relative rounded-md border border-base-300 bg-base-100 hover:border-base-content/20 hover:shadow-sm transition-shadow cursor-grab active:cursor-grabbing select-text overflow-hidden"
         >
           <div class="flex items-stretch">
             <span class="w-1 shrink-0" :class="priorityClass(t.priority)" />

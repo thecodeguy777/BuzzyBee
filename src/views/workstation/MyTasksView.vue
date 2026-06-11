@@ -158,7 +158,7 @@ const sections = computed(() => [
 
     <div
       v-if="myTasks.length === 0"
-      class="bg-white rounded-xl border border-base-300 shadow-md px-6 py-12 text-center text-sm text-base-content/60"
+      class="bg-base-100 rounded-xl border border-base-300 shadow-md px-6 py-12 text-center text-sm text-base-content/60"
     >
       <ListTodo class="w-8 h-8 mx-auto text-base-content/30" :stroke-width="1.5" />
       <p class="mt-3">Nothing assigned to you yet.</p>
@@ -181,9 +181,9 @@ const sections = computed(() => [
           <span class="text-xs text-base-content/40 tabular-nums">{{ s.items.length }}</span>
         </div>
 
-        <ul class="bg-white rounded-xl border border-base-300 shadow-sm overflow-hidden divide-y divide-base-300/60">
+        <ul class="bg-base-100 rounded-xl border border-base-300 shadow-sm overflow-hidden divide-y divide-base-300/60">
           <li v-for="t in s.items" :key="t.id">
-            <div class="flex items-center gap-3 px-3 py-2 hover:bg-base-200/30 transition-colors">
+            <div class="flex items-center gap-2.5 px-3 py-1.5 hover:bg-base-200/30 transition-colors">
               <button
                 type="button"
                 class="shrink-0"
@@ -199,34 +199,31 @@ const sections = computed(() => [
               </button>
               <button
                 type="button"
-                class="flex-1 min-w-0 text-left"
+                class="flex-1 min-w-0 text-left flex items-baseline gap-2"
                 @click="activate(t)"
               >
-                <div
-                  class="text-sm truncate"
+                <span
+                  class="text-[13px] truncate"
                   :class="t.status === 'done' && 'line-through text-base-content/50'"
                 >
                   {{ t.title }}
-                </div>
-                <div class="flex items-center gap-2 text-xs text-base-content/60 mt-0.5 flex-wrap">
-                  <span class="font-mono text-[0.65rem]">{{ t.reference_number }}</span>
-                  <span class="text-base-content/30">·</span>
-                  <span class="flex items-center gap-1 truncate">
-                    <Folder class="w-3 h-3 shrink-0" :stroke-width="1.75" />
-                    {{ t.client_name ?? '—' }}<span v-if="projectName(t)"> / {{ projectName(t) }}</span>
-                  </span>
-                  <span v-if="t.due_on" class="flex items-center gap-1" :class="dueClass(t.due_on)">
-                    <CalendarIcon class="w-3 h-3" :stroke-width="1.75" />
-                    {{ dueLabel(t.due_on) }}
-                  </span>
-                  <span
-                    v-if="t.priority !== 3"
-                    class="flex items-center gap-1"
-                    :class="priorityColor(t.priority)"
-                  >
-                    <Flag class="w-3 h-3" :stroke-width="2.25" />
-                  </span>
-                </div>
+                </span>
+                <span class="font-mono text-[0.65rem] text-base-content/50 shrink-0">{{ t.reference_number }}</span>
+                <span class="flex items-center gap-1 text-xs text-base-content/55 truncate min-w-0">
+                  <Folder class="w-3 h-3 shrink-0" :stroke-width="1.75" />
+                  {{ t.client_name ?? '—' }}<span v-if="projectName(t)"> / {{ projectName(t) }}</span>
+                </span>
+                <span v-if="t.due_on" class="flex items-center gap-1 text-xs shrink-0" :class="dueClass(t.due_on)">
+                  <CalendarIcon class="w-3 h-3" :stroke-width="1.75" />
+                  {{ dueLabel(t.due_on) }}
+                </span>
+                <span
+                  v-if="t.priority !== 3"
+                  class="flex items-center shrink-0"
+                  :class="priorityColor(t.priority)"
+                >
+                  <Flag class="w-3 h-3" :stroke-width="2.25" />
+                </span>
               </button>
             </div>
           </li>

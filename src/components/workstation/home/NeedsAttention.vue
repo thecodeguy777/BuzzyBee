@@ -6,7 +6,7 @@ defineProps<{ alerts: Alert[]; loading?: boolean }>()
 </script>
 
 <template>
-  <div class="bg-white border border-base-300 rounded-2xl p-4 shadow-hc-1">
+  <div class="bg-base-100 border border-base-300 rounded-2xl p-4 shadow-hc-1">
     <div class="flex items-center justify-between mb-3">
       <h2 class="text-sm font-semibold flex items-center gap-2">
         <AlertTriangle class="w-4 h-4 text-base-content/60" :stroke-width="1.75" />

@@ -151,7 +151,7 @@ const briefHeadline = computed(() => {
 
 <template>
   <aside
-    class="rounded-2xl border border-base-300 bg-white shadow-hc-1 flex flex-col self-start sticky top-6"
+    class="rounded-2xl border border-base-300 bg-base-100 shadow-hc-1 flex flex-col self-start sticky top-6"
     style="max-height: calc(100vh - 7rem)"
   >
     <!-- Status block -->

@@ -100,7 +100,7 @@ onUnmounted(() => document.removeEventListener('keydown', onEsc))
       aria-modal="true"
       @click.self="emit('close')"
     >
-      <div class="w-full max-w-md rounded-xl bg-white border border-base-300 shadow-xl overflow-hidden">
+      <div class="w-full max-w-md rounded-xl bg-base-100 border border-base-300 shadow-xl overflow-hidden">
         <header class="flex items-center justify-between px-5 py-3 border-b border-base-300">
           <h2 class="font-display text-lg font-semibold">Add column</h2>
           <button

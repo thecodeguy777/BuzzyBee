@@ -197,7 +197,7 @@ const placeholderByType: Record<TicketType, string> = {
         role="dialog"
         aria-modal="true"
       >
-        <div class="w-full max-w-lg rounded-2xl bg-white border border-base-300 shadow-2xl overflow-hidden pointer-events-auto">
+        <div class="w-full max-w-lg rounded-2xl bg-base-100 border border-base-300 shadow-2xl overflow-hidden pointer-events-auto">
           <!-- header -->
           <header class="flex items-start justify-between gap-3 px-6 pt-5 pb-3">
             <div class="flex items-start gap-3">
@@ -305,7 +305,7 @@ const placeholderByType: Record<TicketType, string> = {
                 type="text"
                 maxlength="120"
                 :placeholder="placeholderByType[type]"
-                class="w-full rounded-lg border border-base-300 px-3 py-2 text-sm bg-white outline-none transition-colors focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
+                class="w-full rounded-lg border border-base-300 px-3 py-2 text-sm bg-base-100 outline-none transition-colors focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
               />
             </label>
 
@@ -322,7 +322,7 @@ const placeholderByType: Record<TicketType, string> = {
                 v-model="description"
                 rows="4"
                 placeholder="What did you expect? What happened instead? Steps to reproduce help a lot."
-                class="w-full rounded-lg border border-base-300 px-3 py-2 text-sm bg-white outline-none resize-y transition-colors focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
+                class="w-full rounded-lg border border-base-300 px-3 py-2 text-sm bg-base-100 outline-none resize-y transition-colors focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
               />
             </label>
 

@@ -49,15 +49,34 @@ export function useHuddlePresence(opts: {
   }
 
   // Always present (online); carry the channel_id only while in a huddle.
-  async function track() {
-    if (!channel || channel.state !== 'joined') return
-    await channel.track({
-      user_id: auth.user?.id,
-      channel_id: opts.inHuddle.value ? opts.channelId.value ?? null : null
-    })
+  // Sends are retried (a join/leave can race a reconnect) and re-asserted
+  // periodically — a silently dropped "I left the huddle" otherwise leaves the
+  // 🎧 indicator stuck for everyone until the tab closes.
+  let retryTimer: ReturnType<typeof setTimeout> | undefined
+  let reassertTimer: ReturnType<typeof setInterval> | undefined
+  async function track(attempt = 0) {
+    clearTimeout(retryTimer)
+    if (!channel) return
+    if (channel.state !== 'joined') {
+      if (attempt < 5) retryTimer = setTimeout(() => void track(attempt + 1), 1000)
+      return
+    }
+    try {
+      await channel.track({
+        user_id: auth.user?.id,
+        channel_id: opts.inHuddle.value ? opts.channelId.value ?? null : null
+      })
+    } catch {
+      if (attempt < 5) retryTimer = setTimeout(() => void track(attempt + 1), 1000)
+    }
   }
 
   async function close() {
+    clearTimeout(retryTimer)
+    if (reassertTimer) {
+      clearInterval(reassertTimer)
+      reassertTimer = undefined
+    }
     if (channel) {
       try {
         await channel.untrack()
@@ -84,6 +103,9 @@ export function useHuddlePresence(opts: {
       if (status === 'SUBSCRIBED') void track()
     })
     channel = ch
+    // Self-heal: re-assert our true state every 25s so one lost frame can't
+    // leave a stale huddle flag on screen indefinitely.
+    if (!reassertTimer) reassertTimer = setInterval(() => void track(), 25_000)
   }
 
   watch(

@@ -188,7 +188,7 @@ async function onMarkAllRead() {
 
     <div
       v-if="filtered.length === 0 && !loading"
-      class="bg-white rounded-xl border border-base-300 shadow-md px-6 py-12 text-center"
+      class="bg-base-100 rounded-xl border border-base-300 shadow-md px-6 py-12 text-center"
     >
       <InboxIcon class="w-8 h-8 mx-auto text-base-content/30" :stroke-width="1.5" />
       <p class="text-sm text-base-content/60 mt-3">
@@ -198,42 +198,37 @@ async function onMarkAllRead() {
       </p>
     </div>
 
-    <ul v-else class="bg-white rounded-xl border border-base-300 shadow-md overflow-hidden divide-y divide-base-300/60">
+    <ul v-else class="bg-base-100 rounded-xl border border-base-300 shadow-md overflow-hidden divide-y divide-base-300/60">
       <li v-for="n in filtered" :key="n.id">
         <button
           type="button"
-          class="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-base-200/40 transition-colors"
+          class="w-full flex items-center gap-2.5 px-3.5 py-1.5 text-left hover:bg-base-200/40 transition-colors"
           :class="!n.is_read && 'bg-primary/5'"
           @click="activate(n)"
         >
           <div
-            class="w-8 h-8 rounded-full bg-base-200/60 flex items-center justify-center shrink-0"
+            class="w-6 h-6 rounded-full bg-base-200/60 flex items-center justify-center shrink-0"
             :class="typeColor(n.type)"
           >
-            <component :is="typeIcon(n.type)" class="w-4 h-4" :stroke-width="1.75" />
+            <component :is="typeIcon(n.type)" class="w-3.5 h-3.5" :stroke-width="1.75" />
           </div>
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 flex-wrap">
-              <span class="text-sm" :class="!n.is_read ? 'font-semibold' : 'font-medium'">
-                {{ n.title }}
-              </span>
-              <span
-                v-if="n.source_ref"
-                class="text-[0.65rem] font-mono text-base-content/50"
-              >
-                {{ n.source_ref }}
-              </span>
-              <span class="text-[0.7rem] text-base-content/50 ml-auto shrink-0">
-                {{ timeAgo(n.created_at) }}
-              </span>
-            </div>
-            <div v-if="n.preview" class="text-xs text-base-content/60 mt-0.5 truncate">
+          <div class="flex-1 min-w-0 flex items-baseline gap-2">
+            <span class="text-[13px] truncate shrink-0 max-w-[55%]" :class="!n.is_read ? 'font-semibold' : 'font-medium'">
+              {{ n.title }}
+            </span>
+            <span v-if="n.source_ref" class="text-[0.65rem] font-mono text-base-content/50 shrink-0">
+              {{ n.source_ref }}
+            </span>
+            <span v-if="n.preview" class="text-xs text-base-content/55 truncate min-w-0">
               {{ n.preview }}
-            </div>
+            </span>
+            <span class="text-[0.7rem] text-base-content/50 ml-auto shrink-0">
+              {{ timeAgo(n.created_at) }}
+            </span>
           </div>
           <span
             v-if="!n.is_read"
-            class="w-2 h-2 rounded-full bg-primary mt-2 shrink-0"
+            class="w-2 h-2 rounded-full bg-primary shrink-0"
             aria-label="Unread"
           />
         </button>

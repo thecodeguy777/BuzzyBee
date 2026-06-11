@@ -366,7 +366,7 @@ onBeforeUnmount(() => document.removeEventListener('click', closeColMenus))
       <div ref="zoomWrap" class="relative">
         <button
           type="button"
-          class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-base-300 bg-white text-xs font-medium hover:bg-base-200/60 transition-colors"
+          class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 text-xs font-medium hover:bg-base-200/60 transition-colors"
           :aria-expanded="zoomMenuOpen"
           aria-haspopup="true"
           @click="zoomMenuOpen = !zoomMenuOpen"
@@ -385,7 +385,7 @@ onBeforeUnmount(() => document.removeEventListener('click', closeColMenus))
         >
           <div
             v-if="zoomMenuOpen"
-            class="absolute right-0 top-full mt-1 z-30 w-56 rounded-xl bg-white border border-base-300 shadow-hc-2 overflow-hidden"
+            class="absolute right-0 top-full mt-1 z-30 w-56 rounded-xl bg-base-100 border border-base-300 shadow-hc-2 overflow-hidden"
           >
             <ul class="py-1">
               <li v-for="p in zoomPresets" :key="p.value">
@@ -498,7 +498,7 @@ onBeforeUnmount(() => document.removeEventListener('click', closeColMenus))
               <div
                 v-if="openMenuId === col.id"
                 data-no-drag
-                class="absolute right-0 top-full mt-1 z-30 w-52 rounded-xl bg-white border border-base-300 shadow-hc-2 overflow-hidden text-base-content p-2 space-y-1"
+                class="absolute right-0 top-full mt-1 z-30 w-52 rounded-xl bg-base-100 border border-base-300 shadow-hc-2 overflow-hidden text-base-content p-2 space-y-1"
                 @click.stop
               >
                 <button type="button" class="w-full text-left text-sm px-2 py-1.5 rounded-md hover:bg-base-200/60 flex items-center gap-2" @click="startRename(col)">
@@ -545,12 +545,12 @@ onBeforeUnmount(() => document.removeEventListener('click', closeColMenus))
             v-for="t in (cardsByStatus[col.key] ?? [])"
             :key="t.id"
             :data-task-id="t.id"
-            class="group relative rounded-lg bg-white border border-base-300 shadow-sm hover:shadow-md hover:border-base-content/20 transition-shadow cursor-grab active:cursor-grabbing select-text"
+            class="group relative rounded-lg bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:border-base-content/20 transition-shadow cursor-grab active:cursor-grabbing select-text"
           >
             <button
               type="button"
               data-no-drag
-              class="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity w-6 h-6 rounded-md flex items-center justify-center bg-white border border-base-300 hover:border-primary hover:text-primary text-base-content/60 cursor-pointer z-10"
+              class="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity w-6 h-6 rounded-md flex items-center justify-center bg-base-100 border border-base-300 hover:border-primary hover:text-primary text-base-content/60 cursor-pointer z-10"
               aria-label="Open task"
               title="Open task"
               @click="openDrawer(t, $event)"
@@ -658,7 +658,7 @@ onBeforeUnmount(() => document.removeEventListener('click', closeColMenus))
           <input
             v-model="newColLabel"
             v-focus
-            class="w-full rounded-xl border border-base-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+            class="w-full rounded-xl border border-base-300 bg-base-100 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
             placeholder="Column name — Enter to add"
             @blur="commitAddCol"
             @keydown.esc="addingCol = false; newColLabel = ''"

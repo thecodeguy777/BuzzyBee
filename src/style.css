@@ -78,6 +78,31 @@
   --border: 1px;
 }
 
+/* ── "hc" (honeycomb) tokens — used across the task board/table/home ──
+   These were referenced for months but never DEFINED, so every var(--hc-*)
+   silently fell back (transparent backgrounds, inherited inks) and the
+   shadow-hc-* utilities emitted nothing. Mapped to the daisyUI theme vars so
+   they follow light/dark automatically. */
+@theme {
+  --shadow-hc-1: 0 1px 2px rgba(20, 12, 22, 0.05), 0 1px 1px rgba(20, 12, 22, 0.04);
+  --shadow-hc-2: 0 2px 4px rgba(20, 12, 22, 0.06), 0 12px 28px -10px rgba(33, 18, 38, 0.18);
+  --shadow-hc-3: 0 4px 8px rgba(20, 12, 22, 0.08), 0 20px 44px -12px rgba(33, 18, 38, 0.26);
+}
+:root {
+  --hc-paper: var(--color-base-100);
+  --hc-surface: var(--color-base-200);
+  --hc-surface-warm: color-mix(in oklab, #f5b50a 4%, var(--color-base-100));
+  --hc-hover: var(--color-base-200);
+  --hc-divider: var(--color-base-300);
+  --hc-ink: var(--color-base-content);
+  --hc-ink-2: color-mix(in oklab, var(--color-base-content) 78%, transparent);
+  --hc-ink-3: color-mix(in oklab, var(--color-base-content) 60%, transparent);
+  --hc-ink-4: color-mix(in oklab, var(--color-base-content) 42%, transparent);
+  --hc-accent: var(--accent);
+  --hc-accent-bg: var(--accent-soft);
+  --hc-accent-soft: color-mix(in oklab, var(--accent) 6%, var(--color-base-100));
+}
+
 /* ── Design tokens (raw access) ──────────────────────────────── */
 :root {
   --hm-white: #ffffff;
