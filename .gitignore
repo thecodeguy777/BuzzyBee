@@ -9,6 +9,7 @@ dist-landing
 node_modules/.tmp
 *.log
 .claude/
+.playwright-mcp/
 
 # Electron build outputs
 electron/dist-main/
