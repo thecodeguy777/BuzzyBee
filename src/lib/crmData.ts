@@ -22,6 +22,14 @@ export interface Company {
   channelId: string | null
   channelName: string | null
   site: string
+  address: string
+  city: string
+  country: string
+  employees: number | null
+  annualRevenue: number | null
+  linkedin: string
+  createdAt: string
+  lastActivityAt: string | null
 }
 export interface Contact {
   id: string
@@ -33,6 +41,11 @@ export interface Contact {
   phone: string
   color: string
   primary: boolean
+  address: string
+  city: string
+  country: string
+  createdAt: string
+  lastActivityAt: string | null
 }
 export interface Deal {
   id: string
@@ -51,7 +64,9 @@ export interface Deal {
 }
 export interface Activity {
   id: string
-  dealId: string
+  dealId: string | null
+  companyId: string
+  contactId: string | null
   type: ActivityType
   actorId: string | null
   body: string
@@ -84,6 +99,9 @@ export const HEALTH: Record<Health, { label: string; color: string }> = {
 export const SOURCES = ['Referral', 'Web inquiry', 'Cold outreach', 'Existing client']
 
 export const fmtMoney = (n: number) => '$' + n.toLocaleString()
+
+export const fmtDate = (iso: string | null | undefined) =>
+  iso ? new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
 
 export const ACT_COLOR: Record<ActivityType, string> = {
   message: 'var(--accent-fg)', task: '#2f6fed', email: '#c2700c', note: 'var(--color-base-content)',

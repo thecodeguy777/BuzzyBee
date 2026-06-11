@@ -1,19 +1,21 @@
 <script setup lang="ts">
 import CrmAvatar from './CrmAvatar.vue'
 import { useCrmStore } from '@/stores/crm'
+import { fmtDate, relTime, type Contact } from '@/lib/crmData'
 
 const crm = useCrmStore()
-const COLS = 'minmax(220px,1.3fr) 180px minmax(200px,1fr) 150px'
+const COLS = 'minmax(200px,1.3fr) 160px minmax(180px,1fr) 130px 130px 100px 110px'
+const location = (c: Contact) => [c.city, c.country].filter(Boolean).join(', ')
 </script>
 
 <template>
   <div class="flex-1 overflow-auto px-5 pb-6">
-    <div class="border border-base-300 rounded-xl overflow-hidden bg-base-100 min-w-[860px]">
+    <div class="border border-base-300 rounded-xl overflow-hidden bg-base-100 min-w-[1080px]">
       <div
         class="grid items-center px-4 h-[42px] border-b border-base-300 bg-base-200"
         :style="{ gridTemplateColumns: COLS }"
       >
-        <span v-for="h in ['Name', 'Company', 'Email', 'Phone']" :key="h"
+        <span v-for="h in ['Name', 'Company', 'Email', 'Phone', 'Location', 'Created', 'Last activity']" :key="h"
           class="text-[11px] font-bold tracking-wider uppercase text-base-content/40">{{ h }}</span>
       </div>
 
@@ -46,6 +48,9 @@ const COLS = 'minmax(220px,1.3fr) 180px minmax(200px,1fr) 150px'
         </div>
         <div class="text-[13px] truncate" :style="{ color: 'var(--link)' }">{{ c.email }}</div>
         <div class="text-[13px] text-base-content/60 tabular-nums">{{ c.phone }}</div>
+        <div class="text-[13px] text-base-content/60 truncate">{{ location(c) || '—' }}</div>
+        <div class="text-[12.5px] text-base-content/60 tabular-nums">{{ fmtDate(c.createdAt) }}</div>
+        <div class="text-[12.5px] text-base-content/60">{{ c.lastActivityAt ? relTime(c.lastActivityAt) : '—' }}</div>
       </div>
     </div>
   </div>

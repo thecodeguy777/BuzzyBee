@@ -39,6 +39,9 @@ function mapCompany(r: any): Company {
     id: r.id, name: r.name, initials: initialsOf(r.name), color: r.color ?? 'var(--accent)',
     industry: r.industry ?? '', isClient: !!r.is_client, clientId: r.client_id,
     channelId: r.channel_id, channelName: r.channel?.name ?? null, site: r.site ?? '',
+    address: r.address ?? '', city: r.city ?? '', country: r.country ?? '',
+    employees: r.employees ?? null, annualRevenue: r.annual_revenue != null ? Number(r.annual_revenue) : null,
+    linkedin: r.linkedin ?? '', createdAt: r.created_at, lastActivityAt: r.last_activity_at ?? null,
   }
 }
 function mapContact(r: any): Contact {
@@ -46,8 +49,20 @@ function mapContact(r: any): Contact {
     id: r.id, companyId: r.company_id, name: r.name, initials: initialsOf(r.name),
     role: r.role ?? '', email: r.email ?? '', phone: r.phone ?? '', color: r.color ?? 'var(--accent)',
     primary: !!r.is_primary,
+    address: r.address ?? '', city: r.city ?? '', country: r.country ?? '',
+    createdAt: r.created_at, lastActivityAt: r.last_activity_at ?? null,
   }
 }
+function mapActivity(r: any): Activity {
+  return {
+    id: r.id, dealId: r.deal_id ?? null, companyId: r.company_id, contactId: r.contact_id ?? null,
+    type: r.type as ActivityType, actorId: r.actor_id, body: r.body, meta: r.meta, createdAt: r.created_at,
+  }
+}
+
+const COMPANY_COLS = 'id,name,industry,site,color,is_client,client_id,channel_id,address,city,country,employees,annual_revenue,linkedin,created_at,last_activity_at'
+const CONTACT_COLS = 'id,company_id,name,role,email,phone,color,is_primary,address,city,country,created_at,last_activity_at'
+const ACTIVITY_COLS = 'id,deal_id,company_id,contact_id,type,actor_id,body,meta,created_at'
 
 export const useCrmStore = defineStore('crm', () => {
   const companies = ref<Record<string, Company>>({})
@@ -55,6 +70,7 @@ export const useCrmStore = defineStore('crm', () => {
   const deals = ref<Deal[]>([])
   const linkedByDeal = ref<Record<string, LinkedTask[]>>({})
   const activitiesByDeal = ref<Record<string, Activity[]>>({})
+  const activitiesByCompany = ref<Record<string, Activity[]>>({})
   const loaded = ref(false)
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -66,6 +82,8 @@ export const useCrmStore = defineStore('crm', () => {
   const contactsFor = (companyId: string) => contacts.value.filter((c) => c.companyId === companyId)
   const linkedTasks = (dealId: string) => linkedByDeal.value[dealId] ?? []
   const activities = (dealId: string) => activitiesByDeal.value[dealId] ?? []
+  const companyActivities = (companyId: string) => activitiesByCompany.value[companyId] ?? []
+  const dealsFor = (companyId: string) => deals.value.filter((d) => d.companyId === companyId)
 
   // The CRM is a per-client workspace: only ever load the selected client's
   // companies/deals (and the contacts/links that belong to them).
@@ -80,7 +98,7 @@ export const useCrmStore = defineStore('crm', () => {
         return
       }
       const [coRes, deRes] = await Promise.all([
-        supabase.from('crm_companies').select('id,name,industry,site,color,is_client,client_id,channel_id, channel:channels(name)').eq('client_id', cid),
+        supabase.from('crm_companies').select(COMPANY_COLS + ', channel:channels(name)').eq('client_id', cid),
         supabase.from('crm_deals').select('id,title,company_id,stage,value,owner_id,close_on,source,health,priority,channel_id,sort, channel:channels(name)').eq('client_id', cid).order('sort').order('created_at'),
       ])
 
@@ -93,7 +111,7 @@ export const useCrmStore = defineStore('crm', () => {
       const dealIds = deals.value.map((d) => d.id)
       const [ctRes, dtRes] = await Promise.all([
         companyIds.length
-          ? supabase.from('crm_contacts').select('id,company_id,name,role,email,phone,color,is_primary').in('company_id', companyIds)
+          ? supabase.from('crm_contacts').select(CONTACT_COLS).in('company_id', companyIds)
           : Promise.resolve({ data: [] as any[] }),
         dealIds.length
           ? supabase.from('crm_deal_tasks').select('deal_id,task_id, task:tasks(reference_number,title,status)').in('deal_id', dealIds)
@@ -140,14 +158,25 @@ export const useCrmStore = defineStore('crm', () => {
     if (activitiesByDeal.value[dealId] && !force) return
     const { data } = await supabase
       .from('crm_deal_activities')
-      .select('id,deal_id,type,actor_id,body,meta,created_at')
+      .select(ACTIVITY_COLS)
       .eq('deal_id', dealId)
       .order('created_at', { ascending: false })
-    const acts: Activity[] = ((data ?? []) as any[]).map((r) => ({
-      id: r.id, dealId: r.deal_id, type: r.type as ActivityType, actorId: r.actor_id,
-      body: r.body, meta: r.meta, createdAt: r.created_at,
-    }))
+    const acts = ((data ?? []) as any[]).map(mapActivity)
     activitiesByDeal.value = { ...activitiesByDeal.value, [dealId]: acts }
+    const ids = [...new Set(acts.map((a) => a.actorId).filter(Boolean))] as string[]
+    if (ids.length) void useTeamStore().fetchProfiles(ids)
+  }
+
+  // Company timeline: every activity on the company, deal-linked or not.
+  async function loadCompanyActivities(companyId: string, force = false) {
+    if (activitiesByCompany.value[companyId] && !force) return
+    const { data } = await supabase
+      .from('crm_deal_activities')
+      .select(ACTIVITY_COLS)
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false })
+    const acts = ((data ?? []) as any[]).map(mapActivity)
+    activitiesByCompany.value = { ...activitiesByCompany.value, [companyId]: acts }
     const ids = [...new Set(acts.map((a) => a.actorId).filter(Boolean))] as string[]
     if (ids.length) void useTeamStore().fetchProfiles(ids)
   }
@@ -274,13 +303,18 @@ export const useCrmStore = defineStore('crm', () => {
   // ── Companies ────────────────────────────────────────────────────────────────
   async function createCompany(input: {
     name: string; industry?: string; site?: string; color?: string; channelId?: string | null
+    address?: string; city?: string; country?: string; employees?: number | null
+    annualRevenue?: number | null; linkedin?: string
   }): Promise<Company | null> {
     const { useAuthStore } = await import('@/stores/auth')
     const { data, error: err } = await supabase.from('crm_companies').insert({
       name: input.name.trim(), industry: input.industry || null, site: input.site || null,
       color: input.color || null, channel_id: input.channelId ?? null,
+      address: input.address || null, city: input.city || null, country: input.country || null,
+      employees: input.employees ?? null, annual_revenue: input.annualRevenue ?? null,
+      linkedin: input.linkedin || null,
       client_id: clients.currentClientId, created_by: useAuthStore().user?.id ?? null,
-    }).select('id,name,industry,site,color,is_client,client_id,channel_id, channel:channels(name)').single()
+    }).select(COMPANY_COLS + ', channel:channels(name)').single()
     if (err) {
       error.value = "Couldn't create company — " + permMsg(err)
       return null
@@ -290,7 +324,9 @@ export const useCrmStore = defineStore('crm', () => {
     return co
   }
 
-  async function updateCompany(id: string, patch: Partial<Pick<Company, 'name' | 'industry' | 'site' | 'color' | 'channelId'>>): Promise<boolean> {
+  async function updateCompany(id: string, patch: Partial<Pick<Company,
+    'name' | 'industry' | 'site' | 'color' | 'channelId'
+    | 'address' | 'city' | 'country' | 'employees' | 'annualRevenue' | 'linkedin'>>): Promise<boolean> {
     const prev = companies.value[id]
     if (!prev) return false
     companies.value = { ...companies.value, [id]: { ...prev, ...patch, initials: patch.name ? initialsOf(patch.name) : prev.initials } }
@@ -300,6 +336,12 @@ export const useCrmStore = defineStore('crm', () => {
     if (patch.site !== undefined) db.site = patch.site || null
     if (patch.color !== undefined) db.color = patch.color
     if (patch.channelId !== undefined) db.channel_id = patch.channelId
+    if (patch.address !== undefined) db.address = patch.address || null
+    if (patch.city !== undefined) db.city = patch.city || null
+    if (patch.country !== undefined) db.country = patch.country || null
+    if (patch.employees !== undefined) db.employees = patch.employees
+    if (patch.annualRevenue !== undefined) db.annual_revenue = patch.annualRevenue
+    if (patch.linkedin !== undefined) db.linkedin = patch.linkedin || null
     const { error: err } = await supabase.from('crm_companies').update(db).eq('id', id)
     if (err) {
       companies.value = { ...companies.value, [id]: prev }
@@ -331,11 +373,13 @@ export const useCrmStore = defineStore('crm', () => {
   // ── Contacts ─────────────────────────────────────────────────────────────────
   async function addContact(input: {
     companyId: string; name: string; role?: string; email?: string; phone?: string; isPrimary?: boolean
+    address?: string; city?: string; country?: string
   }): Promise<Contact | null> {
     const { data, error: err } = await supabase.from('crm_contacts').insert({
       company_id: input.companyId, name: input.name.trim(), role: input.role || null,
       email: input.email || null, phone: input.phone || null, is_primary: !!input.isPrimary,
-    }).select('id,company_id,name,role,email,phone,color,is_primary').single()
+      address: input.address || null, city: input.city || null, country: input.country || null,
+    }).select(CONTACT_COLS).single()
     if (err) {
       error.value = "Couldn't add contact — " + permMsg(err)
       return null
@@ -345,7 +389,8 @@ export const useCrmStore = defineStore('crm', () => {
     return c
   }
 
-  async function updateContact(id: string, patch: Partial<Pick<Contact, 'name' | 'role' | 'email' | 'phone' | 'primary'>>): Promise<boolean> {
+  async function updateContact(id: string, patch: Partial<Pick<Contact,
+    'name' | 'role' | 'email' | 'phone' | 'primary' | 'address' | 'city' | 'country'>>): Promise<boolean> {
     const idx = contacts.value.findIndex((c) => c.id === id)
     if (idx === -1) return false
     const prev = contacts.value[idx]
@@ -356,6 +401,9 @@ export const useCrmStore = defineStore('crm', () => {
     if (patch.email !== undefined) db.email = patch.email || null
     if (patch.phone !== undefined) db.phone = patch.phone || null
     if (patch.primary !== undefined) db.is_primary = patch.primary
+    if (patch.address !== undefined) db.address = patch.address || null
+    if (patch.city !== undefined) db.city = patch.city || null
+    if (patch.country !== undefined) db.country = patch.country || null
     const { error: err } = await supabase.from('crm_contacts').update(db).eq('id', id)
     if (err) {
       contacts.value = contacts.value.map((c) => (c.id === id ? prev : c))
@@ -379,22 +427,48 @@ export const useCrmStore = defineStore('crm', () => {
   }
 
   // ── Activities ───────────────────────────────────────────────────────────────
-  async function logActivity(dealId: string, a: { type: ActivityType; body: string; meta?: string | null }): Promise<boolean> {
+  // Insert + merge into whichever timelines (deal / company / contact-bumps) are
+  // loaded. company_id is derived server-side from deal_id when omitted.
+  async function insertActivity(row: {
+    deal_id?: string | null; company_id?: string | null; contact_id?: string | null
+    type: ActivityType; body: string; meta?: string | null
+  }): Promise<boolean> {
     const { useAuthStore } = await import('@/stores/auth')
     const actor = useAuthStore().user?.id ?? null
     const { data, error: err } = await supabase.from('crm_deal_activities').insert({
-      deal_id: dealId, type: a.type, actor_id: actor, body: a.body.trim(), meta: a.meta ?? null,
-    }).select('id,deal_id,type,actor_id,body,meta,created_at').single()
+      deal_id: row.deal_id ?? null, company_id: row.company_id ?? null, contact_id: row.contact_id ?? null,
+      type: row.type, actor_id: actor, body: row.body.trim(), meta: row.meta ?? null,
+    }).select(ACTIVITY_COLS).single()
     if (err) {
       error.value = "Couldn't log that — " + permMsg(err)
       return false
     }
-    const act: Activity = {
-      id: data.id, dealId: data.deal_id, type: data.type as ActivityType, actorId: data.actor_id,
-      body: data.body, meta: data.meta, createdAt: data.created_at,
+    const act = mapActivity(data)
+    if (act.dealId && activitiesByDeal.value[act.dealId]) {
+      activitiesByDeal.value = { ...activitiesByDeal.value, [act.dealId]: [act, ...activitiesByDeal.value[act.dealId]] }
     }
-    activitiesByDeal.value = { ...activitiesByDeal.value, [dealId]: [act, ...(activitiesByDeal.value[dealId] ?? [])] }
+    if (activitiesByCompany.value[act.companyId]) {
+      activitiesByCompany.value = { ...activitiesByCompany.value, [act.companyId]: [act, ...activitiesByCompany.value[act.companyId]] }
+    }
+    // Mirror the DB last-activity triggers locally.
+    const co = companies.value[act.companyId]
+    if (co) companies.value = { ...companies.value, [act.companyId]: { ...co, lastActivityAt: act.createdAt } }
+    if (act.contactId) {
+      contacts.value = contacts.value.map((c) => (c.id === act.contactId ? { ...c, lastActivityAt: act.createdAt } : c))
+    }
     return true
+  }
+
+  async function logActivity(dealId: string, a: {
+    type: ActivityType; body: string; meta?: string | null; contactId?: string | null
+  }): Promise<boolean> {
+    return insertActivity({ deal_id: dealId, contact_id: a.contactId ?? null, type: a.type, body: a.body, meta: a.meta })
+  }
+
+  async function logCompanyActivity(companyId: string, a: {
+    type: ActivityType; body: string; meta?: string | null; contactId?: string | null
+  }): Promise<boolean> {
+    return insertActivity({ company_id: companyId, contact_id: a.contactId ?? null, type: a.type, body: a.body, meta: a.meta })
   }
 
   async function deleteActivity(dealId: string, id: string): Promise<boolean> {
@@ -407,6 +481,12 @@ export const useCrmStore = defineStore('crm', () => {
       activitiesByDeal.value = { ...activitiesByDeal.value, [dealId]: list }
       error.value = "Couldn't delete that entry — " + permMsg(err)
       return false
+    }
+    if (activitiesByCompany.value[removed.companyId]) {
+      activitiesByCompany.value = {
+        ...activitiesByCompany.value,
+        [removed.companyId]: activitiesByCompany.value[removed.companyId].filter((x) => x.id !== id),
+      }
     }
     return true
   }
@@ -438,6 +518,133 @@ export const useCrmStore = defineStore('crm', () => {
       return false
     }
     return true
+  }
+
+  // ── Bulk import (HubSpot CSV → this client's workspace) ──────────────────────
+  // Companies dedupe by name (case-insensitive) or website domain; contacts by
+  // email, falling back to name+company for email-less rows. Matches enrich
+  // blank fields only — an import never overwrites data someone typed in.
+  async function bulkImport(input: {
+    companies: Array<{ name: string; industry?: string; site?: string; address?: string; city?: string
+      country?: string; employees?: number | null; annualRevenue?: number | null; linkedin?: string }>
+    contacts: Array<{ name: string; company?: string; role?: string; email?: string; phone?: string
+      address?: string; city?: string; country?: string }>
+  }): Promise<{ companiesCreated: number; companiesEnriched: number; contactsCreated: number; contactsSkipped: number } | null> {
+    const cid = clients.currentClientId
+    if (!cid) {
+      error.value = 'Select a client workspace before importing.'
+      return null
+    }
+    if (!loaded.value) await load()
+    const { useAuthStore } = await import('@/stores/auth')
+    const me = useAuthStore().user?.id ?? null
+
+    const norm = (s: string | undefined | null) => (s ?? '').trim().toLowerCase()
+    const domain = (url: string | undefined | null) =>
+      norm(url).replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]
+
+    const byName = new Map<string, Company>()
+    const byDomain = new Map<string, Company>()
+    for (const co of Object.values(companies.value)) {
+      byName.set(norm(co.name), co)
+      if (domain(co.site)) byDomain.set(domain(co.site), co)
+    }
+
+    const stats = { companiesCreated: 0, companiesEnriched: 0, contactsCreated: 0, contactsSkipped: 0 }
+    const toInsert: Record<string, unknown>[] = []
+    const pendingNames = new Set<string>()
+
+    // Contacts may reference companies that aren't in the companies file —
+    // collect every company mentioned anywhere.
+    const wanted = [...input.companies]
+    for (const ct of input.contacts) {
+      const cn = (ct.company ?? '').trim()
+      if (cn && !byName.has(norm(cn)) && !wanted.some((w) => norm(w.name) === norm(cn))) wanted.push({ name: cn })
+    }
+
+    for (const row of wanted) {
+      const name = row.name?.trim()
+      if (!name) continue
+      const existing = byName.get(norm(name)) ?? (domain(row.site) ? byDomain.get(domain(row.site)) : undefined)
+      if (existing) {
+        const patch: Parameters<typeof updateCompany>[1] = {}
+        if (!existing.industry && row.industry) patch.industry = row.industry
+        if (!existing.site && row.site) patch.site = row.site
+        if (!existing.address && row.address) patch.address = row.address
+        if (!existing.city && row.city) patch.city = row.city
+        if (!existing.country && row.country) patch.country = row.country
+        if (existing.employees == null && row.employees != null) patch.employees = row.employees
+        if (existing.annualRevenue == null && row.annualRevenue != null) patch.annualRevenue = row.annualRevenue
+        if (!existing.linkedin && row.linkedin) patch.linkedin = row.linkedin
+        if (Object.keys(patch).length && (await updateCompany(existing.id, patch))) stats.companiesEnriched++
+        continue
+      }
+      if (pendingNames.has(norm(name))) continue
+      pendingNames.add(norm(name))
+      toInsert.push({
+        name, industry: row.industry || null, site: row.site || null, address: row.address || null,
+        city: row.city || null, country: row.country || null, employees: row.employees ?? null,
+        annual_revenue: row.annualRevenue ?? null, linkedin: row.linkedin || null,
+        client_id: cid, created_by: me,
+      })
+    }
+
+    for (let i = 0; i < toInsert.length; i += 200) {
+      const chunk = toInsert.slice(i, i + 200)
+      const { data, error: err } = await supabase.from('crm_companies').insert(chunk).select(COMPANY_COLS)
+      if (err) {
+        error.value = "Import stopped on companies — " + permMsg(err)
+        return null
+      }
+      for (const r of (data ?? []) as any[]) {
+        const co = mapCompany(r)
+        companies.value = { ...companies.value, [co.id]: co }
+        byName.set(norm(co.name), co)
+        if (domain(co.site)) byDomain.set(domain(co.site), co)
+        stats.companiesCreated++
+      }
+    }
+
+    const byEmail = new Set(contacts.value.map((c) => norm(c.email)).filter(Boolean))
+    const byNameCo = new Set(contacts.value.map((c) => norm(c.name) + '|' + c.companyId))
+    let fallbackCo: Company | null = null
+    const contactRows: Record<string, unknown>[] = []
+    for (const row of input.contacts) {
+      const name = row.name?.trim()
+      if (!name) { stats.contactsSkipped++; continue }
+      let co = row.company ? byName.get(norm(row.company)) : undefined
+      if (!co) {
+        // Rows with no (or unknown) company land in one catch-all the team can re-file from.
+        if (!fallbackCo) fallbackCo = byName.get('unsorted contacts') ?? (await createCompany({ name: 'Unsorted contacts' }))
+        if (!fallbackCo) return null // createCompany already set error
+        co = fallbackCo
+      }
+      const emailKey = norm(row.email)
+      const nameKey = norm(name) + '|' + co.id
+      if ((emailKey && byEmail.has(emailKey)) || (!emailKey && byNameCo.has(nameKey))) {
+        stats.contactsSkipped++
+        continue
+      }
+      if (emailKey) byEmail.add(emailKey)
+      byNameCo.add(nameKey)
+      contactRows.push({
+        company_id: co.id, name, role: row.role || null, email: row.email || null, phone: row.phone || null,
+        address: row.address || null, city: row.city || null, country: row.country || null,
+      })
+    }
+
+    for (let i = 0; i < contactRows.length; i += 200) {
+      const chunk = contactRows.slice(i, i + 200)
+      const { data, error: err } = await supabase.from('crm_contacts').insert(chunk).select(CONTACT_COLS)
+      if (err) {
+        error.value = "Import stopped on contacts — " + permMsg(err)
+        return null
+      }
+      contacts.value = [...contacts.value, ...((data ?? []) as any[]).map(mapContact)]
+      stats.contactsCreated += (data ?? []).length
+    }
+
+    return stats
   }
 
   function subscribe() {
@@ -472,13 +679,13 @@ export const useCrmStore = defineStore('crm', () => {
 
   return {
     companies, contacts, deals, loaded, loading, error,
-    company, contactsFor, linkedTasks, activities,
-    load, loadActivities, move, convert,
+    company, contactsFor, linkedTasks, activities, companyActivities, dealsFor,
+    load, loadActivities, loadCompanyActivities, move, convert,
     createDeal, updateDeal, deleteDeal,
     createCompany, updateCompany, deleteCompany,
     addContact, updateContact, deleteContact,
-    logActivity, deleteActivity, linkTask, unlinkTask,
-    subscribe, unsubscribe,
+    logActivity, logCompanyActivity, deleteActivity, linkTask, unlinkTask,
+    bulkImport, subscribe, unsubscribe,
   }
 })
 

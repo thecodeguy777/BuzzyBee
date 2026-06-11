@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
-import { Handshake, LayoutGrid, Filter, Building2, Users, Plus, AlertTriangle } from 'lucide-vue-next'
+import { Handshake, LayoutGrid, Filter, Building2, Users, Plus, Upload, AlertTriangle } from 'lucide-vue-next'
 import CrmOverview from '@/components/crm/CrmOverview.vue'
 import CrmPipelineBoard from '@/components/crm/CrmPipelineBoard.vue'
 import CrmCompaniesTable from '@/components/crm/CrmCompaniesTable.vue'
 import CrmContactsTable from '@/components/crm/CrmContactsTable.vue'
 import CrmDealDetail from '@/components/crm/CrmDealDetail.vue'
+import CrmCompanyDetail from '@/components/crm/CrmCompanyDetail.vue'
 import CrmNewDealPanel from '@/components/crm/CrmNewDealPanel.vue'
+import CrmImportPanel from '@/components/crm/CrmImportPanel.vue'
 import { useCrmStore } from '@/stores/crm'
 import { useClientsStore } from '@/stores/clients'
-import type { Deal, StageId } from '@/lib/crmData'
+import type { Company, Deal, StageId } from '@/lib/crmData'
 
 type ViewId = 'overview' | 'pipeline' | 'companies' | 'contacts'
 const TABS: { id: ViewId; label: string; icon: unknown }[] = [
@@ -23,11 +25,14 @@ const crm = useCrmStore()
 const clients = useClientsStore()
 const view = ref<ViewId>('overview')
 const activeId = ref<string | null>(null)
+const activeCompanyId = ref<string | null>(null)
+const importOpen = ref(false)
 const newDeal = ref<{ open: boolean; stage?: StageId }>({ open: false })
 const toast = ref<{ title: string; sub: string; error?: boolean } | null>(null)
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 
 const active = computed(() => (activeId.value ? crm.deals.find((d) => d.id === activeId.value) ?? null : null))
+const activeCompany = computed(() => (activeCompanyId.value ? crm.company(activeCompanyId.value) ?? null : null))
 
 function fireToast(title: string, sub = '', error = false) {
   toast.value = { title, sub, error }
@@ -35,6 +40,14 @@ function fireToast(title: string, sub = '', error = false) {
   toastTimer = setTimeout(() => (toast.value = null), 4200)
 }
 function open(deal: Deal) {
+  activeId.value = deal.id
+}
+function openCompany(company: Company) {
+  activeCompanyId.value = company.id
+}
+// From the company panel's deals list — swap panels.
+function openDealFromCompany(deal: Deal) {
+  activeCompanyId.value = null
   activeId.value = deal.id
 }
 function move(id: string, stage: StageId) {
@@ -61,7 +74,9 @@ watch(() => crm.error, (msg) => {
 // Re-scope the CRM whenever the active client workspace changes.
 watch(() => clients.currentClientId, () => {
   activeId.value = null
+  activeCompanyId.value = null
   newDeal.value.open = false
+  importOpen.value = false
   void crm.load()
 })
 
@@ -100,6 +115,9 @@ onBeforeUnmount(() => void crm.unsubscribe())
       </button>
 
       <div class="flex-1" />
+      <button class="flex items-center gap-[7px] h-[34px] px-3 rounded-[9px] text-[13px] font-semibold text-base-content/60 hover:bg-base-200 hover:text-base-content whitespace-nowrap" title="Import from HubSpot CSV" @click="importOpen = true">
+        <Upload :size="15" /> <span class="hidden md:inline">Import</span>
+      </button>
       <button class="flex items-center gap-[7px] h-[34px] px-3.5 rounded-[9px] text-[13.5px] font-bold text-white whitespace-nowrap" :style="{ background: 'var(--accent)' }" @click="openNewDeal()">
         <Plus :size="16" /> New deal
       </button>
@@ -120,12 +138,14 @@ onBeforeUnmount(() => void crm.unsubscribe())
     <div v-else class="flex-1 flex min-h-0">
       <CrmOverview v-if="view === 'overview'" :deals="crm.deals" @open="open" />
       <CrmPipelineBoard v-else-if="view === 'pipeline'" :deals="crm.deals" @open="open" @move="move" @new-deal="openNewDeal" />
-      <CrmCompaniesTable v-else-if="view === 'companies'" @open-deal="open" />
+      <CrmCompaniesTable v-else-if="view === 'companies'" @open-company="openCompany" />
       <CrmContactsTable v-else />
     </div>
 
     <CrmDealDetail v-if="active" :key="active.id" :deal="active" @close="activeId = null" @move="move" @convert="convert" />
+    <CrmCompanyDetail v-else-if="activeCompany" :key="activeCompany.id" :company="activeCompany" @close="activeCompanyId = null" @open-deal="openDealFromCompany" />
     <CrmNewDealPanel v-if="newDeal.open" @close="newDeal.open = false" @created="fireToast('Deal created', 'Added to your pipeline.')" />
+    <CrmImportPanel v-if="importOpen" @close="importOpen = false" @done="(s) => fireToast('Import complete', s)" />
 
     <!-- toast -->
     <Transition name="crm-toast">
