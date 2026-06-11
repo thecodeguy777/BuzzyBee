@@ -1,84 +1,103 @@
-import { onUnmounted, ref, watch, type Ref } from 'vue'
+import { computed, onUnmounted, ref, watch, type Ref } from 'vue'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth'
 
-interface HuddleMeta {
+/**
+ * ONE global realtime topic for the workstation, carrying two signals:
+ *
+ *  • onlineUsers — via PRESENCE. Presence is right for "who is connected":
+ *    it carries no claim beyond the connection itself, so it can't go stale.
+ *
+ *  • byChannel (huddle indicators) — via BROADCAST heartbeats with a TTL.
+ *    Presence proved wrong for this: "I'm huddling on channel X" is a claim,
+ *    and any missed "I left" (raced reconnect, dropped frame, dev hot-reload
+ *    zombie) left a live connection serving a stale flag forever. Heartbeats
+ *    invert the failure mode: a huddler pings every 10s, receivers expire
+ *    entries after 25s — no ping, no indicator, by construction. Graceful
+ *    leaves also send an explicit stop for an instant clear.
+ */
+const HEARTBEAT_MS = 10_000
+const TTL_MS = 25_000
+
+interface HuddlePing {
   user_id: string
-  // null when the user is online but not in a huddle.
+  // null = explicit "I left the huddle".
   channel_id: string | null
 }
 
-/**
- * ONE global presence topic for the whole workstation: who is online, and who
- * is huddling on which channel — so the channel list can flag huddles the
- * viewer isn't bound to. Global on purpose: the old per-client topic
- * (`bb-huddles:<clientId>`) silently split people by their *selected
- * workspace*, so a superadmin parked on client A could never see a VA's huddle
- * on client B even when both sat in the same channel list. Public presence
- * channel — non-sensitive (user ids + channel ids), and it degrades gracefully
- * (the active channel still shows its huddle via the live stream).
- */
 export function useHuddlePresence(opts: {
   inHuddle: Ref<boolean>
   channelId: Ref<string | null | undefined>
 }) {
   const auth = useAuthStore()
-  const byChannel = ref<Record<string, number>>({})
-  // Everyone connected to the workstation (online roster) — drives presence dots.
   const onlineUsers = ref<string[]>([])
+  // user_id → { channelId, at } — last heartbeat seen, pruned past TTL.
+  const lastPing = ref<Record<string, { channelId: string; at: number }>>({})
+
+  const byChannel = computed<Record<string, number>>(() => {
+    const sets: Record<string, Set<string>> = {}
+    for (const [uid, p] of Object.entries(lastPing.value)) {
+      ;(sets[p.channelId] ??= new Set()).add(uid)
+    }
+    const out: Record<string, number> = {}
+    for (const [cid, set] of Object.entries(sets)) out[cid] = set.size
+    return out
+  })
 
   let channel: RealtimeChannel | null = null
+  let heartbeatTimer: ReturnType<typeof setInterval> | undefined
+  let pruneTimer: ReturnType<typeof setInterval> | undefined
 
-  function sync() {
+  function syncOnline() {
     if (!channel) return
-    const state = channel.presenceState<HuddleMeta>()
+    const state = channel.presenceState<{ user_id: string }>()
     const online = new Set<string>()
-    const sets: Record<string, Set<string>> = {}
     for (const metas of Object.values(state)) {
-      for (const m of metas as unknown as HuddleMeta[]) {
-        if (!m?.user_id) continue
-        online.add(m.user_id)
-        if (m.channel_id) (sets[m.channel_id] ??= new Set()).add(m.user_id)
+      for (const m of metas as unknown as { user_id: string }[]) {
+        if (m?.user_id) online.add(m.user_id)
       }
     }
     onlineUsers.value = [...online]
-    const out: Record<string, number> = {}
-    for (const [cid, set] of Object.entries(sets)) out[cid] = set.size
-    byChannel.value = out
   }
 
-  // Always present (online); carry the channel_id only while in a huddle.
-  // Sends are retried (a join/leave can race a reconnect) and re-asserted
-  // periodically — a silently dropped "I left the huddle" otherwise leaves the
-  // 🎧 indicator stuck for everyone until the tab closes.
-  let retryTimer: ReturnType<typeof setTimeout> | undefined
-  let reassertTimer: ReturnType<typeof setInterval> | undefined
-  async function track(attempt = 0) {
-    clearTimeout(retryTimer)
-    if (!channel) return
-    if (channel.state !== 'joined') {
-      if (attempt < 5) retryTimer = setTimeout(() => void track(attempt + 1), 1000)
-      return
+  function onPing(payload: HuddlePing | undefined) {
+    if (!payload?.user_id) return
+    if (payload.channel_id) {
+      lastPing.value = { ...lastPing.value, [payload.user_id]: { channelId: payload.channel_id, at: Date.now() } }
+    } else if (lastPing.value[payload.user_id]) {
+      const next = { ...lastPing.value }
+      delete next[payload.user_id]
+      lastPing.value = next
     }
-    try {
-      await channel.track({
-        user_id: auth.user?.id,
-        channel_id: opts.inHuddle.value ? opts.channelId.value ?? null : null
-      })
-    } catch {
-      if (attempt < 5) retryTimer = setTimeout(() => void track(attempt + 1), 1000)
-    }
+  }
+
+  function prune() {
+    const cutoff = Date.now() - TTL_MS
+    const entries = Object.entries(lastPing.value)
+    if (!entries.some(([, p]) => p.at < cutoff)) return
+    lastPing.value = Object.fromEntries(entries.filter(([, p]) => p.at >= cutoff))
+  }
+
+  function sendPing(leaving = false) {
+    const uid = auth.user?.id
+    if (!channel || !uid) return
+    const channelId = !leaving && opts.inHuddle.value ? opts.channelId.value ?? null : null
+    void channel.send({
+      type: 'broadcast',
+      event: 'huddle',
+      payload: { user_id: uid, channel_id: channelId } satisfies HuddlePing,
+    })
+    // Our own indicator shouldn't wait for the round trip (self-broadcast is off).
+    onPing({ user_id: uid, channel_id: channelId })
   }
 
   async function close() {
-    clearTimeout(retryTimer)
-    if (reassertTimer) {
-      clearInterval(reassertTimer)
-      reassertTimer = undefined
-    }
+    if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = undefined }
+    if (pruneTimer) { clearInterval(pruneTimer); pruneTimer = undefined }
     if (channel) {
       try {
+        sendPing(true) // best-effort instant clear for everyone else
         await channel.untrack()
         await supabase.removeChannel(channel)
       } catch {
@@ -86,26 +105,31 @@ export function useHuddlePresence(opts: {
       }
       channel = null
     }
-    byChannel.value = {}
+    lastPing.value = {}
     onlineUsers.value = []
   }
 
   async function open() {
     await close()
     const ch = supabase.channel('bb-huddles', {
-      config: { presence: { key: auth.user?.id ?? 'anon' } }
+      config: { presence: { key: auth.user?.id ?? 'anon' }, broadcast: { self: false } }
     })
-    ch.on('presence', { event: 'sync' }, sync)
-    ch.on('presence', { event: 'join' }, sync)
-    ch.on('presence', { event: 'leave' }, sync)
+    ch.on('presence', { event: 'sync' }, syncOnline)
+    ch.on('presence', { event: 'join' }, syncOnline)
+    ch.on('presence', { event: 'leave' }, syncOnline)
+    ch.on('broadcast', { event: 'huddle' }, (m: { payload?: any }) => onPing(m.payload as HuddlePing | undefined))
     ch.subscribe((status) => {
-      // Re-track on every (re)join so a reconnect restores our presence.
-      if (status === 'SUBSCRIBED') void track()
+      if (status === 'SUBSCRIBED') {
+        void ch.track({ user_id: auth.user?.id })
+        // Announce current state on every (re)join, so a reconnect can't lose us.
+        if (opts.inHuddle.value) sendPing()
+      }
     })
     channel = ch
-    // Self-heal: re-assert our true state every 25s so one lost frame can't
-    // leave a stale huddle flag on screen indefinitely.
-    if (!reassertTimer) reassertTimer = setInterval(() => void track(), 25_000)
+    heartbeatTimer = setInterval(() => {
+      if (opts.inHuddle.value) sendPing()
+    }, HEARTBEAT_MS)
+    pruneTimer = setInterval(prune, 5_000)
   }
 
   watch(
@@ -117,8 +141,9 @@ export function useHuddlePresence(opts: {
     { immediate: true }
   )
 
-  // Re-broadcast whenever the viewer joins/leaves a huddle or switches channel.
-  watch([() => opts.inHuddle.value, () => opts.channelId.value], () => void track())
+  // Joining/leaving a huddle (or carrying it to another channel) announces
+  // immediately — the heartbeat is just the keep-alive between transitions.
+  watch([() => opts.inHuddle.value, () => opts.channelId.value], () => sendPing())
 
   onUnmounted(close)
 
