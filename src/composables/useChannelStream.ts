@@ -1102,6 +1102,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     toggleScreenShare,
     soundMuted,
     toggleSounds,
+    viewers,
     registerViewer,
     unregisterViewer,
     noiseSuppression,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, provide, defineAsyncComponent } from 'vue'
+import { computed, provide, ref, onMounted, onBeforeUnmount, defineAsyncComponent } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useClientsStore } from '@/stores/clients'
@@ -40,13 +40,23 @@ provide(COMMS_STREAM, commsStream)
 
 // Cross-channel huddle + occupancy presence so the channel list can flag
 // huddles anywhere and show who's sitting in which channel.
+// "Viewing" = ANY surface actively showing the channel — the Comms page, the
+// expanded dock, the Messages tab — via the stream's viewer registry, and only
+// while the tab is actually visible. DM threads stay private (no one needs to
+// see who's reading their DMs), so is_dm channels never broadcast a location.
+const tabVisible = ref(typeof document === 'undefined' || document.visibilityState === 'visible')
+const onVisibility = () => { tabVisible.value = document.visibilityState === 'visible' }
+onMounted(() => document.addEventListener('visibilitychange', onVisibility))
+onBeforeUnmount(() => document.removeEventListener('visibilitychange', onVisibility))
+
 const huddlePresence = useHuddlePresence({
   inHuddle: commsStream.inHuddle,
   channelId: computed(() => channels.currentChannelId),
-  // "Viewing" = the selected channel while the Comms surface is on screen.
-  viewingChannelId: computed(() =>
-    route.path.startsWith('/app/comms') ? channels.currentChannelId : null,
-  )
+  viewingChannelId: computed(() => {
+    if (!tabVisible.value || commsStream.viewers.value <= 0) return null
+    if (channels.currentChannel?.is_dm) return null
+    return channels.currentChannelId
+  })
 })
 provide(HUDDLE_PRESENCE, huddlePresence)
 
