@@ -170,7 +170,8 @@ async function commitAddChannel() {
           <Headphones class="w-3.5 h-3.5" :stroke-width="2" />
           <span class="text-[0.6rem] font-bold tabular-nums">{{ huddleByChannel[c.id] }}</span>
         </span>
-        <span v-if="channels.unread[c.id]" class="min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-primary text-primary-content text-[0.65rem] font-bold flex items-center justify-center">{{ channels.unread[c.id] }}</span>
+        <span v-if="channels.mentions[c.id]" class="min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-error text-white text-[0.65rem] font-bold flex items-center justify-center" title="You were mentioned">@{{ channels.mentions[c.id] }}</span>
+        <span v-else-if="channels.unread[c.id]" class="min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-primary text-primary-content text-[0.65rem] font-bold flex items-center justify-center">{{ channels.unread[c.id] }}</span>
       </button>
 
       <div class="px-2 pt-3 pb-1 text-[0.65rem] font-semibold uppercase tracking-wider text-base-content/50">Channels</div>
@@ -187,7 +188,8 @@ async function commitAddChannel() {
           <Headphones class="w-3.5 h-3.5" :stroke-width="2" />
           <span class="text-[0.6rem] font-bold tabular-nums">{{ huddleByChannel[c.id] }}</span>
         </span>
-        <span v-if="channels.unread[c.id]" class="min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-primary text-primary-content text-[0.65rem] font-bold flex items-center justify-center">{{ channels.unread[c.id] }}</span>
+        <span v-if="channels.mentions[c.id]" class="min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-error text-white text-[0.65rem] font-bold flex items-center justify-center" title="You were mentioned">@{{ channels.mentions[c.id] }}</span>
+        <span v-else-if="channels.unread[c.id]" class="min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-primary text-primary-content text-[0.65rem] font-bold flex items-center justify-center">{{ channels.unread[c.id] }}</span>
       </button>
 
       <form v-if="addingChannel" class="px-1 pt-1" @submit.prevent="commitAddChannel">
@@ -221,7 +223,8 @@ async function commitAddChannel() {
           <span class="absolute -right-0.5 -bottom-0.5 w-2 h-2 rounded-full ring-2 ring-base-100" :class="dm.online ? 'bg-success' : 'bg-base-content/25'" />
         </span>
         <span class="flex-1 truncate">{{ dm.name }}</span>
-        <span v-if="dm.channelId && channels.unread[dm.channelId]" class="min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-primary text-primary-content text-[0.65rem] font-bold flex items-center justify-center">{{ channels.unread[dm.channelId] }}</span>
+        <span v-if="dm.channelId && channels.mentions[dm.channelId]" class="min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-error text-white text-[0.65rem] font-bold flex items-center justify-center" title="You were mentioned">@{{ channels.mentions[dm.channelId] }}</span>
+        <span v-else-if="dm.channelId && channels.unread[dm.channelId]" class="min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-primary text-primary-content text-[0.65rem] font-bold flex items-center justify-center">{{ channels.unread[dm.channelId] }}</span>
       </button>
       <p v-if="!dmRows.length" class="px-2 py-1 text-xs italic text-base-content/40">
         No teammates to message yet.

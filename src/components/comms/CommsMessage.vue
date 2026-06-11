@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import {
-  Smile, MessageSquare, CheckSquare, Pin, Paperclip, Link2, ChevronRight, Sparkles
+  Smile, MessageSquare, CheckSquare, Pin, Paperclip, Link2, ChevronRight, Sparkles, Handshake
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
 import CommsLinkedTask from '@/components/comms/CommsLinkedTask.vue'
@@ -28,6 +28,8 @@ const props = defineProps<{
   seen?: { id: string; name: string; avatarUrl: string | null }[]
   /** Pulse this line — you haven't seen it yet. */
   unseen?: boolean
+  /** This channel maps to a CRM company/deal — offer "Log to CRM". */
+  canLogCrm?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -38,6 +40,7 @@ const emit = defineEmits<{
   (e: 'mark-decision'): void
   (e: 'open-task', taskId: string): void
   (e: 'open-dm', userId: string): void
+  (e: 'log-crm'): void
 }>()
 
 const team = useTeamStore()
@@ -52,10 +55,14 @@ function onStartDm(id: string) {
 }
 
 const name = computed(
-  () => props.message.user_name || team.profiles[props.message.user_id]?.full_name || 'Someone',
+  () => props.message.user_name || (props.message.user_id ? team.profiles[props.message.user_id]?.full_name : null) || 'Someone',
 )
-const avatarUrl = computed(() => team.profiles[props.message.user_id]?.avatar_url ?? null)
+const avatarUrl = computed(() => (props.message.user_id ? team.profiles[props.message.user_id]?.avatar_url ?? null : null))
 const nameColor = computed(() => userColor(props.message.user_id))
+// System messages (announcer) have no profile to hover.
+function hoverOpen(ev: MouseEvent) {
+  if (props.message.user_id) hover.open(props.message.user_id, ev)
+}
 const mentionNames = computed(
   () => (props.message.mentioned_user_ids ?? []).map((id) => team.profiles[id]?.full_name).filter(Boolean) as string[]
 )
@@ -98,6 +105,13 @@ function isImage(a: Attachment) {
         <CheckSquare class="w-3.5 h-3.5" :stroke-width="1.75" /> Task
       </button>
       <button
+        v-if="canLogCrm"
+        class="w-7 h-7 rounded-md hover:bg-base-200 flex items-center justify-center text-base-content/60"
+        title="Log to CRM timeline" @click="emit('log-crm')"
+      >
+        <Handshake class="w-4 h-4" :stroke-width="1.75" />
+      </button>
+      <button
         class="w-7 h-7 rounded-md hover:bg-base-200 flex items-center justify-center"
         :class="message.is_decision ? 'text-primary' : 'text-base-content/60'"
         title="Mark as decision / action item" @click="emit('mark-decision')"
@@ -118,11 +132,11 @@ function isImage(a: Attachment) {
         v-if="!continuation"
         type="button"
         class="rounded-md transition hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-        @mouseenter="hover.open(message.user_id, $event)"
+        @mouseenter="hoverOpen($event)"
         @mouseleave="hover.scheduleClose"
-        @click="hover.open(message.user_id, $event)"
+        @click="hoverOpen($event)"
       >
-        <HexAvatar :avatar-url="avatarUrl" :name="name" :color-key="message.user_id" :size="32" />
+        <HexAvatar :avatar-url="avatarUrl" :name="name" :color-key="message.user_id ?? name" :size="32" />
       </button>
       <span v-else class="text-[0.6rem] leading-[18px] text-base-content/40 opacity-0 group-hover:opacity-100 tabular-nums">{{ shortTime }}</span>
     </div>
@@ -133,9 +147,9 @@ function isImage(a: Attachment) {
           type="button"
           class="text-sm font-bold hover:underline focus:outline-none"
           :style="{ color: nameColor }"
-          @mouseenter="hover.open(message.user_id, $event)"
+          @mouseenter="hoverOpen($event)"
           @mouseleave="hover.scheduleClose"
-          @click="hover.open(message.user_id, $event)"
+          @click="hoverOpen($event)"
         >{{ name }}</button>
         <span class="text-[0.7rem] text-base-content/40">{{ time }}</span>
         <span v-if="message.is_pinned" class="inline-flex items-center gap-1 text-[0.65rem] text-primary"><Pin class="w-3 h-3" :stroke-width="2" /> pinned</span>

@@ -23,6 +23,7 @@ import { useClientsStore } from '@/stores/clients'
 import { useTasksStore } from '@/stores/tasks'
 import { useAuthStore } from '@/stores/auth'
 import { useTeamStore } from '@/stores/team'
+import { useCrmStore } from '@/stores/crm'
 import { uploadCommsFile, linkAttachment } from '@/lib/commsAttachments'
 import { displayName } from '@/lib/format'
 import type { Attachment, CommsMessage as CommsMsg } from '@/composables/useChannelStream'
@@ -76,22 +77,50 @@ const canManage = computed(() => auth.isAdmin || auth.role === 'pm')
 const commsError = ref<string | null>(null)
 const showMicCheck = ref(false)
 
+// ── CRM bridge: "Log to CRM" on messages in CRM-linked channels ──────────────
+// A channel maps to CRM either through a deal's linked channel or a company's.
+const crm = useCrmStore()
+const crmTarget = computed(() => {
+  const chId = currentChannelId.value
+  if (!chId || !crm.loaded) return null
+  const deal = crm.deals.find((d) => d.channelId === chId)
+  if (deal) return { dealId: deal.id as string | null, companyId: deal.companyId, label: deal.title }
+  const co = Object.values(crm.companies).find((c) => c.channelId === chId)
+  return co ? { dealId: null as string | null, companyId: co.id, label: co.name } : null
+})
+async function logMessageToCrm(m: CommsMsg) {
+  const t = crmTarget.value
+  if (!t) return
+  const text = m.body.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().slice(0, 280)
+  const author = m.user_name || (m.user_id ? team.profiles[m.user_id]?.full_name : null) || 'teammate'
+  const body = 'logged from #' + (channels.currentChannel?.name ?? 'chat') + ': “' + text + '” — ' + author
+  const ok = t.dealId
+    ? await crm.logActivity(t.dealId, { type: 'message', body })
+    : await crm.logCompanyActivity(t.companyId, { type: 'message', body })
+  if (ok) fireToast('Logged to CRM', t.label)
+  else if (crm.error) { commsError.value = crm.error; crm.error = null }
+}
+
 // Mobile: channel list lives in a slide-over drawer (the desktop aside is md+).
 const mobileNav = ref(false)
 // Right-side Activity rail (tasks created from chat). Open by default.
 const activityOpen = ref(true)
-// Huddle indicators for the channel list — the cross-channel presence map,
-// merged with the live count for the channel we're actively bound to (so it
-// shows instantly before the presence round-trip).
-// Huddle indicator, keyed by channel. Driven purely off the bound channel's
-// live presence (stream.huddlePeople — the same source as the huddle bar), and
-// rebuilt fresh every time so it lights the channel with an active huddle and
-// carries no stale entries: switch channels or leave → the old one clears.
-// (The cross-channel presence channel proved unreliable for this.)
+// Huddle indicators for the channel list: the global cross-channel presence
+// map (one topic for the whole workstation — see useHuddlePresence), overlaid
+// with the live count for the channel we're actively bound to so our own
+// huddle shows instantly, before the presence round-trip.
 const huddleByChannel = computed<Record<string, number>>(() => {
+  const out: Record<string, number> = { ...(huddlePresence?.byChannel.value ?? {}) }
   const cid = currentChannelId.value
   const n = stream.huddlePeople.value.length
-  return cid && n > 0 ? { [cid]: n } : {}
+  if (cid && n > 0) out[cid] = Math.max(out[cid] ?? 0, n)
+  else if (cid && !stream.inHuddle.value && out[cid]) {
+    // We're looking at this channel and the live stream says no huddle —
+    // trust the stream over a stale presence echo.
+    const live = stream.huddlePeople.value.length
+    if (live === 0) delete out[cid]
+  }
+  return out
 })
 // Global online roster (everyone connected for this client), with a fallback to
 // the current channel's presence if the cross-channel presence isn't available.
@@ -162,7 +191,7 @@ function clearFresh() {
 let breatheChannel: string | null = null
 let breatheBaseline = 0
 const seenIds = new Set<string>()
-function isFresh(m: { id: string; user_id: string; created_at: string }) {
+function isFresh(m: { id: string; user_id: string | null; created_at: string }) {
   return m.user_id !== auth.user?.id && new Date(m.created_at).getTime() > breatheBaseline
 }
 function primeBreathing() {
@@ -823,8 +852,12 @@ onMounted(() => {
   // Viewing the full channel = "seen": suppress new-message pings + clear unread.
   stream.registerViewer()
   if (currentChannelId.value) void channels.markRead(currentChannelId.value)
+  // CRM links power the per-message "Log to CRM" action.
+  if (!crm.loaded) void crm.load()
   scrollToBottom()
 })
+// Keep the channel→CRM mapping scoped to the active workspace.
+watch(() => clients.currentClientId, () => void crm.load())
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onHuddleKey)
   window.removeEventListener('resize', onReposition)
@@ -1003,6 +1036,8 @@ function fullscreenScreen() {
                 :last-reply-at="(stream.repliesByParent.value[m.id] ?? []).at(-1)?.created_at"
                 :linked-task="linkedTaskFor(m.linked_task_id)"
                 :can-manage="canManage"
+                :can-log-crm="!!crmTarget"
+                @log-crm="logMessageToCrm(m)"
                 @react="(e) => onReact(m, e)"
                 @open-thread="threadParentId = m.id"
                 @make-task="makeTask(m)"
@@ -1220,6 +1255,8 @@ function fullscreenScreen() {
           :reactions="stream.reactionList(threadParent!.id)"
           :reply-count="0"
           :linked-task="linkedTaskFor(threadParent!.linked_task_id)"
+          :can-log-crm="!!crmTarget"
+          @log-crm="logMessageToCrm(threadParent!)"
           @react="(e) => stream.toggleReaction(threadParent!.id, e)"
           @make-task="makeTask(threadParent!)"
           @toggle-pin="stream.togglePin(threadParent!)"

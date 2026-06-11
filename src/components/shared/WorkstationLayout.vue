@@ -37,7 +37,6 @@ provide(COMMS_STREAM, commsStream)
 
 // Cross-channel huddle presence so the channel list can flag huddles anywhere.
 const huddlePresence = useHuddlePresence({
-  clientId: computed(() => clients.currentClientId),
   inHuddle: commsStream.inHuddle,
   channelId: computed(() => channels.currentChannelId)
 })

@@ -33,7 +33,8 @@ export interface CommsMessage {
   id: string
   channel_id: string
   parent_id: string | null
-  user_id: string
+  /** null = system message (e.g. the CRM pipeline announcer); render user_name. */
+  user_id: string | null
   user_name: string | null
   body: string
   attachments: Attachment[]
@@ -191,7 +192,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     const i = allMessages.value.findIndex((m) => m.id === row.id)
     if (i === -1) {
       allMessages.value = [...allMessages.value, row]
-      if (!team.profiles[row.user_id]) void team.fetchProfiles([row.user_id])
+      if (row.user_id && !team.profiles[row.user_id]) void team.fetchProfiles([row.user_id])
       // A fresh root message in the channel you're actively viewing → keep it
       // marked read. (If you're not looking, it stays unread — see onChange.)
       if (!row.parent_id && row.channel_id === activeId && isViewing()) {
@@ -232,7 +233,8 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
   }
 
   function primeProfiles(msgs: CommsMessage[]) {
-    const ids = [...new Set(msgs.map((m) => m.user_id))].filter((u) => !team.profiles[u])
+    const ids = [...new Set(msgs.map((m) => m.user_id))]
+      .filter((u): u is string => !!u && !team.profiles[u])
     if (ids.length) void team.fetchProfiles(ids)
   }
 
@@ -529,12 +531,16 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
           const incoming = rec as CommsMessage
           const isNew = !!incoming?.id && !allMessages.value.some((mm) => mm.id === incoming.id)
           const fromOther = !!incoming?.user_id && incoming.user_id !== me()
-          if (isNew) clearTyper(incoming.user_id) // posting ends "typing…"
+          if (isNew && incoming.user_id) clearTyper(incoming.user_id) // posting ends "typing…"
           upsertMessage(incoming)
           // New message from someone else that you didn't see → ping + bump unread.
           if (isNew && fromOther && !isViewing()) {
             playMessage()
             if (!incoming.parent_id) channelsStore.bumpUnread(incoming.channel_id)
+            const myId = me()
+            if (myId && incoming.mentioned_user_ids?.includes(myId)) {
+              channelsStore.bumpMention(incoming.channel_id)
+            }
           }
         }
       }

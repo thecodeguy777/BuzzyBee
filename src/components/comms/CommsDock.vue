@@ -45,11 +45,11 @@ const speakingNow = computed(() => stream.speaking.value.size > 0)
 
 // Last slice of the channel for the compact view (full history lives in Comms).
 const messages = computed(() => stream.rootMessages.value.slice(-50))
-function nameFor(m: { user_id: string; user_name: string | null }) {
-  return m.user_name || team.profiles[m.user_id]?.full_name || 'Someone'
+function nameFor(m: { user_id: string | null; user_name: string | null }) {
+  return m.user_name || (m.user_id ? team.profiles[m.user_id]?.full_name : null) || 'Someone'
 }
-function avatarFor(userId: string) {
-  return team.profiles[userId]?.avatar_url ?? null
+function avatarFor(userId: string | null) {
+  return userId ? team.profiles[userId]?.avatar_url ?? null : null
 }
 function timeFor(iso: string) {
   return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
@@ -121,7 +121,7 @@ function clearFresh() {
 let breatheChannel: string | null = null
 let breatheBaseline = 0
 const breatheSeen = new Set<string>()
-function isFresh(m: { user_id: string; created_at: string }) {
+function isFresh(m: { user_id: string | null; created_at: string }) {
   return m.user_id !== auth.user?.id && new Date(m.created_at).getTime() > breatheBaseline
 }
 function primeBreathing() {
@@ -289,11 +289,11 @@ onBeforeUnmount(() => { if (viewing) stream.unregisterViewer() })
                 v-if="!isContinuation(i)"
                 type="button"
                 class="rounded-md transition hover:opacity-90 focus:outline-none"
-                @mouseenter="hover.open(m.user_id, $event)"
+                @mouseenter="m.user_id && hover.open(m.user_id, $event)"
                 @mouseleave="hover.scheduleClose"
-                @click="hover.open(m.user_id, $event)"
+                @click="m.user_id && hover.open(m.user_id, $event)"
               >
-                <HexAvatar :name="nameFor(m)" :avatar-url="avatarFor(m.user_id)" :color-key="m.user_id" :size="24" />
+                <HexAvatar :name="nameFor(m)" :avatar-url="avatarFor(m.user_id)" :color-key="m.user_id ?? nameFor(m)" :size="24" />
               </button>
             </div>
             <div class="flex-1 min-w-0">
@@ -302,9 +302,9 @@ onBeforeUnmount(() => { if (viewing) stream.unregisterViewer() })
                   type="button"
                   class="text-xs font-semibold truncate hover:underline focus:outline-none"
                   :style="{ color: userColor(m.user_id) }"
-                  @mouseenter="hover.open(m.user_id, $event)"
+                  @mouseenter="m.user_id && hover.open(m.user_id, $event)"
                   @mouseleave="hover.scheduleClose"
-                  @click="hover.open(m.user_id, $event)"
+                  @click="m.user_id && hover.open(m.user_id, $event)"
                 >{{ nameFor(m) }}</button>
                 <span class="text-[0.6rem] text-base-content/40 shrink-0">{{ timeFor(m.created_at) }}</span>
               </div>
