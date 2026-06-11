@@ -7,6 +7,8 @@ import LandingNav from '@/components/landing/LandingNav.vue'
 import HeroPeopleSection from '@/components/landing/HeroPeopleSection.vue'
 import SoftwareTaxSection from '@/components/landing/SoftwareTaxSection.vue'
 import PlatformSection from '@/components/landing/PlatformSection.vue'
+import ArsenalHoneycombSection from '@/components/landing/ArsenalHoneycombSection.vue'
+import ThreadOfWorkSection from '@/components/landing/ThreadOfWorkSection.vue'
 import MeetVASection from '@/components/landing/MeetVASection.vue'
 import VettedTalentSection from '@/components/landing/VettedTalentSection.vue'
 import TheMatchSection from '@/components/landing/TheMatchSection.vue'
@@ -27,6 +29,8 @@ import SiteFooter from '@/components/landing/SiteFooter.vue'
     <HeroPeopleSection />
     <SoftwareTaxSection />
     <PlatformSection />
+    <ArsenalHoneycombSection />
+    <ThreadOfWorkSection />
     <MeetVASection />
     <VettedTalentSection />
     <TheMatchSection />
