@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import {
-  Smile, MessageSquare, CheckSquare, Pin, Paperclip, Link2, ChevronRight, Sparkles, Handshake
+  Smile, MessageSquare, CheckSquare, Pin, ChevronRight, Sparkles, Handshake
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
+import CommsAttachments from '@/components/comms/CommsAttachments.vue'
 import CommsLinkedTask from '@/components/comms/CommsLinkedTask.vue'
 import CommsRichText from '@/components/comms/CommsRichText.vue'
 import SeenCluster from '@/components/comms/SeenCluster.vue'
@@ -11,8 +12,7 @@ import CommsProfilePopover from '@/components/comms/CommsProfilePopover.vue'
 import { userColor } from '@/lib/userColor'
 import { useTeamStore } from '@/stores/team'
 import { useProfileHover } from '@/composables/useProfileHover'
-import { formatBytes } from '@/lib/commsAttachments'
-import type { CommsMessage, Attachment } from '@/composables/useChannelStream'
+import type { CommsMessage } from '@/composables/useChannelStream'
 import type { Task } from '@/stores/tasks'
 
 const props = defineProps<{
@@ -30,6 +30,8 @@ const props = defineProps<{
   unseen?: boolean
   /** This channel maps to a CRM company/deal — offer "Log to CRM". */
   canLogCrm?: boolean
+  /** Offer "turn into task" (off in personal DMs, which have no board). */
+  canTask?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -75,9 +77,6 @@ function react(e: string) {
   pickerOpen.value = false
   emit('react', e)
 }
-function isImage(a: Attachment) {
-  return a.kind === 'image' && !!a.url
-}
 </script>
 
 <template>
@@ -101,7 +100,7 @@ function isImage(a: Attachment) {
       <button class="w-7 h-7 rounded-md hover:bg-base-200 flex items-center justify-center text-base-content/60" title="Reply in thread" @click="emit('open-thread')">
         <MessageSquare class="w-4 h-4" :stroke-width="1.75" />
       </button>
-      <button class="inline-flex items-center gap-1 h-7 px-2 rounded-md bg-primary/10 text-primary text-xs font-semibold" title="Turn into task" @click="emit('make-task')">
+      <button v-if="canTask !== false" class="inline-flex items-center gap-1 h-7 px-2 rounded-md bg-primary/10 text-primary text-xs font-semibold" title="Turn into task" @click="emit('make-task')">
         <CheckSquare class="w-3.5 h-3.5" :stroke-width="1.75" /> Task
       </button>
       <button
@@ -159,28 +158,8 @@ function isImage(a: Attachment) {
         <CommsRichText :text="message.body" :mention-names="mentionNames" />
       </div>
 
-      <!-- attachments -->
-      <div v-if="message.attachments?.length" class="mt-1.5 flex flex-col gap-2 items-start">
-        <template v-for="(a, i) in message.attachments" :key="i">
-          <a v-if="isImage(a)" :href="a.url" target="_blank" rel="noopener" class="block max-w-xs rounded-xl overflow-hidden border border-base-300">
-            <img :src="a.url" :alt="a.name" class="w-full max-h-64 object-cover" />
-          </a>
-          <a v-else-if="a.kind === 'file'" :href="a.url" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 rounded-xl border border-base-300 bg-base-100 px-3 py-2 max-w-xs hover:border-primary/40">
-            <span class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center"><Paperclip class="w-4 h-4" :stroke-width="1.75" /></span>
-            <span class="min-w-0">
-              <span class="block text-sm font-medium truncate">{{ a.name }}</span>
-              <span class="block text-[0.7rem] text-base-content/50">{{ formatBytes(a.size) }}</span>
-            </span>
-          </a>
-          <a v-else :href="a.url" target="_blank" rel="noopener" class="flex items-stretch rounded-xl overflow-hidden border border-base-300 bg-base-100 max-w-sm hover:border-primary/40">
-            <span class="w-1 bg-primary shrink-0" />
-            <span class="px-3 py-2 min-w-0">
-              <span class="flex items-center gap-1 text-[0.7rem] text-base-content/50"><Link2 class="w-3 h-3" /> {{ a.name }}</span>
-              <span class="block text-sm font-medium text-primary truncate">{{ a.url }}</span>
-            </span>
-          </a>
-        </template>
-      </div>
+      <!-- attachments (images / video / files / links — shared renderer) -->
+      <CommsAttachments v-if="message.attachments?.length" :attachments="message.attachments" />
 
       <!-- linked task — embedded card / pill -->
       <CommsLinkedTask v-if="linkedTask" :task="linkedTask" @open="emit('open-task', $event)" />

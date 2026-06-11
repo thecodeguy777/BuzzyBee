@@ -7,16 +7,18 @@ import {
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
 import SeenCluster from '@/components/comms/SeenCluster.vue'
+import CommsAttachments from '@/components/comms/CommsAttachments.vue'
 import TypingIndicator from '@/components/comms/TypingIndicator.vue'
 import CommsProfilePopover from '@/components/comms/CommsProfilePopover.vue'
 import { userColor } from '@/lib/userColor'
 import { useProfileHover } from '@/composables/useProfileHover'
-import { COMMS_STREAM } from '@/composables/commsStream'
+import { COMMS_STREAM, HUDDLE_PRESENCE } from '@/composables/commsStream'
 import { useChannelsStore } from '@/stores/channels'
 import { useTeamStore } from '@/stores/team'
 import { useAuthStore } from '@/stores/auth'
 
 const stream = inject(COMMS_STREAM)!
+const huddlePresence = inject(HUDDLE_PRESENCE, null)
 const channels = useChannelsStore()
 const team = useTeamStore()
 const auth = useAuthStore()
@@ -30,13 +32,40 @@ const listEl = ref<HTMLElement | null>(null)
 
 // Don't shadow the full Comms page — the dock is for *everywhere else*.
 const onCommsPage = computed(() => route.name === 'workstation-comms')
-// Show whenever there's something to act on: a live call, or any channel to chat in.
+// Show whenever there's something to act on: a live call, or any thread to chat in.
 const visible = computed(
-  () => !onCommsPage.value && (stream.inHuddle.value || channels.channels.length > 0),
+  () => !onCommsPage.value && (stream.inHuddle.value || channels.channels.length > 0 || channels.dms.length > 0),
 )
 
-const channelName = computed(() => channels.currentChannel?.name ?? 'comms')
 const firstName = (n: string | null | undefined) => (n || 'Someone').split(' ')[0]
+// Display name for any thread: channels by name, 1:1 DMs by partner, groups by
+// their name or member first-names.
+function threadName(c: { id: string; name: string; is_dm: boolean; is_group: boolean } | null) {
+  if (!c) return 'comms'
+  if (!c.is_dm) return c.name
+  if (c.is_group && c.name) return c.name
+  const members = (channels.dmMembers[c.id] ?? [])
+    .map((id) => firstName(team.profiles[id]?.full_name))
+  return members.join(', ') || 'Direct message'
+}
+const channelName = computed(() => threadName(channels.currentChannel))
+const currentIsDm = computed(() => !!channels.currentChannel?.is_dm)
+// Launcher badge: everything you can reply to from the dock — channels + DMs.
+const dockUnread = computed(() => channels.totalUnread + channels.dmUnreadTotal)
+// DM threads for the switcher, busiest first.
+const dmThreads = computed(() =>
+  [...channels.dms].sort((a, b) =>
+    (channels.lastMessageAt[b.id] ?? '').localeCompare(channels.lastMessageAt[a.id] ?? ''),
+  ),
+)
+// Channel occupancy (same clusters as the Comms sidebar) for the switcher.
+function viewerCluster(id: string) {
+  return (huddlePresence?.viewersByChannel.value[id] ?? []).map((uid) => ({
+    id: uid,
+    name: team.profiles[uid]?.full_name ?? 'Member',
+    avatarUrl: team.profiles[uid]?.avatar_url ?? null,
+  }))
+}
 const hostName = computed(() => {
   const h = stream.huddleHost.value
   return h ? firstName(stream.huddlePeople.value.find((p) => p.userId === h)?.name) : ''
@@ -216,7 +245,7 @@ onBeforeUnmount(() => { if (viewing) stream.unregisterViewer() })
         <!-- header -->
         <header class="relative flex items-center gap-2 px-3 py-2.5 border-b border-base-300 bg-base-100">
           <button class="flex items-center gap-1.5 min-w-0 rounded-md hover:bg-base-200 px-1.5 py-1 -ml-1" @click="channelMenuOpen = !channelMenuOpen">
-            <Hash class="w-4 h-4 text-base-content/50 shrink-0" :stroke-width="2" />
+            <component :is="currentIsDm ? MessagesSquare : Hash" class="w-4 h-4 text-base-content/50 shrink-0" :stroke-width="2" />
             <span class="font-display font-semibold truncate">{{ channelName }}</span>
             <ChevronDown class="w-3.5 h-3.5 text-base-content/40 shrink-0" :stroke-width="2" />
           </button>
@@ -237,7 +266,7 @@ onBeforeUnmount(() => { if (viewing) stream.unregisterViewer() })
             <ChevronDown class="w-4 h-4" :stroke-width="2" />
           </button>
 
-          <!-- channel switcher -->
+          <!-- thread switcher: channels + DMs -->
           <div v-if="channelMenuOpen" class="absolute left-2 top-full mt-1 z-10 w-56 max-h-64 overflow-y-auto rounded-xl border border-base-300 bg-base-100 shadow-lg p-1" @mouseleave="channelMenuOpen = false">
             <button
               v-for="c in channels.sorted"
@@ -248,8 +277,23 @@ onBeforeUnmount(() => { if (viewing) stream.unregisterViewer() })
             >
               <Hash class="w-3.5 h-3.5 shrink-0" :stroke-width="2" />
               <span class="flex-1 truncate">{{ c.name }}</span>
+              <SeenCluster v-if="viewerCluster(c.id).length" :members="viewerCluster(c.id)" :size="12" :max="3" />
               <span v-if="channels.unread[c.id]" class="min-w-[1rem] h-4 px-1 rounded-full bg-error text-white text-[0.6rem] font-bold flex items-center justify-center">{{ channels.unread[c.id] }}</span>
             </button>
+            <template v-if="dmThreads.length">
+              <div class="px-2 pt-2 pb-1 text-[0.6rem] font-semibold uppercase tracking-wider text-base-content/40">Messages</div>
+              <button
+                v-for="c in dmThreads"
+                :key="c.id"
+                class="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-left"
+                :class="c.id === channels.currentChannelId ? 'bg-primary/10 text-primary font-semibold' : 'hover:bg-base-200'"
+                @click="pickChannel(c.id)"
+              >
+                <MessagesSquare class="w-3.5 h-3.5 shrink-0 text-base-content/50" :stroke-width="2" />
+                <span class="flex-1 truncate">{{ threadName(c) }}</span>
+                <span v-if="channels.unread[c.id]" class="min-w-[1rem] h-4 px-1 rounded-full bg-error text-white text-[0.6rem] font-bold flex items-center justify-center">{{ channels.unread[c.id] }}</span>
+              </button>
+            </template>
           </div>
         </header>
 
@@ -309,7 +353,7 @@ onBeforeUnmount(() => { if (viewing) stream.unregisterViewer() })
                 <span class="text-[0.6rem] text-base-content/40 shrink-0">{{ timeFor(m.created_at) }}</span>
               </div>
               <div v-if="m.body" class="text-[0.8rem] text-base-content/90 whitespace-pre-wrap break-words leading-snug">{{ m.body }}</div>
-              <div v-if="m.attachments?.length" class="text-[0.7rem] text-base-content/50 italic">📎 {{ m.attachments.length }} attachment{{ m.attachments.length > 1 ? 's' : '' }} — open in Comms</div>
+              <CommsAttachments v-if="m.attachments?.length" :attachments="m.attachments" compact />
             </div>
           </div>
 
@@ -328,7 +372,7 @@ onBeforeUnmount(() => { if (viewing) stream.unregisterViewer() })
           <div class="flex items-center gap-1.5 rounded-xl border border-base-300 bg-base-100 pl-3 pr-1.5 py-1">
             <input
               v-model="draft"
-              :placeholder="`Message #${channelName}`"
+              :placeholder="currentIsDm ? `Message ${channelName}` : `Message #${channelName}`"
               class="flex-1 bg-transparent text-sm outline-none min-w-0"
               @input="onInput"
               @keydown.enter.prevent="send"
@@ -357,7 +401,7 @@ onBeforeUnmount(() => { if (viewing) stream.unregisterViewer() })
             </button>
           </template>
           <button v-else class="inline-flex items-center justify-center gap-2 h-8 w-full rounded-lg bg-primary text-white text-xs font-semibold" @click="stream.toggleHuddle()">
-            <Headphones class="w-4 h-4" :stroke-width="1.75" /> Start huddle in #{{ channelName }}
+            <Headphones class="w-4 h-4" :stroke-width="1.75" /> Start huddle {{ currentIsDm ? 'with ' + channelName : 'in #' + channelName }}
           </button>
         </div>
       </div>
@@ -393,8 +437,8 @@ onBeforeUnmount(() => { if (viewing) stream.unregisterViewer() })
         @click="open"
       >
         <MessagesSquare class="w-6 h-6" :stroke-width="1.75" />
-        <span v-if="channels.totalUnread > 0" class="absolute -top-0.5 -right-0.5 min-w-[1.25rem] h-5 px-1 rounded-full bg-error text-white text-[0.65rem] font-bold flex items-center justify-center ring-2 ring-base-100">
-          {{ channels.totalUnread > 99 ? '99+' : channels.totalUnread }}
+        <span v-if="dockUnread > 0" class="absolute -top-0.5 -right-0.5 min-w-[1.25rem] h-5 px-1 rounded-full bg-error text-white text-[0.65rem] font-bold flex items-center justify-center ring-2 ring-base-100">
+          {{ dockUnread > 99 ? '99+' : dockUnread }}
         </span>
       </button>
 

@@ -11,6 +11,7 @@ import {
   Bug,
   UsersRound,
   MessagesSquare,
+  MessageCircle,
   Handshake
 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
@@ -25,9 +26,11 @@ type NavItem = { to: string; label: string; icon: FunctionalComponent; exact?: b
 
 // Live unread badge per nav item. Comms unread bumps app-wide because the
 // comms stream is provided at the workstation shell, so this updates even when
-// you're on another page.
+// you're on another page. Messages (DMs) badge separately from channels.
 function badgeFor(item: NavItem): number {
-  return item.to === '/app/comms' ? channels.totalUnread : 0
+  if (item.to === '/app/comms') return channels.totalUnread
+  if (item.to === '/app/messages') return channels.dmUnreadTotal
+  return 0
 }
 
 const topNavItems = computed<NavItem[]>(() => {
@@ -43,6 +46,7 @@ const topNavItems = computed<NavItem[]>(() => {
 const bottomNavItems = computed<NavItem[]>(() => {
   const items: NavItem[] = [
     { to: '/app/comms', label: 'Comms', icon: MessagesSquare },
+    { to: '/app/messages', label: 'Messages', icon: MessageCircle },
     { to: '/app/crm', label: 'CRM', icon: Handshake },
     { to: '/app/clients', label: 'Clients', icon: Users }
   ]

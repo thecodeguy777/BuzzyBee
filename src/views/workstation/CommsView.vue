@@ -255,7 +255,11 @@ async function startDm(userId: string) {
   if (userId === auth.user?.id) return
   try {
     const id = await channels.openDm(userId)
-    if (id) chooseChannel(id)
+    // DMs live in their own surface now.
+    if (id) {
+      chooseChannel(id)
+      void router.push({ name: 'workstation-messages' })
+    }
   } catch (e) {
     commsError.value = (e as Error).message
   }
@@ -914,7 +918,6 @@ function fullscreenScreen() {
         :current-channel-id="currentChannelId"
         :huddle-by-channel="huddleByChannel"
         :viewers-by-channel="channelViewers"
-        :online-ids="onlineIds"
         @choose="chooseChannel"
         @error="commsError = $event"
       />
@@ -930,7 +933,6 @@ function fullscreenScreen() {
             :current-channel-id="currentChannelId"
             :huddle-by-channel="huddleByChannel"
             :viewers-by-channel="channelViewers"
-            :online-ids="onlineIds"
             @choose="chooseChannel"
             @error="commsError = $event"
           />

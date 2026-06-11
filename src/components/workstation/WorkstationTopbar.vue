@@ -20,14 +20,21 @@ const channels = useChannelsStore()
 const team = useTeamStore()
 const time = useTimeStore()
 
-// Breadcrumb channel segment — only meaningful on the comms surface.
-const showChannelCrumb = computed(() => route.path.startsWith('/app/comms') && !!channels.currentChannel)
+// Breadcrumb channel segment — meaningful on the comms + messages surfaces.
+const showChannelCrumb = computed(
+  () => (route.path.startsWith('/app/comms') || route.path.startsWith('/app/messages')) && !!channels.currentChannel,
+)
 const channelIsDm = computed(() => !!channels.currentChannel?.is_dm)
 const channelLabel = computed(() => {
   const ch = channels.currentChannel
   if (!ch) return ''
   if (ch.is_dm) {
-    const uid = channels.dmOther[ch.id]
+    if (ch.is_group && ch.name) return ch.name
+    const members = channels.dmMembers[ch.id] ?? []
+    if (ch.is_group) {
+      return members.map((id) => team.profiles[id]?.full_name?.split(' ')[0]).filter(Boolean).join(', ') || 'Group message'
+    }
+    const uid = members[0]
     return displayName(uid ? team.profiles[uid] : null, 'Direct message')
   }
   return ch.name

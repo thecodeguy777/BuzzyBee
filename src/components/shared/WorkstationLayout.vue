@@ -24,10 +24,13 @@ const clients = useClientsStore()
 const projects = useProjectsStore()
 const channels = useChannelsStore()
 
-// Comms + CRM run edge-to-edge (own tabs/board manage scroll); other pages keep
-// the padded, scrollable content area.
+// Comms + Messages + CRM run edge-to-edge (own panes manage scroll); other
+// pages keep the padded, scrollable content area.
 const fullBleed = computed(
-  () => route.path.startsWith('/app/comms') || route.path.startsWith('/app/crm'),
+  () =>
+    route.path.startsWith('/app/comms') ||
+    route.path.startsWith('/app/messages') ||
+    route.path.startsWith('/app/crm'),
 )
 
 // The comms/huddle stream lives here (the shell stays mounted across all

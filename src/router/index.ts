@@ -102,6 +102,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, layout: 'workstation' }
   },
   {
+    path: '/app/messages',
+    name: 'workstation-messages',
+    component: () => import('@/views/workstation/MessagesView.vue'),
+    meta: { requiresAuth: true, layout: 'workstation' }
+  },
+  {
     path: '/app/crm',
     name: 'workstation-crm',
     component: () => import('@/views/workstation/CrmView.vue'),

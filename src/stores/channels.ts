@@ -12,10 +12,19 @@ export interface Channel {
   topic: string | null
   is_private: boolean
   is_dm: boolean
+  is_group: boolean
   dm_key: string | null
   created_by: string | null
   created_at: string
   updated_at: string
+}
+
+interface DmThread {
+  channel_id: string
+  is_group: boolean
+  name: string
+  members: string[]
+  last_message_at: string | null
 }
 
 interface Membership {
@@ -30,8 +39,17 @@ export const useChannelsStore = defineStore('channels', () => {
 
   const channels = ref<Channel[]>([])
   const dms = ref<Channel[]>([])
-  // DM channel id → the *other* participant's user id.
-  const dmOther = ref<Record<string, string>>({})
+  // DM channel id → the *other* participants' user ids (everyone but me).
+  // 1:1 DMs have one entry; group DMs have many.
+  const dmMembers = ref<Record<string, string[]>>({})
+  // Back-compat: DM channel id → the single other participant. For 1:1 DMs this
+  // is the partner; for groups it's just the first member (group surfaces use
+  // dmMembers + dmName instead).
+  const dmOther = computed<Record<string, string>>(() => {
+    const out: Record<string, string> = {}
+    for (const [id, mem] of Object.entries(dmMembers.value)) if (mem[0]) out[id] = mem[0]
+    return out
+  })
   const memberships = ref<Record<string, Membership>>({})
   // The last_read_at a channel had *before* this session first read it — so the
   // UI can highlight what was unseen on entry. Captured once per channel.
@@ -64,8 +82,16 @@ export const useChannelsStore = defineStore('channels', () => {
   )
   const pinned = computed(() => sorted.value.filter((c) => memberships.value[c.id]?.pinned))
   const unpinned = computed(() => sorted.value.filter((c) => !memberships.value[c.id]?.pinned))
+  // Channel-only unread (DMs live in their own surface, badged separately).
   const totalUnread = computed(() =>
-    Object.values(unread.value).reduce((a, b) => a + b, 0),
+    channels.value.reduce((a, c) => a + (unread.value[c.id] ?? 0), 0),
+  )
+  // Aggregate DM badges for the Messages nav item.
+  const dmUnreadTotal = computed(() =>
+    dms.value.reduce((a, c) => a + (unread.value[c.id] ?? 0), 0),
+  )
+  const dmMentionTotal = computed(() =>
+    dms.value.reduce((a, c) => a + (mentions.value[c.id] ?? 0), 0),
   )
 
   function isUnread(id: string) {
@@ -234,46 +260,50 @@ export const useChannelsStore = defineStore('channels', () => {
   }
 
   // ── Direct messages ─────────────────────────────────────────────────────────
-  // DMs are private 2-person channels (is_dm). RLS scopes them to my memberships,
-  // so a plain is_dm query returns exactly my DMs (not client-scoped).
+  // DMs (1:1 and group) are private is_dm channels with no client. dm_threads()
+  // returns each one I'm in with its other participants + last activity in a
+  // single round-trip; RLS-equivalent scoping happens inside the RPC.
   async function loadDms() {
     if (!auth.isAuthenticated) {
       dms.value = []
-      dmOther.value = {}
+      dmMembers.value = {}
       return
     }
-    const { data, error } = await supabase
-      .from('channels')
-      .select('*')
-      .eq('is_dm', true)
+    const { data, error } = await supabase.rpc('dm_threads')
     if (error) {
       console.warn('[channels] loadDms:', error.message)
       return
     }
-    const list = (data ?? []) as Channel[]
-    dms.value = list
-    if (!list.length) {
-      dmOther.value = {}
-      return
-    }
-    const { data: mem } = await supabase
-      .from('channel_members')
-      .select('channel_id, user_id')
-      .in('channel_id', list.map((c) => c.id))
-    const me = auth.user?.id
-    const other: Record<string, string> = {}
-    for (const row of (mem ?? []) as { channel_id: string; user_id: string }[]) {
-      if (row.user_id !== me) other[row.channel_id] = row.user_id
-    }
-    dmOther.value = other
-    const ids = [...new Set(Object.values(other))]
+    const rows = (data ?? []) as DmThread[]
+    // Synthesize Channel-shaped rows (only id/name/is_dm/is_group are consumed).
+    dms.value = rows.map((r) => ({
+      id: r.channel_id,
+      client_id: null,
+      name: r.name ?? '',
+      topic: null,
+      is_private: true,
+      is_dm: true,
+      is_group: r.is_group,
+      dm_key: null,
+      created_by: null,
+      created_at: '',
+      updated_at: '',
+    }))
+    const members: Record<string, string[]> = {}
+    for (const r of rows) members[r.channel_id] = r.members ?? []
+    dmMembers.value = members
+    // Seed last activity for DM sorting without clobbering channel entries.
+    const lm = { ...lastMessageAt.value }
+    for (const r of rows) if (r.last_message_at) lm[r.channel_id] = r.last_message_at
+    lastMessageAt.value = lm
+    const ids = [...new Set(rows.flatMap((r) => r.members ?? []))]
     if (ids.length) {
       const { useTeamStore } = await import('@/stores/team')
       void useTeamStore().fetchProfiles(ids)
     }
   }
 
-  /** Find-or-create a DM with another user, returning its channel id. */
+  /** Find-or-create a 1:1 DM with another user, returning its channel id. */
   async function openDm(otherUserId: string): Promise<string | null> {
     const { data, error } = await supabase.rpc('open_dm', { p_other: otherUserId })
     if (error) {
@@ -283,6 +313,33 @@ export const useChannelsStore = defineStore('channels', () => {
     const id = data as string
     await loadDms()
     return id
+  }
+
+  /** Create a group DM with the given members (+ optional name). Always a new
+   *  thread — group DMs aren't deduped. Returns its channel id. */
+  async function createGroupDm(memberIds: string[], name?: string): Promise<string | null> {
+    const { data, error } = await supabase.rpc('create_group_dm', {
+      p_members: memberIds,
+      p_name: name?.trim() || null,
+    })
+    if (error) {
+      console.warn('[channels] createGroupDm:', error.message)
+      throw error
+    }
+    const id = data as string
+    await loadDms()
+    return id
+  }
+
+  /** Leave a group DM (no-op for 1:1 DMs, enforced server-side). */
+  async function leaveDm(id: string): Promise<void> {
+    const { error } = await supabase.rpc('leave_dm', { p_channel: id })
+    if (error) {
+      console.warn('[channels] leaveDm:', error.message)
+      throw error
+    }
+    if (currentChannelId.value === id) currentChannelId.value = null
+    await loadDms()
   }
 
   // Light meta sync: channel add/remove reloads the list, and every message
@@ -333,7 +390,7 @@ export const useChannelsStore = defineStore('channels', () => {
       } else {
         channels.value = []
         dms.value = []
-        dmOther.value = {}
+        dmMembers.value = {}
         unreadByClient.value = {}
         currentChannelId.value = null
         void stopMeta()
@@ -345,6 +402,7 @@ export const useChannelsStore = defineStore('channels', () => {
   return {
     channels,
     dms,
+    dmMembers,
     dmOther,
     memberships,
     entryReadAt,
@@ -359,11 +417,15 @@ export const useChannelsStore = defineStore('channels', () => {
     pinned,
     unpinned,
     totalUnread,
+    dmUnreadTotal,
+    dmMentionTotal,
     loading,
     isUnread,
     load,
     loadDms,
     openDm,
+    createGroupDm,
+    leaveDm,
     refreshOverview,
     refreshCrossClient,
     select,
