@@ -37,6 +37,8 @@ export const useChannelsStore = defineStore('channels', () => {
   // UI can highlight what was unseen on entry. Captured once per channel.
   const entryReadAt = ref<Record<string, string | null>>({})
   const unread = ref<Record<string, number>>({})
+  // Unread messages that @-mention me, per channel (subset of unread + replies).
+  const mentions = ref<Record<string, number>>({})
   const lastMessageAt = ref<Record<string, string>>({})
   const currentChannelId = ref<string | null>(null)
   const loading = ref(false)
@@ -72,6 +74,8 @@ export const useChannelsStore = defineStore('channels', () => {
     if (!auth.isAuthenticated || !cid) {
       channels.value = []
       currentChannelId.value = null
+      // DM unreads aren't client-scoped — keep them fresh even with no client.
+      if (auth.isAuthenticated) void refreshOverview()
       return
     }
     loading.value = true
@@ -110,20 +114,25 @@ export const useChannelsStore = defineStore('channels', () => {
   }
 
   async function refreshOverview() {
-    const cid = clients.currentClientId
-    if (!cid) return
-    const { data, error } = await supabase.rpc('comms_overview', { p_client: cid })
+    // Returns the current client's channels plus my DMs (DMs have no client,
+    // so a null p_client still resolves them).
+    const { data, error } = await supabase.rpc('comms_overview', {
+      p_client: clients.currentClientId ?? null,
+    })
     if (error) {
       console.warn('[channels] overview:', error.message)
       return
     }
     const u: Record<string, number> = {}
+    const mn: Record<string, number> = {}
     const lm: Record<string, string> = {}
     for (const row of (data ?? []) as any[]) {
       u[row.channel_id] = row.unread ?? 0
+      mn[row.channel_id] = row.mentions ?? 0
       if (row.last_message_at) lm[row.channel_id] = row.last_message_at
     }
     unread.value = u
+    mentions.value = mn
     lastMessageAt.value = lm
   }
 
@@ -136,6 +145,9 @@ export const useChannelsStore = defineStore('channels', () => {
   function bumpUnread(id: string) {
     unread.value = { ...unread.value, [id]: (unread.value[id] ?? 0) + 1 }
   }
+  function bumpMention(id: string) {
+    mentions.value = { ...mentions.value, [id]: (mentions.value[id] ?? 0) + 1 }
+  }
 
   async function markRead(id: string) {
     const uid = auth.user?.id
@@ -145,6 +157,7 @@ export const useChannelsStore = defineStore('channels', () => {
       entryReadAt.value = { ...entryReadAt.value, [id]: memberships.value[id]?.last_read_at ?? null }
     }
     unread.value = { ...unread.value, [id]: 0 }
+    mentions.value = { ...mentions.value, [id]: 0 }
     const now = new Date().toISOString()
     memberships.value[id] = { ...(memberships.value[id] ?? { pinned: false, muted: false }), last_read_at: now }
     const { error } = await supabase
@@ -279,6 +292,7 @@ export const useChannelsStore = defineStore('channels', () => {
     memberships,
     entryReadAt,
     unread,
+    mentions,
     lastMessageAt,
     currentChannelId,
     currentChannel,
@@ -294,6 +308,7 @@ export const useChannelsStore = defineStore('channels', () => {
     refreshOverview,
     select,
     bumpUnread,
+    bumpMention,
     markRead,
     togglePin,
     toggleMute,
