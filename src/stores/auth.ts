@@ -12,6 +12,7 @@ export interface Profile {
   role: UserRole
   timezone: string | null
   avatar_url: string | null
+  is_active: boolean
 }
 
 export const useAuthStore = defineStore('auth', () => {
@@ -55,7 +56,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
     const { data, error: err } = await supabase
       .from('profiles')
-      .select('id, email, full_name, role, timezone, avatar_url')
+      .select('id, email, full_name, role, timezone, avatar_url, is_active')
       .eq('id', user.value.id)
       .maybeSingle()
 
@@ -67,6 +68,14 @@ export const useAuthStore = defineStore('auth', () => {
       return
     }
     profile.value = (data as Profile) ?? null
+
+    // Deactivated accounts fail closed server-side (role helpers return
+    // nothing); sign them out client-side too so they land on the login page.
+    if (profile.value && profile.value.is_active === false) {
+      console.warn('[auth] account is deactivated — signing out')
+      await supabase.auth.signOut()
+      profile.value = null
+    }
   }
 
   function setSession(next: Session | null) {
@@ -156,7 +165,7 @@ export const useAuthStore = defineStore('auth', () => {
         .from('profiles')
         .update(patch)
         .eq('id', user.value.id)
-        .select('id, email, full_name, role, timezone, avatar_url')
+        .select('id, email, full_name, role, timezone, avatar_url, is_active')
         .single()
       if (err) throw err
       profile.value = data as Profile

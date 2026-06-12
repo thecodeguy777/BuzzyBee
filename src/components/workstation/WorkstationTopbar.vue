@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Hash, ChevronRight } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useChannelsStore } from '@/stores/channels'
 import { useTeamStore } from '@/stores/team'
 import { useTimeStore } from '@/stores/time'
+import { useOnlinePresence, reportPath } from '@/composables/useOnlinePresence'
 import { displayName } from '@/lib/format'
 import ClientSwitcher from '@/components/workstation/ClientSwitcher.vue'
 import GlobalSearch from '@/components/workstation/GlobalSearch.vue'
@@ -13,12 +14,18 @@ import ThemeToggle from '@/components/workstation/ThemeToggle.vue'
 import RefreshButton from '@/components/workstation/RefreshButton.vue'
 import NotificationBell from '@/components/workstation/NotificationBell.vue'
 import TimerChip from '@/components/workstation/TimerChip.vue'
+import OnlineNowChip from '@/components/workstation/OnlineNowChip.vue'
 
 const auth = useAuthStore()
 const route = useRoute()
 const channels = useChannelsStore()
 const team = useTeamStore()
 const time = useTimeStore()
+
+// Join the global presence channel (everyone tracks; admins see the list) and
+// keep our payload's current-page fresh as we navigate.
+useOnlinePresence()
+watch(() => route.path, (p) => reportPath(p), { immediate: true })
 
 // Breadcrumb channel segment — meaningful on the comms + messages surfaces.
 const showChannelCrumb = computed(
@@ -64,6 +71,7 @@ const channelLabel = computed(() => {
     <div class="flex items-center gap-1 sm:gap-2 shrink-0">
       <!-- Nice-to-haves give way first on phones -->
       <div class="hidden sm:flex items-center gap-2">
+        <OnlineNowChip />
         <ThemeToggle />
         <RefreshButton />
       </div>

@@ -1,10 +1,41 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useAuthStore, type UserRole } from '@/stores/auth'
-import { Save, Check } from 'lucide-vue-next'
+import { Save, Check, KeyRound } from 'lucide-vue-next'
+import { supabase } from '@/lib/supabase'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
 
 const auth = useAuthStore()
+
+// ── Password (invited users land here from the email link with a session but
+// no password yet — this is where they set one) ──────────────────────────────
+const newPassword = ref('')
+const confirmPassword = ref('')
+const pwState = ref<'idle' | 'saving' | 'saved'>('idle')
+const pwError = ref<string | null>(null)
+
+async function savePassword() {
+  pwError.value = null
+  if (newPassword.value.length < 8) {
+    pwError.value = 'Use at least 8 characters.'
+    return
+  }
+  if (newPassword.value !== confirmPassword.value) {
+    pwError.value = "Passwords don't match."
+    return
+  }
+  pwState.value = 'saving'
+  const { error } = await supabase.auth.updateUser({ password: newPassword.value })
+  if (error) {
+    pwError.value = error.message
+    pwState.value = 'idle'
+    return
+  }
+  newPassword.value = ''
+  confirmPassword.value = ''
+  pwState.value = 'saved'
+  setTimeout(() => (pwState.value = 'idle'), 2500)
+}
 
 const fullName = ref('')
 const timezone = ref('')
@@ -155,6 +186,55 @@ async function handleSave() {
               Saved
             </span>
             <span v-else-if="auth.error" class="text-sm text-error">{{ auth.error }}</span>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Password -->
+    <div class="card bg-base-100 border border-base-300 shadow-sm">
+      <div class="card-body p-6 space-y-4">
+        <div class="flex items-center gap-2">
+          <KeyRound class="w-4 h-4 text-base-content/60" :stroke-width="1.75" />
+          <h2 class="font-display text-base font-semibold">Password</h2>
+        </div>
+        <p class="text-xs text-base-content/60 -mt-2">
+          Just accepted an invite? Set a password here so you can sign in next time.
+        </p>
+        <form class="grid gap-4 sm:grid-cols-2" @submit.prevent="savePassword">
+          <label class="form-control">
+            <span class="label-text text-sm font-medium mb-1">New password</span>
+            <input
+              v-model="newPassword"
+              type="password"
+              autocomplete="new-password"
+              minlength="8"
+              class="input input-bordered w-full"
+            />
+          </label>
+          <label class="form-control">
+            <span class="label-text text-sm font-medium mb-1">Confirm</span>
+            <input
+              v-model="confirmPassword"
+              type="password"
+              autocomplete="new-password"
+              class="input input-bordered w-full"
+            />
+          </label>
+          <div class="sm:col-span-2 flex items-center gap-3">
+            <button
+              type="submit"
+              class="btn btn-primary btn-sm gap-2"
+              :disabled="!newPassword || pwState === 'saving'"
+            >
+              <KeyRound class="w-3.5 h-3.5" :stroke-width="2" />
+              {{ pwState === 'saving' ? 'Saving…' : 'Set password' }}
+            </button>
+            <span v-if="pwState === 'saved'" class="text-sm text-success flex items-center gap-1">
+              <Check class="w-4 h-4" :stroke-width="2.5" />
+              Password set
+            </span>
+            <span v-else-if="pwError" class="text-sm text-error">{{ pwError }}</span>
           </div>
         </form>
       </div>

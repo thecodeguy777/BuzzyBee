@@ -21,6 +21,7 @@ export interface MemberProfile {
   role: 'va' | 'pm' | 'admin' | 'superadmin'
   timezone: string | null
   avatar_url: string | null
+  is_active?: boolean
 }
 
 export const useTeamStore = defineStore('team', () => {
@@ -64,7 +65,7 @@ export const useTeamStore = defineStore('team', () => {
     if (missing.length === 0) return
     const { data, error: err } = await supabase
       .from('profiles')
-      .select('id, full_name, email, role, timezone, avatar_url')
+      .select('id, full_name, email, role, timezone, avatar_url, is_active')
       .in('id', missing)
     if (err) {
       console.warn('[team] fetchProfiles:', err.message)
@@ -76,14 +77,15 @@ export const useTeamStore = defineStore('team', () => {
   }
 
   /**
-   * For the current PM (or any admin), the unique VA roster they manage.
-   * For admins this is everyone with active assignments.
+   * The VA roster. PMs roam (docs/roles.md) — they and admins see everyone
+   * with an active assignment; anyone else sees VAs they supervise.
    */
   const myTeam = computed(() => {
     const ids = new Set<string>()
+    const roams = auth.isAdmin || auth.role === 'pm'
     for (const a of assignments.value) {
       if (a.status !== 'active') continue
-      if (auth.isAdmin) {
+      if (roams) {
         if (a.va_id) ids.add(a.va_id)
         continue
       }
