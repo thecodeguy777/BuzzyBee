@@ -18,17 +18,20 @@ const layout = computed<'workstation' | 'admin' | 'bare'>(() => {
 </script>
 
 <template>
+  <!-- Key by the matched route *record*, not the concrete path: param-only
+       navigations (/app/team → /app/team/:vaId) keep the page mounted, so
+       selecting a member opens its drawer without remounting the whole view. -->
   <WorkstationLayout v-if="layout === 'workstation'">
     <router-view v-slot="{ Component, route: r }">
       <transition name="page" mode="out-in">
-        <component :is="Component" :key="r.path" />
+        <component :is="Component" :key="r.matched[r.matched.length - 1]?.path ?? r.path" />
       </transition>
     </router-view>
   </WorkstationLayout>
   <AppLayout v-else-if="layout === 'admin'">
     <router-view v-slot="{ Component, route: r }">
       <transition name="page" mode="out-in">
-        <component :is="Component" :key="r.path" />
+        <component :is="Component" :key="r.matched[r.matched.length - 1]?.path ?? r.path" />
       </transition>
     </router-view>
   </AppLayout>

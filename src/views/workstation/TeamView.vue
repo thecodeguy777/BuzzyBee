@@ -6,15 +6,15 @@ import {
   Search,
   Clock,
   ListTodo,
-  Mail,
-  Filter,
+  Gauge,
+  Flag,
   UserPlus,
   Send,
   RotateCw,
   X,
-  UserX,
-  UserCheck,
-  AlertTriangle
+  AlertTriangle,
+  Rows3,
+  LayoutGrid
 } from 'lucide-vue-next'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth'
@@ -23,8 +23,11 @@ import { useTasksStore } from '@/stores/tasks'
 import { useStatusesStore } from '@/stores/statuses'
 import { useTeamStore, type MemberProfile } from '@/stores/team'
 import { useInvitesStore, type InviteRole } from '@/stores/invites'
+import { useOnlinePresence } from '@/composables/useOnlinePresence'
 import VADetail from '@/components/workstation/VADetail.vue'
-import HexAvatar from '@/components/shared/HexAvatar.vue'
+import TeamRosterTable from '@/components/workstation/team/TeamRosterTable.vue'
+import TeamRosterCards from '@/components/workstation/team/TeamRosterCards.vue'
+import { utilOf, utilColor, formatHours, type TeamMemberRow } from '@/components/workstation/team/capacity'
 
 const props = defineProps<{ vaId?: string }>()
 
@@ -34,6 +37,7 @@ const tasks = useTasksStore()
 const statusesStore = useStatusesStore()
 const team = useTeamStore()
 const invites = useInvitesStore()
+const { online } = useOnlinePresence()
 const router = useRouter()
 
 // ── Invitations + deactivation (admin only) ──────────────────────────────────
@@ -59,15 +63,13 @@ function openInvite() {
   inviteOpen.value = true
   void nextTick(() => inviteEmailEl.value?.focus())
 }
-function onInviteKey(e: KeyboardEvent) {
-  if (e.key === 'Escape' && inviteOpen.value) inviteOpen.value = false
+function onKeydown(e: KeyboardEvent) {
+  if (e.key !== 'Escape') return
+  if (inviteOpen.value) inviteOpen.value = false
+  else if (selectedId.value) clearSelection()
 }
-watch(inviteOpen, (open) => {
-  if (typeof document === 'undefined') return
-  if (open) document.addEventListener('keydown', onInviteKey)
-  else document.removeEventListener('keydown', onInviteKey)
-})
-onBeforeUnmount(() => document.removeEventListener('keydown', onInviteKey))
+document.addEventListener('keydown', onKeydown)
+onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 
 const roleOptions = computed<{ value: InviteRole; label: string }[]>(() => {
   const base: { value: InviteRole; label: string }[] = [
@@ -111,14 +113,16 @@ async function resendInvite(id: string, email: string) {
   if (await invites.resend(id)) fireToast('Invitation re-sent to ' + email)
 }
 
-async function toggleActive(m: MemberProfile) {
+async function toggleActive(id: string) {
+  const m = team.profiles[id] ?? team.myTeam.find((x) => x.id === id)
+  if (!m) return
   const next = m.is_active === false
   const verb = next ? 'Reactivate' : 'Deactivate'
   if (!window.confirm(verb + ' ' + (m.full_name || m.email || 'this person') + '?'
       + (next ? '' : ' They lose all access immediately; history is kept.'))) return
   if (await invites.setActive(m.id, next)) {
     // fetchProfiles caches by id — patch the roster entry directly.
-    team.profiles[m.id] = { ...m, is_active: next }
+    team.profiles[m.id] = { ...(m as MemberProfile), is_active: next }
     fireToast((m.full_name || m.email || 'Account') + (next ? ' reactivated' : ' deactivated'))
   }
 }
@@ -129,12 +133,10 @@ watch(
   { immediate: true }
 )
 
-// Hours-this-week per VA (for the master list).
+// ── Hours this week per member ────────────────────────────────────────────────
 const hoursByVa = ref<Record<string, number>>({})
-const hoursLoading = ref(false)
 
 async function loadHoursThisWeek() {
-  hoursLoading.value = true
   try {
     const monday = new Date()
     monday.setHours(0, 0, 0, 0)
@@ -149,69 +151,139 @@ async function loadHoursThisWeek() {
       if (!e.va_id) continue
       const start = new Date(e.started_at).getTime()
       const end = e.ended_at ? new Date(e.ended_at).getTime() : Date.now()
-      const seconds = Math.max(0, Math.floor((end - start) / 1000))
-      map[e.va_id] = (map[e.va_id] ?? 0) + seconds
+      map[e.va_id] = (map[e.va_id] ?? 0) + Math.max(0, Math.floor((end - start) / 1000))
     }
     hoursByVa.value = map
   } catch (e) {
     console.warn('[team] hours:', (e as Error).message)
-  } finally {
-    hoursLoading.value = false
   }
 }
 
 watch(
   () => auth.isAuthenticated,
-  (is) => {
-    if (is) void loadHoursThisWeek()
-  },
+  (is) => { if (is) void loadHoursThisWeek() },
   { immediate: true }
 )
 
-const openTasksByVa = computed<Record<string, number>>(() => {
-  const m: Record<string, number> = {}
+// ── Per-member task tallies (open / overdue / done this week) ─────────────────
+const taskTallies = computed(() => {
+  const monday = new Date()
+  monday.setHours(0, 0, 0, 0)
+  monday.setDate(monday.getDate() - monday.getDay())
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const open: Record<string, number> = {}
+  const overdue: Record<string, number> = {}
+  const done: Record<string, number> = {}
   for (const t of tasks.tasks) {
     if (!t.assignee_id) continue
-    if (!statusesStore.isOpen(t.project_id, t.status)) continue
-    m[t.assignee_id] = (m[t.assignee_id] ?? 0) + 1
+    if (statusesStore.isOpen(t.project_id, t.status)) {
+      open[t.assignee_id] = (open[t.assignee_id] ?? 0) + 1
+      if (t.due_on && new Date(t.due_on + 'T00:00:00').getTime() < today.getTime()) {
+        overdue[t.assignee_id] = (overdue[t.assignee_id] ?? 0) + 1
+      }
+    } else if (
+      statusesStore.isDone(t.project_id, t.status) &&
+      t.completed_at &&
+      new Date(t.completed_at).getTime() >= monday.getTime()
+    ) {
+      done[t.assignee_id] = (done[t.assignee_id] ?? 0) + 1
+    }
   }
-  return m
+  return { open, overdue, done }
 })
 
-// Filtering
+// ── Filters / sort / view ─────────────────────────────────────────────────────
 const search = ref('')
+const roleFilter = ref<'all' | 'va' | 'pm' | 'admin'>('all')
 const clientFilter = ref<'all' | string>('all')
+const sort = ref<'workload' | 'name' | 'open' | 'overdue' | 'hours'>('workload')
+const view = ref<'table' | 'cards'>('table')
 
-const filtered = computed(() => {
-  return team.myTeam.filter((m) => {
-    if (clientFilter.value !== 'all') {
-      const list = team.assignmentsByVa[m.id] ?? []
-      if (!list.some((a) => a.client_id === clientFilter.value)) return false
+const ROLE_TABS: { value: typeof roleFilter.value; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'va', label: 'VAs' },
+  { value: 'pm', label: 'PMs' },
+  { value: 'admin', label: 'Admins' },
+]
+const SORTS: Record<typeof sort.value, string> = {
+  workload: 'Workload',
+  name: 'Name',
+  open: 'Open tasks',
+  overdue: 'Overdue',
+  hours: 'Hours',
+}
+
+function rowOf(m: MemberProfile): TeamMemberRow {
+  const seconds = hoursByVa.value[m.id] ?? 0
+  const assignments = (team.assignmentsByVa[m.id] ?? []).filter((a) => a.status !== 'ended')
+  return {
+    id: m.id,
+    name: m.full_name || m.email || 'Unknown',
+    email: m.email ?? '—',
+    avatarUrl: m.avatar_url,
+    role: m.role,
+    timezone: m.timezone,
+    inactive: m.is_active === false,
+    online: !!online.value[m.id],
+    seconds,
+    util: utilOf(seconds),
+    open: taskTallies.value.open[m.id] ?? 0,
+    overdue: taskTallies.value.overdue[m.id] ?? 0,
+    done: taskTallies.value.done[m.id] ?? 0,
+    clients: assignments
+      .map((a) => clients.clients.find((c) => c.id === a.client_id))
+      .filter((c): c is NonNullable<typeof c> => !!c)
+      .map((c) => ({ id: c.id, name: c.name })),
+  }
+}
+
+const allRows = computed(() => team.myTeam.map(rowOf))
+
+const rows = computed(() => {
+  let list = allRows.value.filter((r) => {
+    if (roleFilter.value !== 'all') {
+      const match = roleFilter.value === 'admin'
+        ? r.role === 'admin' || r.role === 'superadmin'
+        : r.role === roleFilter.value
+      if (!match) return false
     }
+    if (clientFilter.value !== 'all' && !r.clients.some((c) => c.id === clientFilter.value)) return false
     if (search.value.trim()) {
       const q = search.value.trim().toLowerCase()
-      const hay = `${m.full_name ?? ''} ${m.email ?? ''}`.toLowerCase()
-      if (!hay.includes(q)) return false
+      if (!`${r.name} ${r.email}`.toLowerCase().includes(q)) return false
     }
     return true
   })
+  const cmp: Record<typeof sort.value, (a: TeamMemberRow, b: TeamMemberRow) => number> = {
+    workload: (a, b) => b.util - a.util,
+    name: (a, b) => a.name.localeCompare(b.name),
+    open: (a, b) => b.open - a.open,
+    overdue: (a, b) => b.overdue - a.overdue,
+    hours: (a, b) => b.seconds - a.seconds,
+  }
+  return [...list].sort(cmp[sort.value])
 })
 
-function formatHours(seconds: number) {
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  if (h === 0) return `${m}m`
-  return `${h}h ${String(m).padStart(2, '0')}m`
-}
+// ── KPIs (whole team, unfiltered) ─────────────────────────────────────────────
+const kpis = computed(() => {
+  const all = allRows.value
+  const totalSeconds = all.reduce((s, r) => s + r.seconds, 0)
+  const avgUtil = all.length ? all.reduce((s, r) => s + r.util, 0) / all.length : 0
+  return {
+    members: all.length,
+    vas: all.filter((r) => r.role === 'va').length,
+    onlineNow: all.filter((r) => r.online).length,
+    hours: formatHours(totalSeconds),
+    avgUtil,
+    avgUtilColor: utilColor(avgUtil),
+    open: all.reduce((s, r) => s + r.open, 0),
+    overdue: all.reduce((s, r) => s + r.overdue, 0),
+  }
+})
 
-const totalVAs = computed(() => team.myTeam.length)
-const totalHours = computed(() =>
-  Object.values(hoursByVa.value).reduce((a, b) => a + b, 0)
-)
-
-// -----------------------------------------------------------------------------
-// Selection — synced to /app/team/:vaId
-// -----------------------------------------------------------------------------
+// ── Selection — synced to /app/team/:vaId, shown as a slide-out ───────────────
 const selectedId = computed(() => props.vaId ?? null)
 const selectedVa = computed(() =>
   selectedId.value ? team.profiles[selectedId.value] ?? team.myTeam.find((x) => x.id === selectedId.value) ?? null : null
@@ -223,61 +295,70 @@ function selectVa(id: string) {
 function clearSelection() {
   router.push({ name: 'workstation-team', params: {} })
 }
-
-// Auto-select the first filtered VA on wide screens for a populated initial state.
-watch(
-  [filtered, selectedId],
-  ([list, sel]) => {
-    if (sel) return
-    if (typeof window === 'undefined') return
-    if (window.matchMedia('(min-width: 1024px)').matches && list.length > 0) {
-      router.replace({ name: 'workstation-team', params: { vaId: list[0].id } })
-    }
-  },
-  { immediate: true }
-)
 </script>
 
 <template>
-  <div class="h-full -mx-6 -my-6 flex flex-col">
+  <div class="space-y-4">
     <!-- Page header -->
-    <header
-      class="px-6 py-4 border-b border-base-300 flex items-end justify-between gap-4 flex-wrap shrink-0"
-    >
-      <div>
-        <h1 class="font-display text-xl font-semibold flex items-center gap-2">
-          <UsersRound class="w-5 h-5 text-base-content/70" :stroke-width="1.75" />
-          Team
-        </h1>
-        <p class="text-xs text-base-content/60 mt-0.5">
-          {{ auth.isAdmin ? 'All VAs across the agency.' : 'VAs you manage.' }}
-        </p>
-      </div>
-      <div class="flex items-center gap-3 text-xs text-base-content/60">
-        <span class="flex items-center gap-1.5">
-          <UsersRound class="w-3.5 h-3.5" :stroke-width="1.75" />
-          {{ totalVAs }} VA{{ totalVAs === 1 ? '' : 's' }}
+    <header class="flex items-end gap-4 flex-wrap">
+      <div class="flex items-center gap-3">
+        <span class="w-10 h-10 rounded-xl grid place-items-center text-primary shrink-0" style="background: var(--accent-soft)">
+          <UsersRound class="w-5 h-5" :stroke-width="1.9" />
         </span>
-        <span class="flex items-center gap-1.5">
-          <Clock class="w-3.5 h-3.5" :stroke-width="1.75" />
-          {{ formatHours(totalHours) }} this week
-        </span>
-        <button
-          v-if="auth.isAdmin"
-          type="button"
-          class="btn btn-primary btn-sm gap-1.5"
-          @click="openInvite"
-        >
-          <UserPlus class="w-3.5 h-3.5" :stroke-width="2" />
-          Invite
-        </button>
+        <div>
+          <h1 class="font-display text-xl font-bold leading-tight">Team</h1>
+          <p class="text-xs text-base-content/60 mt-0.5">
+            Everyone across the agency — capacity, workload &amp; assignments.
+          </p>
+        </div>
       </div>
+      <div class="flex-1" />
+      <button
+        v-if="auth.isAdmin"
+        type="button"
+        class="btn btn-primary btn-sm gap-1.5"
+        @click="openInvite"
+      >
+        <UserPlus class="w-4 h-4" :stroke-width="2" />
+        Invite member
+      </button>
     </header>
+
+    <!-- KPI strip -->
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div class="team-kpi">
+        <div class="team-kpi-label"><UsersRound class="w-3.5 h-3.5" :stroke-width="1.75" /> Members</div>
+        <div class="team-kpi-value">{{ kpis.members }}</div>
+        <div class="team-kpi-sub">{{ kpis.vas }} VAs · {{ kpis.onlineNow }} online now</div>
+      </div>
+      <div class="team-kpi">
+        <div class="team-kpi-label"><Clock class="w-3.5 h-3.5" :stroke-width="1.75" /> Hours this week</div>
+        <div class="team-kpi-value">{{ kpis.hours }}</div>
+        <div class="team-kpi-sub">across {{ kpis.members }} members</div>
+      </div>
+      <div class="team-kpi">
+        <div class="team-kpi-label"><Gauge class="w-3.5 h-3.5" :stroke-width="1.75" /> Avg utilization</div>
+        <div class="team-kpi-value" :style="{ color: kpis.avgUtilColor }">{{ Math.round(kpis.avgUtil * 100) }}%</div>
+        <div class="h-[5px] rounded-full bg-base-200 overflow-hidden mt-2">
+          <div class="h-full rounded-full" :style="{ width: Math.min(kpis.avgUtil * 100, 100) + '%', background: kpis.avgUtilColor }" />
+        </div>
+      </div>
+      <div class="team-kpi">
+        <div class="team-kpi-label"><ListTodo class="w-3.5 h-3.5" :stroke-width="1.75" /> Open tasks</div>
+        <div class="team-kpi-value" style="color: var(--st-rev-fg)">{{ kpis.open }}</div>
+        <div class="team-kpi-sub">in flight team-wide</div>
+      </div>
+      <div class="team-kpi">
+        <div class="team-kpi-label"><Flag class="w-3.5 h-3.5" :stroke-width="1.75" /> Overdue</div>
+        <div class="team-kpi-value" :style="kpis.overdue > 0 ? 'color: var(--st-block-fg)' : ''">{{ kpis.overdue }}</div>
+        <div class="team-kpi-sub">{{ kpis.overdue > 0 ? 'needs attention' : 'all on time' }}</div>
+      </div>
+    </div>
 
     <!-- Pending invitations (admin) -->
     <div
       v-if="auth.isAdmin && pendingInvites.length"
-      class="px-6 py-2 border-b border-base-300 bg-base-200/40 flex items-center gap-2 flex-wrap shrink-0"
+      class="rounded-xl border border-base-300 bg-base-200/40 px-3 py-2 flex items-center gap-2 flex-wrap"
     >
       <span class="text-[0.65rem] uppercase tracking-wider font-semibold text-base-content/50">
         Pending invites
@@ -309,136 +390,98 @@ watch(
       </span>
     </div>
 
-    <!-- Master + detail -->
-    <div class="flex-1 min-h-0 flex">
-      <!-- Master (roster) -->
-      <aside
-        :class="[
-          'w-full lg:w-80 lg:shrink-0 lg:border-r border-base-300 bg-base-100 flex flex-col min-h-0',
-          selectedId ? 'hidden lg:flex' : 'flex'
-        ]"
+    <!-- Toolbar -->
+    <div class="flex items-center gap-2.5 flex-wrap">
+      <label
+        class="flex items-center gap-2 w-60 px-3 h-9 rounded-lg border border-base-300 bg-base-100 focus-within:border-primary"
       >
-        <!-- Filters -->
-        <div class="px-3 py-2.5 border-b border-base-300 space-y-2 shrink-0">
-          <label
-            class="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-base-300 focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/40"
-          >
-            <Search class="w-4 h-4 text-base-content/50" :stroke-width="1.75" />
-            <input
-              v-model="search"
-              type="text"
-              placeholder="Search name or email"
-              class="flex-1 bg-transparent outline-none text-sm placeholder:text-base-content/40 min-w-0"
-            />
-          </label>
-          <div class="flex items-center gap-1.5">
-            <Filter class="w-3.5 h-3.5 text-base-content/50" :stroke-width="1.75" />
-            <select v-model="clientFilter" class="select select-bordered select-xs flex-1">
-              <option value="all">All clients</option>
-              <option v-for="c in clients.clients" :key="c.id" :value="c.id">
-                {{ c.name }}
-              </option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Roster list -->
-        <ul class="flex-1 overflow-y-auto py-1">
-          <li v-if="!filtered.length" class="px-4 py-8 text-center text-xs text-base-content/50">
-            <UsersRound class="w-6 h-6 mx-auto text-base-content/30" :stroke-width="1.5" />
-            <p class="mt-2" v-if="team.myTeam.length === 0">
-              {{ auth.isAdmin ? 'No VAs in the system yet.' : 'No VAs assigned to you yet.' }}
-            </p>
-            <p class="mt-2" v-else>No matches.</p>
-          </li>
-          <li
-            v-for="m in filtered"
-            :key="m.id"
-            class="px-2"
-          >
-            <button
-              type="button"
-              class="group/row w-full text-left px-2.5 py-2 rounded-lg flex items-start gap-2.5 transition-colors"
-              :class="[
-                selectedId === m.id
-                  ? 'bg-primary/10 text-primary'
-                  : 'hover:bg-base-200',
-                m.is_active === false && 'opacity-50'
-              ]"
-              @click="selectVa(m.id)"
-            >
-              <HexAvatar
-                :avatar-url="m.avatar_url"
-                :name="m.full_name"
-                :email="m.email"
-                :size="36"
-                tint="primary"
-              />
-              <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium truncate flex items-center gap-1.5">
-                  <span class="truncate">{{ m.full_name || m.email || 'Unknown' }}</span>
-                  <span
-                    v-if="m.is_active === false"
-                    class="text-[0.6rem] font-bold uppercase px-1.5 py-px rounded bg-base-200 text-base-content/50 shrink-0"
-                  >Inactive</span>
-                </div>
-                <div class="text-[0.65rem] text-base-content/50 truncate flex items-center gap-1">
-                  <Mail class="w-2.5 h-2.5" :stroke-width="1.75" />
-                  {{ m.email ?? '—' }}
-                </div>
-                <div class="flex items-center gap-2 mt-1 text-[0.65rem] text-base-content/60">
-                  <span class="inline-flex items-center gap-0.5 tabular-nums">
-                    <Clock class="w-2.5 h-2.5" :stroke-width="1.75" />
-                    {{ formatHours(hoursByVa[m.id] ?? 0) }}
-                  </span>
-                  <span class="text-base-content/30">·</span>
-                  <span class="inline-flex items-center gap-0.5 tabular-nums">
-                    <ListTodo class="w-2.5 h-2.5" :stroke-width="1.75" />
-                    {{ openTasksByVa[m.id] ?? 0 }} open
-                  </span>
-                </div>
-              </div>
-              <span
-                v-if="auth.isAdmin"
-                role="button"
-                class="opacity-0 group-hover/row:opacity-100 w-6 h-6 rounded-md grid place-items-center shrink-0 transition-opacity"
-                :class="m.is_active === false
-                  ? 'text-success hover:bg-base-300/60'
-                  : 'text-base-content/30 hover:text-error hover:bg-base-300/60'"
-                :title="m.is_active === false ? 'Reactivate account' : 'Deactivate account'"
-                @click.stop="toggleActive(m)"
-              >
-                <component :is="m.is_active === false ? UserCheck : UserX" class="w-3.5 h-3.5" :stroke-width="1.75" />
-              </span>
-            </button>
-          </li>
-        </ul>
-      </aside>
-
-      <!-- Detail -->
-      <section
-        :class="[
-          'flex-1 min-w-0',
-          selectedId ? 'flex' : 'hidden lg:flex'
-        ]"
-      >
-        <VADetail
-          v-if="selectedVa"
-          :key="selectedId ?? 'none'"
-          :va-id="selectedId!"
-          @back="clearSelection"
+        <Search class="w-4 h-4 text-base-content/50 shrink-0" :stroke-width="1.75" />
+        <input
+          v-model="search"
+          type="text"
+          placeholder="Search name or email"
+          class="flex-1 bg-transparent outline-none text-sm placeholder:text-base-content/40 min-w-0"
         />
-        <div
-          v-else
-          class="flex-1 flex items-center justify-center text-center text-sm text-base-content/50 px-6"
+      </label>
+
+      <!-- role segmented -->
+      <div class="flex gap-0.5 bg-base-200 p-[3px] rounded-lg">
+        <button
+          v-for="t in ROLE_TABS"
+          :key="t.value"
+          type="button"
+          class="px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap transition-all"
+          :class="roleFilter === t.value ? 'bg-base-100 shadow-sm text-base-content' : 'text-base-content/60'"
+          @click="roleFilter = t.value"
+        >{{ t.label }}</button>
+      </div>
+
+      <select v-model="clientFilter" class="select select-bordered select-sm w-40">
+        <option value="all">All clients</option>
+        <option v-for="c in clients.clients" :key="c.id" :value="c.id">{{ c.name }}</option>
+      </select>
+
+      <div class="flex-1" />
+
+      <select v-model="sort" class="select select-bordered select-sm w-36">
+        <option v-for="(label, k) in SORTS" :key="k" :value="k">{{ label }}</option>
+      </select>
+
+      <!-- view toggle -->
+      <div class="flex gap-0.5 bg-base-200 p-[3px] rounded-lg">
+        <button
+          v-for="[k, icon, label] in ([['table', Rows3, 'Roster'], ['cards', LayoutGrid, 'Cards']] as const)"
+          :key="k"
+          type="button"
+          class="w-9 h-8 rounded-md grid place-items-center transition-all"
+          :class="view === k ? 'bg-base-100 shadow-sm text-base-content' : 'text-base-content/50'"
+          :title="label"
+          @click="view = k"
         >
-          <div>
-            <UsersRound class="w-10 h-10 mx-auto text-base-content/20" :stroke-width="1.5" />
-            <p class="mt-3">Pick a VA from the list to see assignments, hours, and recent activity.</p>
-          </div>
-        </div>
-      </section>
+          <component :is="icon" class="w-4 h-4" :stroke-width="1.9" />
+        </button>
+      </div>
     </div>
+
+    <!-- Roster -->
+    <div
+      v-if="rows.length === 0"
+      class="py-14 text-center text-base-content/50"
+    >
+      <UsersRound class="w-8 h-8 mx-auto text-base-content/30" :stroke-width="1.5" />
+      <p class="mt-3 text-sm font-medium">
+        {{ team.myTeam.length === 0
+          ? (auth.isAdmin ? 'No members in the system yet.' : 'No VAs assigned to you yet.')
+          : 'No members match your filters.' }}
+      </p>
+    </div>
+    <TeamRosterTable
+      v-else-if="view === 'table'"
+      :rows="rows"
+      :admin="auth.isAdmin"
+      @open="selectVa"
+      @toggle-active="toggleActive"
+    />
+    <TeamRosterCards v-else :rows="rows" @open="selectVa" />
+
+    <!-- Member detail slide-out -->
+    <Teleport to="body">
+      <Transition name="tv-fade">
+        <div
+          v-if="selectedVa"
+          class="fixed inset-0 z-[70] bg-black/30"
+          @click="clearSelection"
+        />
+      </Transition>
+      <Transition name="tv-slide">
+        <div
+          v-if="selectedVa"
+          class="fixed top-0 right-0 bottom-0 z-[71] w-[500px] max-w-[95vw] bg-base-100 border-l border-base-300 shadow-2xl"
+        >
+          <VADetail :key="selectedId ?? 'none'" :va-id="selectedId!" @back="clearSelection" />
+        </div>
+      </Transition>
+    </Teleport>
 
     <!-- Invite modal -->
     <Teleport to="body">
@@ -546,7 +589,7 @@ watch(
       >
         <div
           v-if="toast"
-          class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2.5 px-4 py-3 rounded-xl border border-base-300 bg-base-100 shadow-2xl"
+          class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[80] flex items-center gap-2.5 px-4 py-3 rounded-xl border border-base-300 bg-base-100 shadow-2xl"
         >
           <AlertTriangle v-if="toast.error" class="w-4 h-4 text-error shrink-0" :stroke-width="2" />
           <Send v-else class="w-4 h-4 text-success shrink-0" :stroke-width="2" />
@@ -558,6 +601,42 @@ watch(
 </template>
 
 <style scoped>
+.team-kpi {
+  padding: 13px 16px;
+  border-radius: 13px;
+  border: 1px solid var(--color-base-300);
+  background: var(--color-base-100);
+  box-shadow: var(--sh-card);
+  min-width: 0;
+}
+.team-kpi-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-base-content);
+  opacity: 0.45;
+  margin-bottom: 9px;
+  white-space: nowrap;
+}
+.team-kpi-value {
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.team-kpi-sub {
+  font-size: 0.7rem;
+  color: var(--color-base-content);
+  opacity: 0.45;
+  margin-top: 5px;
+  white-space: nowrap;
+}
+
 .tv-fade-enter-active,
 .tv-fade-leave-active { transition: opacity 0.18s ease; }
 .tv-fade-enter-from,
@@ -567,4 +646,9 @@ watch(
 .tv-pop-leave-active { transition: opacity 0.14s ease-in, transform 0.14s ease-in; }
 .tv-pop-enter-from,
 .tv-pop-leave-to { opacity: 0; transform: scale(0.96) translateY(8px); }
+
+.tv-slide-enter-active { transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.22s ease; }
+.tv-slide-leave-active { transition: transform 0.16s ease-in, opacity 0.16s ease-in; }
+.tv-slide-enter-from,
+.tv-slide-leave-to { transform: translateX(24px); opacity: 0; }
 </style>

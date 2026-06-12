@@ -6,21 +6,41 @@ import {
   ListTodo,
   CheckCircle2,
   Calendar,
-  ChevronLeft,
+  MessageSquare,
+  X,
+  IdCard,
   Activity as ActivityIcon
 } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
 import { supabase } from '@/lib/supabase'
 import { useClientsStore } from '@/stores/clients'
+import { useChannelsStore } from '@/stores/channels'
 import { useTasksStore, type Task, type TaskActivityEvent } from '@/stores/tasks'
 import { useTeamStore, type MemberProfile } from '@/stores/team'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
+import RoleChip from '@/components/workstation/team/RoleChip.vue'
+import CapacityRing from '@/components/workstation/team/CapacityRing.vue'
 
 const props = defineProps<{ vaId: string }>()
 const emit = defineEmits<{ (e: 'back'): void }>()
 
 const clients = useClientsStore()
+const channels = useChannelsStore()
 const tasks = useTasksStore()
 const team = useTeamStore()
+const router = useRouter()
+
+async function messageVa() {
+  try {
+    const id = await channels.openDm(props.vaId)
+    if (id) {
+      channels.select(id)
+      await router.push({ path: '/app/comms' })
+    }
+  } catch (e) {
+    console.warn('[va detail] dm:', (e as Error).message)
+  }
+}
 
 const va = computed<MemberProfile | null>(() => team.profiles[props.vaId] ?? null)
 
@@ -220,43 +240,56 @@ const statusMeta: Record<string, { label: string; class: string }> = {
 
 <template>
   <div class="h-full flex flex-col bg-base-100 min-w-0">
-    <!-- Header -->
-    <header class="px-5 sm:px-6 py-4 border-b border-base-300 shrink-0 flex items-center gap-3">
+    <!-- Action bar -->
+    <div class="px-4 py-2.5 border-b border-base-300 shrink-0 flex items-center gap-2">
+      <RoleChip :role="va?.role" />
+      <div class="flex-1" />
       <button
         type="button"
-        class="lg:hidden w-8 h-8 rounded-md flex items-center justify-center hover:bg-base-200 -ml-1 text-base-content/70"
-        aria-label="Back to roster"
+        class="h-8 px-3 rounded-lg inline-flex items-center gap-1.5 text-xs font-semibold text-base-content/60 hover:bg-base-200 hover:text-base-content"
+        title="Open full profile — the shareable résumé"
+        @click="router.push({ name: 'workstation-va-profile', params: { userId: props.vaId } })"
+      >
+        <IdCard class="w-4 h-4" :stroke-width="1.75" /> Profile
+      </button>
+      <button
+        type="button"
+        class="w-8 h-8 rounded-lg grid place-items-center text-base-content/60 hover:bg-base-200 hover:text-base-content"
+        title="Message"
+        @click="messageVa"
+      >
+        <MessageSquare class="w-4 h-4" :stroke-width="1.9" />
+      </button>
+      <button
+        type="button"
+        class="w-8 h-8 rounded-lg grid place-items-center text-base-content/60 hover:bg-base-200 hover:text-base-content"
+        aria-label="Close"
         @click="emit('back')"
       >
-        <ChevronLeft class="w-5 h-5" :stroke-width="1.75" />
+        <X class="w-[18px] h-[18px]" :stroke-width="2" />
       </button>
+    </div>
+
+    <!-- Identity -->
+    <header class="px-5 py-5 border-b border-base-300 shrink-0 flex items-center gap-4">
       <HexAvatar
         :avatar-url="va?.avatar_url"
         :name="va?.full_name"
         :email="va?.email"
-        :size="48"
+        :size="56"
         tint="primary"
       />
       <div class="flex-1 min-w-0">
-        <h2 class="font-display text-lg font-semibold truncate">
+        <h2 class="font-display text-lg font-bold truncate">
           {{ va?.full_name || va?.email || 'Loading…' }}
         </h2>
-        <div class="text-xs text-base-content/60 flex items-center gap-2 flex-wrap">
-          <span class="inline-flex items-center gap-1">
-            <Mail class="w-3 h-3" :stroke-width="1.75" />
-            {{ va?.email ?? '—' }}
-          </span>
-          <span v-if="va?.timezone" class="text-base-content/40">·</span>
-          <span v-if="va?.timezone">{{ va.timezone }}</span>
-          <span v-if="va?.role" class="text-base-content/40">·</span>
-          <span
-            v-if="va?.role"
-            class="px-1.5 py-0.5 rounded-full text-[0.6rem] uppercase tracking-wider bg-base-200 text-base-content/70 font-semibold"
-          >
-            {{ va.role }}
-          </span>
+        <div class="text-xs text-base-content/60 flex items-center gap-1.5 mt-0.5">
+          <Mail class="w-3 h-3 shrink-0" :stroke-width="1.75" />
+          <span class="truncate">{{ va?.email ?? '—' }}</span>
         </div>
+        <div v-if="va?.timezone" class="text-xs text-base-content/50 mt-0.5">{{ va.timezone }}</div>
       </div>
+      <CapacityRing :seconds="hoursThisWeek" :size="92" />
     </header>
 
     <!-- Body -->
