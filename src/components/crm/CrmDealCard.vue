@@ -8,11 +8,9 @@ import { useTeamStore } from '@/stores/team'
 import { userColor } from '@/lib/userColor'
 import { fmtMoney, type Deal } from '@/lib/crmData'
 
-const props = defineProps<{ deal: Deal; dragging?: boolean }>()
+const props = defineProps<{ deal: Deal }>()
 const emit = defineEmits<{
   (e: 'open', deal: Deal): void
-  (e: 'dragstart', id: string): void
-  (e: 'dragend'): void
 }>()
 
 const crm = useCrmStore()
@@ -25,14 +23,10 @@ const taskN = computed(() => crm.linkedTasks(props.deal.id).length)
 <template>
   <div
     class="crm-card flex flex-col gap-[9px] px-[13px] py-[11px]"
-    :class="dragging ? 'opacity-40' : ''"
-    draggable="true"
     role="button"
     tabindex="0"
     @click="emit('open', deal)"
     @keydown.enter.prevent="emit('open', deal)"
-    @dragstart="emit('dragstart', deal.id)"
-    @dragend="emit('dragend')"
   >
     <div class="flex items-center gap-2">
       <CrmAvatar :name="co?.name" :initials="co?.initials" :color="co?.color" :size="24" :radius="7" />

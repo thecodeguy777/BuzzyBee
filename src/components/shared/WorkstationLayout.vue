@@ -33,6 +33,10 @@ const fullBleed = computed(
     route.path.startsWith('/app/crm'),
 )
 
+// Tasks keeps the padded canvas but on the white surface — its board columns
+// are base-200 tints (CRM pipeline style) and vanish on a base-200 page.
+const whiteCanvas = computed(() => route.path.startsWith('/app/tasks'))
+
 // The comms/huddle stream lives here (the shell stays mounted across all
 // workstation routes), so a call keeps running as you move between pages.
 const commsStream = useChannelStream(computed(() => channels.currentChannelId))
@@ -78,7 +82,9 @@ if (auth.isAuthenticated && !projects.loaded) {
 
       <main
         class="flex-1 min-h-0"
-        :class="fullBleed ? 'overflow-hidden bg-base-100' : 'overflow-y-auto px-6 py-6 bg-base-200'"
+        :class="fullBleed
+          ? 'overflow-hidden bg-base-100'
+          : ['overflow-y-auto px-6 py-6', whiteCanvas ? 'bg-base-100' : 'bg-base-200']"
       >
         <slot />
       </main>

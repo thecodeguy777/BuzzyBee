@@ -135,7 +135,9 @@ function dueClass(due: string | null) {
 </script>
 
 <template>
-  <div class="space-y-5">
+  <!-- Board view pins to the viewport (columns scroll, page doesn't) — it needs
+       the full height of the layout's <main>; every other tab scrolls naturally. -->
+  <div :class="view === 'board' && hasClient ? 'h-full flex flex-col gap-5' : 'space-y-5'">
     <nav
       class="flex items-center gap-1 border-b border-base-300 -mx-2 px-2"
       aria-label="Task views"
@@ -208,7 +210,7 @@ function dueClass(due: string | null) {
     />
 
     <!-- Board view -->
-    <TaskBoardView v-else-if="view === 'board'" />
+    <TaskBoardView v-else-if="view === 'board'" class="flex-1 min-h-0" />
 
     <!-- Calendar view -->
     <TaskCalendarView v-else-if="view === 'calendar'" />

@@ -10,8 +10,10 @@ export type StatusColor =
   | 'muted'
 
 export interface StatusClasses {
-  /** Board column header fill (white text on top). */
-  headerBg: string
+  /** Board column header tint (CRM-pipeline style — soft fill, base-content text). */
+  tintBg: string
+  /** Count badge on the tinted header (slightly stronger than tintBg). */
+  badgeBg: string
   /** Table group pill background. */
   pillBg: string
   /** Table group pill / dot foreground. */
@@ -23,13 +25,13 @@ export interface StatusClasses {
 }
 
 const MAP: Record<StatusColor, StatusClasses> = {
-  neutral: { headerBg: 'bg-base-content/55', pillBg: 'bg-base-200',   pillFg: 'text-base-content/70', dot: 'bg-base-content/40', bar: 'bg-base-content/40' },
-  primary: { headerBg: 'bg-primary',         pillBg: 'bg-primary/10', pillFg: 'text-primary',         dot: 'bg-primary',         bar: 'bg-primary' },
-  success: { headerBg: 'bg-success',         pillBg: 'bg-success/10', pillFg: 'text-success',         dot: 'bg-success',         bar: 'bg-success' },
-  error:   { headerBg: 'bg-error',           pillBg: 'bg-error/10',   pillFg: 'text-error',           dot: 'bg-error',           bar: 'bg-error' },
-  warning: { headerBg: 'bg-warning',         pillBg: 'bg-warning/10', pillFg: 'text-warning',         dot: 'bg-warning',         bar: 'bg-warning' },
-  info:    { headerBg: 'bg-info',            pillBg: 'bg-info/10',    pillFg: 'text-info',            dot: 'bg-info',            bar: 'bg-info' },
-  muted:   { headerBg: 'bg-base-content/30', pillBg: 'bg-base-200',   pillFg: 'text-base-content/40', dot: 'bg-base-content/30', bar: 'bg-base-content/30' }
+  neutral: { tintBg: 'bg-base-300/60', badgeBg: 'bg-base-content/10', pillBg: 'bg-base-200',   pillFg: 'text-base-content/70', dot: 'bg-base-content/40', bar: 'bg-base-content/40' },
+  primary: { tintBg: 'bg-primary/10',  badgeBg: 'bg-primary/20',      pillBg: 'bg-primary/10', pillFg: 'text-primary',         dot: 'bg-primary',         bar: 'bg-primary' },
+  success: { tintBg: 'bg-success/10',  badgeBg: 'bg-success/20',      pillBg: 'bg-success/10', pillFg: 'text-success',         dot: 'bg-success',         bar: 'bg-success' },
+  error:   { tintBg: 'bg-error/10',    badgeBg: 'bg-error/20',        pillBg: 'bg-error/10',   pillFg: 'text-error',           dot: 'bg-error',           bar: 'bg-error' },
+  warning: { tintBg: 'bg-warning/10',  badgeBg: 'bg-warning/20',      pillBg: 'bg-warning/10', pillFg: 'text-warning',         dot: 'bg-warning',         bar: 'bg-warning' },
+  info:    { tintBg: 'bg-info/10',     badgeBg: 'bg-info/20',         pillBg: 'bg-info/10',    pillFg: 'text-info',            dot: 'bg-info',            bar: 'bg-info' },
+  muted:   { tintBg: 'bg-base-300/40', badgeBg: 'bg-base-content/10', pillBg: 'bg-base-200',   pillFg: 'text-base-content/40', dot: 'bg-base-content/30', bar: 'bg-base-content/30' }
 }
 
 export function statusClasses(color: string | null | undefined): StatusClasses {

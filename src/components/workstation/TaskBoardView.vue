@@ -394,7 +394,7 @@ onBeforeUnmount(() => document.removeEventListener('click', closeColMenus))
 </script>
 
 <template>
-  <div class="-mx-4 px-4 space-y-3">
+  <div class="-mx-4 px-4 flex flex-col gap-3">
     <!-- Toolbar -->
     <div class="flex items-center gap-2 flex-wrap">
       <div class="flex-1" />
@@ -451,26 +451,27 @@ onBeforeUnmount(() => document.removeEventListener('click', closeColMenus))
       <button type="button" class="underline hover:no-underline" @click="boardError = null">dismiss</button>
     </p>
 
-    <div class="flex items-start gap-3 overflow-x-auto pb-4">
+    <div class="flex-1 min-h-0 flex items-start gap-[14px] overflow-x-auto pb-1">
       <template v-for="col in columns" :key="col.key">
         <!-- Collapsed column → narrow rail -->
         <section
           v-if="isCollapsed(col.key)"
-          class="shrink-0 w-11 rounded-xl bg-base-100 border border-base-300 shadow-sm overflow-hidden"
+          class="shrink-0 w-11 rounded-xl bg-base-200 border border-base-300 overflow-hidden"
           :data-status="col.key"
         >
           <button
             type="button"
-            class="w-full min-h-[9rem] flex flex-col items-center gap-2 py-2 text-white"
-            :class="statusClasses(col.color).headerBg"
+            class="w-full min-h-[9rem] flex flex-col items-center gap-2 py-2.5 text-base-content"
+            :class="statusClasses(col.color).tintBg"
             :title="`Expand ${col.label}`"
             @click="toggleCollapse(col.key)"
           >
-            <ChevronDown class="w-3.5 h-3.5 -rotate-90 shrink-0" :stroke-width="2" />
-            <span class="text-[0.7rem] font-semibold tabular-nums px-1.5 rounded-full bg-white/20 shrink-0">
+            <ChevronDown class="w-3.5 h-3.5 -rotate-90 shrink-0 text-base-content/50" :stroke-width="2" />
+            <span class="w-2 h-2 rounded-full shrink-0" :class="statusClasses(col.color).dot" />
+            <span class="text-[0.7rem] font-bold tabular-nums px-1.5 rounded-full shrink-0" :class="statusClasses(col.color).badgeBg">
               {{ (cardsByStatus[col.key] ?? []).length }}
             </span>
-            <span class="text-xs font-semibold uppercase tracking-wider [writing-mode:vertical-rl] rotate-180">
+            <span class="text-xs font-bold uppercase tracking-wide [writing-mode:vertical-rl] rotate-180">
               {{ col.label }}
             </span>
           </button>
@@ -479,36 +480,37 @@ onBeforeUnmount(() => document.removeEventListener('click', closeColMenus))
         <!-- Expanded column -->
         <section
           v-else
-          class="shrink-0 rounded-xl bg-base-100 border border-base-300 shadow-sm flex flex-col max-h-[calc(100vh-12rem)] transition-[width] duration-200"
+          class="shrink-0 rounded-xl bg-base-200 border border-base-300 flex flex-col max-h-full transition-[width] duration-200"
           :class="colWidthClass"
           :data-status="col.key"
         >
           <header
-            class="flex items-center gap-1.5 px-2.5 py-2 rounded-t-xl text-white"
-            :class="statusClasses(col.color).headerBg"
+            class="flex items-center gap-2 px-2.5 py-2.5 rounded-t-xl border-b border-base-300"
+            :class="statusClasses(col.color).tintBg"
           >
             <button
               type="button"
               data-no-drag
-              class="opacity-80 hover:opacity-100 shrink-0"
+              class="text-base-content/50 hover:text-base-content shrink-0"
               title="Collapse column"
               @click.stop="toggleCollapse(col.key)"
             >
               <ChevronDown class="w-3.5 h-3.5" :stroke-width="2" />
             </button>
+            <span class="w-2 h-2 rounded-full flex-none" :class="statusClasses(col.color).dot" />
             <input
               v-if="editingColId === col.id"
               v-model="editLabel"
               v-focus
               data-no-drag
-              class="flex-1 min-w-0 bg-white/25 rounded px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wider outline-none text-white placeholder-white/60"
+              class="flex-1 min-w-0 bg-base-100/80 rounded px-1.5 py-0.5 text-[12.5px] font-bold uppercase tracking-wide outline-none text-base-content placeholder-base-content/40"
               @blur="commitRename(col)"
               @keydown.enter.prevent="commitRename(col)"
               @keydown.esc="editingColId = null"
             />
             <span
               v-else
-              class="text-xs font-semibold uppercase tracking-wider truncate flex-1"
+              class="text-[12.5px] font-bold uppercase tracking-wide text-base-content truncate flex-1"
               :class="canManage && 'cursor-text'"
               :title="canManage ? 'Double-click to rename' : ''"
               @dblclick="startRename(col)"
@@ -516,7 +518,8 @@ onBeforeUnmount(() => document.removeEventListener('click', closeColMenus))
               {{ col.label }}
             </span>
             <span
-              class="text-[0.7rem] font-semibold tabular-nums px-1.5 py-0.5 rounded-full leading-none shrink-0 bg-white/20"
+              class="min-w-5 h-5 px-1.5 grid place-items-center rounded-full text-[11.5px] font-bold tabular-nums leading-none shrink-0 text-base-content"
+              :class="statusClasses(col.color).badgeBg"
             >
               {{ (cardsByStatus[col.key] ?? []).length }}
             </span>
@@ -524,7 +527,7 @@ onBeforeUnmount(() => document.removeEventListener('click', closeColMenus))
               <button
                 type="button"
                 data-no-drag
-                class="opacity-80 hover:opacity-100 flex items-center"
+                class="text-base-content/50 hover:text-base-content flex items-center"
                 title="Column options"
                 @click.stop="toggleMenu(col.id)"
               >
@@ -573,7 +576,7 @@ onBeforeUnmount(() => document.removeEventListener('click', closeColMenus))
 
           <div
           :ref="(el) => setColumnRef(col.key, el)"
-          class="flex-1 overflow-y-auto p-2 space-y-2 min-h-[3rem] bg-base-200/40"
+          class="flex-1 overflow-y-auto p-2.5 space-y-2 min-h-[3rem]"
           :data-status="col.key"
         >
           <article
@@ -670,7 +673,7 @@ onBeforeUnmount(() => document.removeEventListener('click', closeColMenus))
 
           <div
             v-if="(cardsByStatus[col.key] ?? []).length === 0"
-            class="text-xs text-base-content/40 italic px-2 py-3 text-center"
+            class="py-[18px] text-center text-base-content/40 text-[12.5px] italic border-[1.5px] border-dashed border-base-300 rounded-[10px]"
           >
             Drop tasks here.
           </div>
@@ -681,7 +684,7 @@ onBeforeUnmount(() => document.removeEventListener('click', closeColMenus))
           class="border-t border-base-300/60 p-2"
           @submit.prevent="quickAdd(col.key)"
         >
-          <label class="flex items-center gap-2 px-1 py-1 rounded-md hover:bg-base-100/60 transition-colors group/add">
+          <label class="flex items-center gap-2 px-1 py-1 rounded-md hover:bg-base-300/60 transition-colors group/add">
             <Plus class="w-3.5 h-3.5 text-base-content/40 group-focus-within/add:text-primary" :stroke-width="1.75" />
             <input
               v-model="newTitleByCol[col.key]"
