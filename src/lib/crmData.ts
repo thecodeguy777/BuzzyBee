@@ -46,6 +46,7 @@ export interface Contact {
   country: string
   createdAt: string
   lastActivityAt: string | null
+  unsubscribedAt: string | null
 }
 export interface Deal {
   id: string

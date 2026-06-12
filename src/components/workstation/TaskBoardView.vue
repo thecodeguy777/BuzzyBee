@@ -15,13 +15,15 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
-  CircleSlash
+  CircleSlash,
+  Handshake
 } from 'lucide-vue-next'
 import { useTasksStore, type Task, type TaskStatus } from '@/stores/tasks'
 import { useClientsStore } from '@/stores/clients'
 import { useProjectsStore } from '@/stores/projects'
 import { useAuthStore } from '@/stores/auth'
 import { useStatusesStore, type TaskStatusDef } from '@/stores/statuses'
+import { useDealLinksStore } from '@/stores/dealLinks'
 import { statusClasses, STATUS_COLOR_OPTIONS } from '@/lib/statusColors'
 
 const tasks = useTasksStore()
@@ -29,6 +31,12 @@ const clients = useClientsStore()
 const projects = useProjectsStore()
 const auth = useAuthStore()
 const statusesStore = useStatusesStore()
+const dealLinks = useDealLinksStore()
+
+// "Linked to <deals>" tooltip for the card's CRM badge.
+function dealBadgeTitle(taskId: string) {
+  return 'Linked to ' + dealLinks.forTask(taskId).map((l) => l.dealTitle).join(', ')
+}
 
 // Only managers edit columns (RLS enforces this server-side too).
 const canManage = computed(() => auth.isAdmin || auth.role === 'pm')
@@ -602,6 +610,14 @@ onBeforeUnmount(() => document.removeEventListener('click', closeColMenus))
                   >
                     <Paperclip class="w-3 h-3" :stroke-width="1.75" />
                     {{ t.attachments.length }}
+                  </span>
+                  <span
+                    v-if="dealLinks.forTask(t.id).length"
+                    class="flex items-center"
+                    :style="{ color: 'var(--accent-fg)' }"
+                    :title="dealBadgeTitle(t.id)"
+                  >
+                    <Handshake class="w-3 h-3" :stroke-width="1.75" />
                   </span>
                 </div>
                 <div class="flex items-center gap-2">

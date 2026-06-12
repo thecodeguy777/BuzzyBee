@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import {
   X, MessageSquare, ListChecks, Mail, Pencil, Route, Phone, Calendar, Trophy,
   User, Users, Filter, SquareCheck, ArrowUpRight, Plus, Handshake, Hash,
-  Video, Trash2, ChevronDown, Flag,
+  Video, Trash2, ChevronDown, Flag, Link2,
 } from 'lucide-vue-next'
 import CrmAvatar from './CrmAvatar.vue'
 import CrmHealthDot from './CrmHealthDot.vue'
@@ -13,6 +13,10 @@ import { useTeamStore } from '@/stores/team'
 import { useAuthStore } from '@/stores/auth'
 import { useChannelsStore } from '@/stores/channels'
 import { useClientsStore } from '@/stores/clients'
+import { useProjectsStore } from '@/stores/projects'
+import { useStatusesStore } from '@/stores/statuses'
+import { useTasksStore, type Task } from '@/stores/tasks'
+import { statusClasses } from '@/lib/statusColors'
 import { userColor } from '@/lib/userColor'
 import { createMeetingRoom } from '@/lib/meetingRoom'
 import { STAGES, LOST, HEALTH, SOURCES, fmtMoney, relTime, ACT_COLOR, type Deal, type StageId, type Health, type ActivityType } from '@/lib/crmData'
@@ -30,6 +34,9 @@ const team = useTeamStore()
 const auth = useAuthStore()
 const channels = useChannelsStore()
 const clients = useClientsStore()
+const projects = useProjectsStore()
+const statusesStore = useStatusesStore()
+const tasksStore = useTasksStore()
 const closeBtn = ref<HTMLElement | null>(null)
 const panel = ref<HTMLElement | null>(null)
 const visible = ref(false)
@@ -38,7 +45,22 @@ let triggerEl: HTMLElement | null = null
 const co = computed(() => crm.company(props.deal.companyId))
 const ownerProfile = computed(() => (props.deal.ownerId ? team.profiles[props.deal.ownerId] : null))
 const contacts = computed(() => crm.contactsFor(props.deal.companyId))
-const linkedTasks = computed(() => crm.linkedTasks(props.deal.id))
+// Linked tasks resolved live: the canonical tasks store carries every task
+// with realtime, so status here renders current instead of the load-time
+// snapshot crm.linkedTasks keeps (which only sees link rows, not task moves).
+const linkedTasks = computed(() =>
+  crm.linkedTasks(props.deal.id).map((lt) => {
+    const t = tasksStore.tasks.find((x) => x.id === lt.taskId)
+    if (!t) return { ...lt, dotClass: null as string | null }
+    const def = statusesStore.get(t.project_id, t.status)
+    return {
+      ...lt,
+      title: t.title,
+      ref: t.reference_number,
+      status: def?.label ?? t.status,
+      dotClass: def ? statusClasses(def.color).dot : null,
+    }
+  }))
 const activities = computed(() => crm.activities(props.deal.id))
 const isWon = computed(() => props.deal.stage === 'won')
 // Stages + Lost, so a deal can be marked lost and a lost deal still shows a chip.
@@ -117,7 +139,16 @@ async function pickChannel(id: string | null) {
   if (id !== props.deal.channelId) await crm.updateDeal(props.deal.id, { channelId: id })
 }
 
-// ── Create a task from this deal ──────────────────────────────────────────────
+// ── Create / link tasks from this deal ────────────────────────────────────────
+// Tasks belong in the deal's own workspace, not whatever project the
+// workstation happens to have selected: converted companies get their client's
+// first project, everything else falls back to the CRM workspace's.
+const targetClientId = computed(() => co.value?.clientId ?? clients.currentClientId)
+const targetProject = computed(() => {
+  const cid = targetClientId.value
+  return cid ? (projects.projectsByClient[cid] ?? [])[0] ?? null : null
+})
+
 const addingTask = ref(false)
 const taskTitle = ref('')
 const savingTask = ref(false)
@@ -129,13 +160,20 @@ function openTaskForm() {
 async function submitTask() {
   const title = taskTitle.value.trim()
   if (!title || savingTask.value) return
+  if (!targetProject.value) {
+    crm.error = "Couldn't create that task — " + (co.value?.name ?? 'this client') + ' has no project yet'
+    return
+  }
   savingTask.value = true
   try {
-    const { useTasksStore } = await import('@/stores/tasks')
-    const task = await useTasksStore().createTask({ title, client_id: co.value?.clientId ?? undefined })
+    const task = await tasksStore.createTask({
+      title,
+      client_id: targetClientId.value ?? undefined,
+      project_id: targetProject.value.id,
+    })
     if (task?.id) {
       await crm.linkTask(props.deal.id, task.id)
-      void crm.logActivity(props.deal.id, { type: 'task', body: 'created task "' + title + '"', meta: (task as any).reference_number ?? null })
+      void crm.logActivity(props.deal.id, { type: 'task', body: 'created task "' + title + '"', meta: task.reference_number ?? null })
       addingTask.value = false
       taskTitle.value = ''
     }
@@ -144,6 +182,34 @@ async function submitTask() {
   } finally {
     savingTask.value = false
   }
+}
+
+// Link an existing task from the deal's workspace.
+const linkPickerOpen = ref(false)
+const linkSearch = ref('')
+const linkableTasks = computed(() => {
+  const linkedIds = new Set(crm.linkedTasks(props.deal.id).map((t) => t.taskId))
+  const q = linkSearch.value.trim().toLowerCase()
+  return tasksStore.tasks
+    .filter((t) => t.client_id === targetClientId.value && !linkedIds.has(t.id))
+    .filter((t) => !q || t.title.toLowerCase().includes(q) || t.reference_number.toLowerCase().includes(q))
+    .slice(0, 30)
+})
+function openLinkPicker() {
+  linkPickerOpen.value = !linkPickerOpen.value
+  linkSearch.value = ''
+  if (linkPickerOpen.value) {
+    void nextTick(() => panel.value?.querySelector<HTMLInputElement>('#crm-deal-link-search')?.focus())
+  }
+}
+async function linkExisting(t: Task) {
+  linkPickerOpen.value = false
+  if (await crm.linkTask(props.deal.id, t.id)) {
+    void crm.logActivity(props.deal.id, { type: 'task', body: 'linked task "' + t.title + '"', meta: t.reference_number })
+  }
+}
+async function unlink(taskId: string) {
+  await crm.unlinkTask(props.deal.id, taskId)
 }
 
 // ── Meetings / email ──────────────────────────────────────────────────────────
@@ -212,6 +278,7 @@ function requestClose() {
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape') {
     if (channelPickerOpen.value) { channelPickerOpen.value = false; return }
+    if (linkPickerOpen.value) { linkPickerOpen.value = false; return }
     if (editing.value) { editing.value = null; return }
     requestClose()
     return
@@ -255,8 +322,7 @@ async function goChannel(channelId: string | null, clientId: string | null | und
 }
 async function goTask(taskId: string) {
   try {
-    const { useTasksStore } = await import('@/stores/tasks')
-    useTasksStore().selectTask(taskId)
+    tasksStore.selectTask(taskId)
     await router.push({ name: 'workstation-tasks' })
   } catch (e) {
     console.warn('[crm] open task:', (e as Error).message)
@@ -266,6 +332,7 @@ async function goTask(taskId: string) {
 watch(() => props.deal.id, () => {
   editing.value = null
   addingTask.value = false
+  linkPickerOpen.value = false
   void crm.loadActivities(props.deal.id)
 })
 </script>
@@ -510,20 +577,39 @@ watch(() => props.deal.id, () => {
 
             <!-- tasks -->
             <div class="flex flex-col gap-1.5">
-              <button
+              <div
                 v-for="t in linkedTasks"
                 :key="t.taskId"
-                type="button"
-                class="crm-link flex items-center gap-2.5 px-[11px] py-2.5 rounded-[9px] border border-base-300 bg-base-100 text-left"
-                :title="'Open ' + t.ref + ' in the tracker'"
-                @click="goTask(t.taskId)"
+                class="crm-link crm-task-row flex items-center gap-2.5 px-[11px] py-2.5 rounded-[9px] border border-base-300 bg-base-100"
               >
-                <span class="w-[18px] h-[18px] rounded-md grid place-items-center flex-none" :style="{ background: 'var(--accent-soft)', color: 'var(--accent-fg)' }"><SquareCheck :size="12" :stroke-width="2.2" /></span>
-                <span class="font-mono text-[11px] font-semibold text-base-content/40">{{ t.ref }}</span>
-                <span class="flex-1 text-[12.5px] text-base-content truncate">{{ t.title }}</span>
-                <span class="w-2 h-2 rounded-full flex-none" :style="{ background: t.dot }" :title="t.status || 'status'" :aria-label="'Status: ' + (t.status || 'unknown')" />
-                <ArrowUpRight :size="13" class="text-base-content/40 flex-none" />
-              </button>
+                <button
+                  type="button"
+                  class="flex items-center gap-2.5 flex-1 min-w-0 text-left"
+                  :title="'Open ' + t.ref + ' in the tracker'"
+                  @click="goTask(t.taskId)"
+                >
+                  <span class="w-[18px] h-[18px] rounded-md grid place-items-center flex-none" :style="{ background: 'var(--accent-soft)', color: 'var(--accent-fg)' }"><SquareCheck :size="12" :stroke-width="2.2" /></span>
+                  <span class="font-mono text-[11px] font-semibold text-base-content/40">{{ t.ref }}</span>
+                  <span class="flex-1 text-[12.5px] text-base-content truncate">{{ t.title }}</span>
+                  <span
+                    class="w-2 h-2 rounded-full flex-none"
+                    :class="t.dotClass ?? ''"
+                    :style="t.dotClass ? {} : { background: t.dot }"
+                    :title="t.status || 'status'"
+                    :aria-label="'Status: ' + (t.status || 'unknown')"
+                  />
+                  <ArrowUpRight :size="13" class="text-base-content/40 flex-none" />
+                </button>
+                <button
+                  type="button"
+                  class="crm-task-unlink w-5 h-5 rounded-md grid place-items-center flex-none text-base-content/30 hover:text-[#c2253c] hover:bg-base-200"
+                  :aria-label="'Unlink ' + t.ref + ' from this deal'"
+                  title="Unlink from this deal"
+                  @click="unlink(t.taskId)"
+                >
+                  <X :size="12" />
+                </button>
+              </div>
 
               <form v-if="addingTask" class="flex gap-1.5" @submit.prevent="submitTask">
                 <input
@@ -537,9 +623,45 @@ watch(() => props.deal.id, () => {
                   {{ savingTask ? 'Adding…' : 'Add' }}
                 </button>
               </form>
-              <button v-else type="button" class="crm-link flex items-center gap-2 px-[11px] py-2 rounded-[9px] border-[1.5px] border-dashed border-base-300 text-base-content/50 text-[12.5px] font-semibold" @click="openTaskForm">
-                <SquareCheck :size="14" :stroke-width="2.1" /> Create a task from this deal
-              </button>
+              <div v-else class="flex gap-1.5">
+                <button type="button" class="crm-link flex-1 flex items-center gap-2 px-[11px] py-2 rounded-[9px] border-[1.5px] border-dashed border-base-300 text-base-content/50 text-[12.5px] font-semibold" @click="openTaskForm">
+                  <SquareCheck :size="14" :stroke-width="2.1" /> Create a task from this deal
+                </button>
+                <div class="relative">
+                  <button type="button" class="crm-link flex items-center gap-2 px-[11px] py-2 rounded-[9px] border-[1.5px] border-dashed border-base-300 text-base-content/50 text-[12.5px] font-semibold whitespace-nowrap" title="Link an existing task" @click="openLinkPicker">
+                    <Link2 :size="14" :stroke-width="2.1" /> Link existing
+                  </button>
+                  <template v-if="linkPickerOpen">
+                    <div class="fixed inset-0 z-[105]" @click="linkPickerOpen = false" />
+                    <div class="absolute top-full right-0 mt-1.5 z-[106] w-72 rounded-[10px] border border-base-300 bg-base-100 shadow-2xl overflow-hidden">
+                      <div class="p-1.5 border-b border-base-200">
+                        <input
+                          id="crm-deal-link-search"
+                          v-model="linkSearch"
+                          class="w-full bg-base-200 rounded-[7px] px-2.5 py-1.5 text-[12.5px] text-base-content outline-none focus:ring-1 focus:ring-primary/40"
+                          placeholder="Search tasks…"
+                          @keydown.esc.stop="linkPickerOpen = false"
+                        />
+                      </div>
+                      <div class="max-h-52 overflow-y-auto p-1">
+                        <button
+                          v-for="lt in linkableTasks"
+                          :key="lt.id"
+                          type="button"
+                          class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md hover:bg-base-200 text-left"
+                          @click="linkExisting(lt)"
+                        >
+                          <span class="font-mono text-[10.5px] font-semibold text-base-content/40 flex-none">{{ lt.reference_number }}</span>
+                          <span class="flex-1 min-w-0 text-[12.5px] font-semibold text-base-content truncate">{{ lt.title }}</span>
+                        </button>
+                        <div v-if="!linkableTasks.length" class="px-2.5 py-2.5 text-[12.5px] text-base-content/40 text-center">
+                          {{ linkSearch ? 'No matches' : 'No unlinked tasks in this workspace' }}
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -679,4 +801,7 @@ watch(() => props.deal.id, () => {
 
 .crm-act .crm-act-del { opacity: 0; transition: opacity 0.12s; }
 .crm-act:hover .crm-act-del, .crm-act-del:focus-visible { opacity: 1; }
+
+.crm-task-row .crm-task-unlink { opacity: 0; transition: opacity 0.12s; }
+.crm-task-row:hover .crm-task-unlink, .crm-task-unlink:focus-visible { opacity: 1; }
 </style>

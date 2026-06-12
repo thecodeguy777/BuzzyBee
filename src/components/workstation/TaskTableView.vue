@@ -17,7 +17,8 @@ import {
   MessageSquare,
   Link2,
   Pencil,
-  GripVertical
+  GripVertical,
+  Handshake
 } from 'lucide-vue-next'
 import { useTasksStore, type Task, type TaskStatus } from '@/stores/tasks'
 import { useTaskFieldsStore, type TaskFieldDef } from '@/stores/taskFields'
@@ -25,6 +26,7 @@ import { useClientsStore } from '@/stores/clients'
 import { useTeamStore } from '@/stores/team'
 import { useStatusesStore } from '@/stores/statuses'
 import { useProjectsStore } from '@/stores/projects'
+import { useDealLinksStore } from '@/stores/dealLinks'
 import { statusClasses } from '@/lib/statusColors'
 import { useColumnWidths } from '@/composables/useColumnWidths'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
@@ -35,6 +37,12 @@ const clients = useClientsStore()
 const team = useTeamStore()
 const statusesStore = useStatusesStore()
 const projects = useProjectsStore()
+const dealLinks = useDealLinksStore()
+
+// "Linked to <deals>" tooltip for the name cell's CRM badge.
+function dealBadgeTitle(taskId: string) {
+  return 'Linked to ' + dealLinks.forTask(taskId).map((l) => l.dealTitle).join(', ')
+}
 
 // TKT-0004 — Excel-style resizable columns. Widths persist to localStorage
 // so a user's preferred layout survives reloads.
@@ -900,6 +908,14 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
                         @blur="setTitle(t, ($event.target as HTMLInputElement).value)"
                         @keydown.enter="($event.target as HTMLInputElement).blur()"
                       />
+                      <span
+                        v-if="dealLinks.forTask(t.id).length"
+                        class="shrink-0 mr-1"
+                        :style="{ color: 'var(--accent-fg)' }"
+                        :title="dealBadgeTitle(t.id)"
+                      >
+                        <Handshake class="w-3.5 h-3.5" :stroke-width="1.75" />
+                      </span>
                       <button
                         type="button"
                         class="opacity-0 group-hover:opacity-100 transition-opacity text-base-content/40 hover:text-base-content shrink-0 mr-1"

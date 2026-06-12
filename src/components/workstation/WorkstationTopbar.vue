@@ -43,25 +43,30 @@ const channelLabel = computed(() => {
 
 <template>
   <header
-    class="h-14 shrink-0 bg-base-100 border-b border-base-300 flex items-center px-3 sm:px-5 gap-2"
+    class="h-14 shrink-0 bg-base-100 border-b border-base-300 flex items-center px-2 sm:px-5 gap-1 sm:gap-2"
   >
     <ClientSwitcher />
 
-    <!-- breadcrumb: ▸ #channel (comms only) -->
+    <!-- breadcrumb: ▸ #channel (comms only, needs the room) -->
     <template v-if="showChannelCrumb">
-      <ChevronRight class="w-4 h-4 text-base-content/30 shrink-0" :stroke-width="2" />
+      <ChevronRight class="hidden sm:block w-4 h-4 text-base-content/30 shrink-0" :stroke-width="2" />
       <span class="hidden sm:flex items-center gap-1 text-sm text-base-content/70 min-w-0 max-w-[14rem]">
         <Hash v-if="!channelIsDm" class="w-3.5 h-3.5 shrink-0" :stroke-width="2" />
         <span class="truncate font-medium">{{ channelLabel }}</span>
       </span>
     </template>
 
-    <div class="flex-1 flex justify-center min-w-0 px-2">
+    <!-- Inline input on md+; collapses to an icon that opens a full-width
+         overlay below that. -->
+    <div class="flex-1 flex justify-end md:justify-center min-w-0 px-0.5 sm:px-2">
       <GlobalSearch />
     </div>
-    <div class="flex items-center gap-2 shrink-0">
-      <ThemeToggle />
-      <RefreshButton />
+    <div class="flex items-center gap-1 sm:gap-2 shrink-0">
+      <!-- Nice-to-haves give way first on phones -->
+      <div class="hidden sm:flex items-center gap-2">
+        <ThemeToggle />
+        <RefreshButton />
+      </div>
       <NotificationBell />
       <!-- Always show a RUNNING timer (any role) — otherwise a non-VA with a
            live entry has no way to see or stop it. -->

@@ -28,11 +28,14 @@ const props = withDefaults(
     placeholder?: string
     autofocus?: boolean
     minHeight?: string
+    /** Show a persistent toolbar above the surface (the selection bubble stays). */
+    toolbar?: boolean
   }>(),
   {
     placeholder: "What needs to happen? Bold, italic, lists, links — Google-Docs style.",
     autofocus: false,
-    minHeight: '7rem'
+    minHeight: '7rem',
+    toolbar: false
   }
 )
 const emit = defineEmits<{
@@ -91,6 +94,10 @@ watch(
 )
 
 onBeforeUnmount(() => editor.value?.destroy())
+
+// Parents occasionally need the instance itself (e.g. the campaign composer
+// inserts merge tags at the cursor).
+defineExpose({ editor })
 
 // Toolbar action helpers
 function setLink() {
@@ -175,6 +182,26 @@ const tools = computed(() => {
       </div>
     </BubbleMenu>
 
+    <!-- Optional persistent toolbar (e.g. the campaign composer) -->
+    <div v-if="toolbar" class="rt-toolbar">
+      <template v-for="tool in tools" :key="'tb-' + tool.key">
+        <span v-if="tool.sep" class="rt-toolbar-sep" aria-hidden="true" />
+        <button
+          v-else
+          type="button"
+          class="rt-toolbar-btn"
+          :class="tool.active && 'rt-toolbar-btn-active'"
+          :title="tool.label"
+          :aria-label="tool.label"
+          :aria-pressed="tool.active"
+          @mousedown.prevent
+          @click="tool.run"
+        >
+          <component :is="tool.icon" class="w-3.5 h-3.5" :stroke-width="1.75" />
+        </button>
+      </template>
+    </div>
+
     <!-- Editor surface — clean, no chrome until you select text -->
     <div class="rt-surface" :style="{ minHeight }">
       <EditorContent :editor="editor" />
@@ -235,6 +262,42 @@ const tools = computed(() => {
   height: 18px;
   background: rgba(255, 255, 255, 0.14);
   margin: 0 3px;
+}
+
+/* Persistent toolbar (opt-in via the `toolbar` prop) */
+.rt-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--hc-divider);
+  background: color-mix(in oklch, var(--hc-surface) 60%, transparent);
+  flex-wrap: wrap;
+}
+.rt-toolbar-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--hc-ink-3);
+  transition: background 0.12s, color 0.12s;
+}
+.rt-toolbar-btn:hover {
+  background: var(--hc-hover);
+  color: var(--hc-ink);
+}
+.rt-toolbar-btn-active {
+  background: var(--hc-accent);
+  color: white;
+}
+.rt-toolbar-sep {
+  display: inline-block;
+  width: 1px;
+  height: 16px;
+  background: var(--hc-divider);
+  margin: 0 4px;
 }
 
 /* Surface */

@@ -139,7 +139,7 @@ function toggleOpen() {
         <span class="absolute inline-flex h-full w-full rounded-full bg-success opacity-75 animate-ping"></span>
         <span class="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
       </span>
-      <span class="font-medium max-w-[10rem] truncate">
+      <span class="hidden sm:inline font-medium max-w-[10rem] truncate">
         {{ runningClient?.name ?? 'Running' }}
       </span>
       <span class="font-mono tabular-nums text-xs">{{ elapsedLabel }}</span>

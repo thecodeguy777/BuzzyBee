@@ -322,10 +322,16 @@ export const useTasksStore = defineStore('tasks', () => {
     if (!cid) throw new Error('No client selected')
     const client = clients.clients.find((c) => c.id === cid)
 
-    // New tasks go to the top of the todo column.
+    // New tasks land at the top of the target project's first column. Status
+    // keys are per-project — 'todo' only exists where a project kept the
+    // default set, and the target project isn't necessarily the current one
+    // (e.g. tasks created from a CRM deal).
+    const statusKey = statuses.defaultKey(pid) ?? 'todo'
     const minOrder = Math.min(
       0,
-      ...tasksByStatus.value.todo.map((t) => t.priority_order)
+      ...tasks.value
+        .filter((t) => t.project_id === pid && t.status === statusKey)
+        .map((t) => t.priority_order)
     )
     const priority_order = minOrder - 10
 
@@ -343,7 +349,7 @@ export const useTasksStore = defineStore('tasks', () => {
         ? null // backend can fill via trigger later; for now leave null when assigning to someone else
         : auth.fullName,
       created_by: auth.user.id,
-      status: 'todo'
+      status: statusKey
     }
 
     const { data, error: err } = await supabase

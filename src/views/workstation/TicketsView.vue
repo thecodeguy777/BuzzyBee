@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   Bug,
   Lightbulb,
@@ -7,20 +8,42 @@ import {
   MessageSquare,
   Send,
   Hash,
-  Search
+  Search,
+  Paperclip,
+  AlertTriangle,
+  UserCheck,
+  X
 } from 'lucide-vue-next'
+import { supabase } from '@/lib/supabase'
+import { useAuthStore } from '@/stores/auth'
 import { useTicketsStore, type TicketType, type TicketStatus, type TicketSeverity, type Ticket } from '@/stores/tickets'
 
 const tickets = useTicketsStore()
+const auth = useAuthStore()
+const route = useRoute()
+const router = useRouter()
 
 const filterStatus = ref<'all' | TicketStatus>('open')
 const filterType = ref<'all' | TicketType>('all')
+const filterSeverity = ref<'all' | TicketSeverity>('all')
+const assignedToMe = ref(false)
 const search = ref('')
 const showInternal = ref(true)
 
 const newComment = ref('')
 const newCommentInternal = ref(false)
 const sending = ref(false)
+
+// Store-level failures surface as a toast instead of dying in the console.
+const toast = ref<string | null>(null)
+let toastTimer: ReturnType<typeof setTimeout> | undefined
+watch(() => tickets.error, (msg) => {
+  if (!msg) return
+  toast.value = msg
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (toast.value = null), 4200)
+  tickets.error = null
+})
 
 const filteredList = computed(() => {
   return tickets.visibleTickets.filter((t) => {
@@ -31,6 +54,8 @@ const filteredList = computed(() => {
       } else if (t.status !== filterStatus.value) return false
     }
     if (filterType.value !== 'all' && t.type !== filterType.value) return false
+    if (filterSeverity.value !== 'all' && t.severity !== filterSeverity.value) return false
+    if (assignedToMe.value && t.assigned_to !== auth.user?.id) return false
     if (search.value.trim()) {
       const q = search.value.trim().toLowerCase()
       const hay =
@@ -49,8 +74,74 @@ watch(
       newComment.value = ''
       newCommentInternal.value = false
     }
+    // Keep the selection shareable/refreshable: /app/tickets?t=<id>
+    const q = { ...route.query }
+    if (id) q.t = id
+    else delete q.t
+    void router.replace({ query: q })
   }
 )
+
+// Deep-link: notifications link to /app/tickets?t=<id>.
+watch(
+  [() => tickets.tickets, () => route.query.t] as const,
+  ([list, q]) => {
+    if (typeof q !== 'string' || !q || tickets.selectedTicketId === q) return
+    if (list.some((t) => t.id === q)) tickets.selectTicket(q)
+  },
+  { immediate: true }
+)
+
+// ── Assignee roster (triagers handle tickets) ─────────────────────────────────
+const triagers = ref<{ id: string; full_name: string | null }[]>([])
+onMounted(async () => {
+  if (!tickets.canTriage) return
+  const { data } = await supabase
+    .from('profiles')
+    .select('id, full_name, role')
+    .in('role', ['admin', 'superadmin', 'pm'])
+    .order('full_name')
+  triagers.value = (data ?? []) as { id: string; full_name: string | null }[]
+})
+const assigneeName = computed(() => {
+  const id = detail.value?.assigned_to
+  if (!id) return null
+  return triagers.value.find((p) => p.id === id)?.full_name ?? 'Assigned'
+})
+async function setAssignee(id: string, userId: string) {
+  await tickets.updateTicket(id, { assigned_to: userId || null })
+}
+
+// ── Attachments ───────────────────────────────────────────────────────────────
+const uploading = ref(false)
+async function onAttach(e: Event) {
+  const input = e.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+  input.value = ''
+  if (!detail.value || !files.length) return
+  uploading.value = true
+  try {
+    for (const f of files) await tickets.addAttachment(detail.value.id, f)
+  } finally {
+    uploading.value = false
+  }
+}
+async function openAttachment(path: string) {
+  const url = await tickets.attachmentUrl(path)
+  if (url) window.open(url, '_blank', 'noopener')
+}
+async function removeAttachment(attachmentId: string) {
+  if (!detail.value) return
+  if (!window.confirm('Remove this attachment?')) return
+  await tickets.removeAttachment(detail.value.id, attachmentId)
+}
+const canRemoveAttachment = (uploadedBy: string | null) =>
+  tickets.canTriage || uploadedBy === auth.user?.id
+function fmtSize(bytes: number) {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB'
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB'
+}
 
 function typeIcon(t: TicketType) {
   return t === 'bug' ? Bug : t === 'feature_request' ? Lightbulb : t === 'question' ? HelpCircle : MessageSquare
@@ -105,38 +196,26 @@ const visibleComments = computed(() =>
 )
 
 async function setStatus(id: string, status: TicketStatus) {
-  try {
-    await tickets.setStatus(id, status)
-  } catch (e) {
-    console.warn('[tickets] setStatus:', (e as Error).message)
-  }
+  await tickets.setStatus(id, status)
 }
 
 async function setType(id: string, type: TicketType) {
-  try {
-    await tickets.updateTicket(id, { type })
-  } catch (e) {
-    console.warn('[tickets] setType:', (e as Error).message)
-  }
+  await tickets.updateTicket(id, { type })
 }
 
 async function setSeverity(id: string, severity: TicketSeverity) {
-  try {
-    await tickets.updateTicket(id, { severity })
-  } catch (e) {
-    console.warn('[tickets] setSeverity:', (e as Error).message)
-  }
+  await tickets.updateTicket(id, { severity })
 }
 
 async function sendComment() {
   if (!detail.value || !newComment.value.trim()) return
   sending.value = true
   try {
-    await tickets.addComment(detail.value.id, newComment.value, newCommentInternal.value && tickets.isAdmin)
-    newComment.value = ''
-    newCommentInternal.value = false
-  } catch (e) {
-    console.warn('[tickets] addComment:', (e as Error).message)
+    const row = await tickets.addComment(detail.value.id, newComment.value, newCommentInternal.value && tickets.canTriage)
+    if (row) {
+      newComment.value = ''
+      newCommentInternal.value = false
+    }
   } finally {
     sending.value = false
   }
@@ -167,7 +246,7 @@ const typeOptions: { value: 'all' | TicketType; label: string }[] = [
       <header>
         <h1 class="font-display text-xl font-semibold">Tickets</h1>
         <p class="text-xs text-base-content/60 mt-0.5">
-          {{ tickets.isAdmin ? 'All beta reports across users.' : 'Reports you submitted.' }}
+          {{ tickets.canTriage ? 'All reports across users — triage away.' : 'Reports you submitted.' }}
         </p>
       </header>
 
@@ -178,6 +257,23 @@ const typeOptions: { value: 'all' | TicketType; label: string }[] = [
         <select v-model="filterType" class="select select-bordered select-sm">
           <option v-for="o in typeOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
         </select>
+        <select v-model="filterSeverity" class="select select-bordered select-sm">
+          <option value="all">All severities</option>
+          <option value="critical">Critical</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <button
+          v-if="tickets.canTriage"
+          type="button"
+          class="btn btn-sm gap-1.5"
+          :class="assignedToMe ? 'btn-primary' : 'btn-ghost border border-base-300'"
+          @click="assignedToMe = !assignedToMe"
+        >
+          <UserCheck class="w-3.5 h-3.5" :stroke-width="1.75" />
+          Mine
+        </button>
         <label class="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-base-300 flex-1 min-w-[10rem] focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/40">
           <Search class="w-4 h-4 text-base-content/50" :stroke-width="1.75" />
           <input
@@ -189,8 +285,17 @@ const typeOptions: { value: 'all' | TicketType; label: string }[] = [
         </label>
       </div>
 
+      <div v-if="tickets.loading && !tickets.tickets.length" class="bg-base-100 rounded-xl border border-base-300 shadow-md divide-y divide-base-300/60 overflow-hidden">
+        <div v-for="n in 5" :key="n" class="flex items-start gap-3 px-4 py-3">
+          <div class="w-8 h-8 rounded-md bg-base-200 animate-pulse shrink-0" />
+          <div class="flex-1 space-y-2 py-0.5">
+            <div class="h-3 w-2/3 rounded bg-base-200 animate-pulse" />
+            <div class="h-2.5 w-1/3 rounded bg-base-200 animate-pulse" />
+          </div>
+        </div>
+      </div>
       <ul
-        v-if="filteredList.length"
+        v-else-if="filteredList.length"
         class="bg-base-100 rounded-xl border border-base-300 shadow-md overflow-hidden divide-y divide-base-300/60"
       >
         <li v-for="t in filteredList" :key="t.id">
@@ -266,7 +371,7 @@ const typeOptions: { value: 'all' | TicketType; label: string }[] = [
               <select
                 :value="detail.status"
                 class="select select-bordered select-xs"
-                :disabled="!tickets.isAdmin"
+                :disabled="!tickets.canTriage"
                 @change="setStatus(detail.id, ($event.target as HTMLSelectElement).value as TicketStatus)"
               >
                 <option value="open">Open</option>
@@ -282,7 +387,7 @@ const typeOptions: { value: 'all' | TicketType; label: string }[] = [
               <select
                 :value="detail.type"
                 class="select select-bordered select-xs"
-                :disabled="!tickets.isAdmin"
+                :disabled="!tickets.canTriage"
                 @change="setType(detail.id, ($event.target as HTMLSelectElement).value as TicketType)"
               >
                 <option value="bug">Bug</option>
@@ -296,7 +401,7 @@ const typeOptions: { value: 'all' | TicketType; label: string }[] = [
               <select
                 :value="detail.severity"
                 class="select select-bordered select-xs"
-                :disabled="!tickets.isAdmin"
+                :disabled="!tickets.canTriage"
                 @change="setSeverity(detail.id, ($event.target as HTMLSelectElement).value as TicketSeverity)"
               >
                 <option value="low">Low</option>
@@ -307,9 +412,23 @@ const typeOptions: { value: 'all' | TicketType; label: string }[] = [
             </label>
           </div>
 
-          <!-- reporter -->
+          <!-- assignee (triage) -->
+          <label v-if="tickets.canTriage" class="form-control">
+            <span class="label-text text-[0.65rem] font-medium mb-0.5 uppercase tracking-wider text-base-content/60">Assigned to</span>
+            <select
+              :value="detail.assigned_to ?? ''"
+              class="select select-bordered select-xs"
+              @change="setAssignee(detail.id, ($event.target as HTMLSelectElement).value)"
+            >
+              <option value="">Unassigned</option>
+              <option v-for="p in triagers" :key="p.id" :value="p.id">{{ p.full_name ?? p.id.slice(0, 8) }}</option>
+            </select>
+          </label>
+
+          <!-- reporter + assignee line -->
           <div class="text-xs text-base-content/60">
             Reported by <span class="font-medium text-base-content">{{ detail.reporter_name ?? 'Unknown' }}</span>
+            <template v-if="assigneeName"> · assigned to <span class="font-medium text-base-content">{{ assigneeName }}</span></template>
           </div>
 
           <!-- description -->
@@ -318,8 +437,45 @@ const typeOptions: { value: 'all' | TicketType; label: string }[] = [
           </div>
           <p v-else class="text-xs italic text-base-content/40">No description.</p>
 
+          <!-- attachments -->
+          <div>
+            <div class="flex items-center justify-between text-[0.65rem] uppercase tracking-wider text-base-content/60 font-semibold mb-1.5">
+              <span class="flex items-center gap-1">
+                <Paperclip class="w-3 h-3" :stroke-width="1.75" />
+                Attachments ({{ detail.attachments?.length ?? 0 }})
+              </span>
+              <label class="btn btn-ghost btn-xs gap-1 normal-case font-medium cursor-pointer" :class="uploading && 'btn-disabled'">
+                {{ uploading ? 'Uploading…' : 'Attach' }}
+                <input type="file" class="hidden" multiple :disabled="uploading" @change="onAttach" />
+              </label>
+            </div>
+            <ul v-if="detail.attachments?.length" class="space-y-1">
+              <li
+                v-for="a in detail.attachments"
+                :key="a.id"
+                class="group flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-base-300/60 text-xs"
+              >
+                <button type="button" class="flex-1 min-w-0 flex items-center gap-2 text-left hover:underline" :title="'Open ' + a.name" @click="openAttachment(a.path)">
+                  <Paperclip class="w-3 h-3 text-base-content/40 shrink-0" :stroke-width="1.75" />
+                  <span class="truncate font-medium">{{ a.name }}</span>
+                  <span class="text-base-content/40 shrink-0">{{ fmtSize(a.size) }}</span>
+                </button>
+                <button
+                  v-if="canRemoveAttachment(a.uploaded_by)"
+                  type="button"
+                  class="opacity-0 group-hover:opacity-100 w-5 h-5 rounded grid place-items-center text-base-content/30 hover:text-error transition-opacity"
+                  title="Remove attachment"
+                  @click="removeAttachment(a.id)"
+                >
+                  <X class="w-3 h-3" :stroke-width="2" />
+                </button>
+              </li>
+            </ul>
+            <p v-else class="text-xs italic text-base-content/40">No files attached — screenshots help a lot.</p>
+          </div>
+
           <!-- context -->
-          <details v-if="tickets.isAdmin" class="text-xs text-base-content/70">
+          <details v-if="tickets.canTriage" class="text-xs text-base-content/70">
             <summary class="cursor-pointer font-medium">Diagnostic context</summary>
             <dl class="mt-2 grid grid-cols-3 gap-x-2 gap-y-1 font-mono text-[0.7rem]">
               <dt class="text-base-content/50">URL</dt>
@@ -336,7 +492,7 @@ const typeOptions: { value: 'all' | TicketType; label: string }[] = [
           <div class="border-t border-base-300/60 pt-3">
             <div class="flex items-center justify-between text-[0.65rem] uppercase tracking-wider text-base-content/60 font-semibold mb-2">
               <span>Comments ({{ visibleComments.length }})</span>
-              <label v-if="tickets.isAdmin" class="flex items-center gap-1 text-[0.65rem]">
+              <label v-if="tickets.canTriage" class="flex items-center gap-1 text-[0.65rem]">
                 <input v-model="showInternal" type="checkbox" class="checkbox checkbox-xs" />
                 Show internal
               </label>
@@ -374,7 +530,7 @@ const typeOptions: { value: 'all' | TicketType; label: string }[] = [
             class="textarea textarea-bordered text-sm w-full"
           />
           <div class="flex items-center justify-between gap-2">
-            <label v-if="tickets.isAdmin" class="flex items-center gap-1.5 text-xs">
+            <label v-if="tickets.canTriage" class="flex items-center gap-1.5 text-xs">
               <input v-model="newCommentInternal" type="checkbox" class="checkbox checkbox-xs" />
               Internal note
             </label>
@@ -392,5 +548,21 @@ const typeOptions: { value: 'all' | TicketType; label: string }[] = [
         </footer>
       </div>
     </aside>
+
+    <!-- error toast -->
+    <Transition
+      enter-active-class="transition-all duration-200"
+      enter-from-class="opacity-0 translate-y-2"
+      leave-active-class="transition-opacity duration-150"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="toast"
+        class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl border border-base-300 bg-base-100 shadow-2xl"
+      >
+        <AlertTriangle class="w-4 h-4 text-error shrink-0" :stroke-width="2" />
+        <span class="text-sm">{{ toast }}</span>
+      </div>
+    </Transition>
   </div>
 </template>

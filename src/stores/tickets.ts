@@ -57,24 +57,37 @@ export interface TicketComment {
   updated_at: string
 }
 
+// RLS + the column-guard trigger turn unauthorized writes into permission
+// errors — surface those as humans, not Postgres codes.
+function permMsg(err: { code?: string; message: string }) {
+  if (err.code === '42501' || /row-level security|permission denied/i.test(err.message)) {
+    return "you don't have permission to do that"
+  }
+  return err.message
+}
+
 export const useTicketsStore = defineStore('tickets', () => {
   const auth = useAuthStore()
 
   const tickets = ref<Ticket[]>([])
   const commentsByTicket = ref<Record<string, TicketComment[]>>({})
   const loading = ref(false)
+  const error = ref<string | null>(null)
   const selectedTicketId = ref<string | null>(null)
 
   let channel: RealtimeChannel | null = null
 
   const isAdmin = computed(() => auth.isAdmin)
+  // Triage (status/severity/assignee/internal notes) = pm + admin + superadmin,
+  // matching the tickets_triage_all RLS policy.
+  const canTriage = computed(() => auth.isAdmin || auth.role === 'pm')
 
   const myTickets = computed(() =>
     tickets.value.filter((t) => t.reporter_id === auth.user?.id)
   )
 
   const visibleTickets = computed(() =>
-    isAdmin.value ? tickets.value : myTickets.value
+    canTriage.value ? tickets.value : myTickets.value
   )
 
   const openCount = computed(
@@ -153,16 +166,24 @@ export const useTicketsStore = defineStore('tickets', () => {
   }
 
   async function updateTicket(id: string, patch: Partial<Ticket>) {
-    const { data, error } = await supabase
+    // Optimistic with rollback — selects in the detail pane feel instant.
+    const idx = tickets.value.findIndex((t) => t.id === id)
+    const prev = idx !== -1 ? { ...tickets.value[idx] } : null
+    if (idx !== -1) tickets.value[idx] = { ...tickets.value[idx], ...patch }
+    const { data, error: err } = await supabase
       .from('tickets')
       .update(patch as Record<string, unknown>)
       .eq('id', id)
       .select('*')
       .single()
-    if (error) throw error
+    if (err) {
+      if (idx !== -1 && prev) tickets.value[idx] = prev
+      error.value = "Couldn't update the ticket — " + permMsg(err)
+      return null
+    }
     const row = data as Ticket
-    const idx = tickets.value.findIndex((t) => t.id === row.id)
-    if (idx !== -1) tickets.value[idx] = row
+    const i = tickets.value.findIndex((t) => t.id === row.id)
+    if (i !== -1) tickets.value[i] = row
     return row
   }
 
@@ -172,7 +193,7 @@ export const useTicketsStore = defineStore('tickets', () => {
 
   async function addComment(ticketId: string, message: string, isInternal = false) {
     if (!auth.user) throw new Error('Not authenticated')
-    const { data, error } = await supabase
+    const { data, error: err } = await supabase
       .from('ticket_comments')
       .insert({
         ticket_id: ticketId,
@@ -183,12 +204,72 @@ export const useTicketsStore = defineStore('tickets', () => {
       })
       .select('*')
       .single()
-    if (error) throw error
+    if (err) {
+      error.value = "Couldn't post the comment — " + permMsg(err)
+      return null
+    }
     const row = data as TicketComment
     const list = commentsByTicket.value[ticketId] ? [...commentsByTicket.value[ticketId]] : []
     if (!list.some((c) => c.id === row.id)) list.push(row)
     commentsByTicket.value = { ...commentsByTicket.value, [ticketId]: list }
     return row
+  }
+
+  // ── Attachments (ticket-attachments bucket, path {ticket_id}/…) ────────────
+  async function addAttachment(ticketId: string, file: File): Promise<boolean> {
+    if (!auth.user) throw new Error('Not authenticated')
+    if (file.size > 25 * 1024 * 1024) {
+      error.value = 'Attachments are capped at 25 MB.'
+      return false
+    }
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, '_')
+    const path = `${ticketId}/${crypto.randomUUID().slice(0, 8)}-${safeName}`
+    const { error: upErr } = await supabase.storage
+      .from('ticket-attachments')
+      .upload(path, file, { contentType: file.type || 'application/octet-stream' })
+    if (upErr) {
+      error.value = "Couldn't upload the file — " + upErr.message
+      return false
+    }
+    const t = tickets.value.find((x) => x.id === ticketId)
+    const meta: TicketAttachment = {
+      id: crypto.randomUUID(),
+      path,
+      name: file.name,
+      size: file.size,
+      mime_type: file.type || 'application/octet-stream',
+      uploaded_at: new Date().toISOString(),
+      uploaded_by: auth.user.id,
+    }
+    const next = [...(t?.attachments ?? []), meta]
+    const updated = await updateTicket(ticketId, { attachments: next })
+    return !!updated
+  }
+
+  async function removeAttachment(ticketId: string, attachmentId: string): Promise<boolean> {
+    const t = tickets.value.find((x) => x.id === ticketId)
+    if (!t) return false
+    const target = t.attachments.find((a) => a.id === attachmentId)
+    if (!target) return false
+    const updated = await updateTicket(ticketId, {
+      attachments: t.attachments.filter((a) => a.id !== attachmentId),
+    })
+    if (!updated) return false
+    // Best-effort blob cleanup — metadata is already gone.
+    void supabase.storage.from('ticket-attachments').remove([target.path])
+    return true
+  }
+
+  /** Short-lived signed URL for viewing/downloading (private bucket). */
+  async function attachmentUrl(path: string): Promise<string | null> {
+    const { data, error: err } = await supabase.storage
+      .from('ticket-attachments')
+      .createSignedUrl(path, 60 * 10)
+    if (err) {
+      error.value = "Couldn't open the attachment — " + err.message
+      return null
+    }
+    return data.signedUrl
   }
 
   function applyTicketRealtime(payload: any) {
@@ -279,13 +360,18 @@ export const useTicketsStore = defineStore('tickets', () => {
     selectedTicket,
     selectedTicketId,
     isAdmin,
+    canTriage,
     loading,
+    error,
     fetchAll,
     fetchComments,
     createTicket,
     updateTicket,
     setStatus,
     addComment,
+    addAttachment,
+    removeAttachment,
+    attachmentUrl,
     selectTicket
   }
 })

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Search, ListTodo, Hash, Loader, CornerDownLeft, MessageSquare, User, Briefcase
@@ -18,8 +18,21 @@ const query = ref('')
 const open = ref(false)
 const loading = ref(false)
 const inputEl = ref<HTMLInputElement | null>(null)
+const mobileInputEl = ref<HTMLInputElement | null>(null)
 const rootEl = ref<HTMLElement | null>(null)
 const focusedIndex = ref(0)
+
+// Below md the inline input has no room — a search icon opens a full-width
+// overlay strip across the top of the viewport instead.
+const mobileOpen = ref(false)
+function openMobile() {
+  mobileOpen.value = true
+  void nextTick(() => mobileInputEl.value?.focus())
+}
+function closeMobile() {
+  mobileOpen.value = false
+  close()
+}
 
 type RType = 'task' | 'message' | 'channel' | 'person' | 'client'
 interface SearchRow {
@@ -98,6 +111,7 @@ const flatResults = computed(() => grouped.value.flatMap((g) => g.items))
 
 async function activate(r: SearchRow) {
   open.value = false
+  mobileOpen.value = false
   query.value = ''
   results.value = []
   if (r.rtype === 'task' && r.task_id) {
@@ -129,6 +143,11 @@ async function activate(r: SearchRow) {
 }
 
 function focus() {
+  // The inline input is display:none below md — use the overlay there.
+  if (inputEl.value && inputEl.value.offsetParent === null) {
+    openMobile()
+    return
+  }
   inputEl.value?.focus()
 }
 function close() {
@@ -140,6 +159,11 @@ function onKeyDown(e: KeyboardEvent) {
     e.preventDefault()
     focus()
     inputEl.value?.select()
+    return
+  }
+  if (e.key === 'Escape' && mobileOpen.value) {
+    e.preventDefault()
+    closeMobile()
     return
   }
   if (!open.value) return
@@ -198,9 +222,21 @@ function parts(text: string) {
 </script>
 
 <template>
-  <div ref="rootEl" class="relative w-full max-w-md">
+  <div ref="rootEl" class="relative w-full max-w-md max-md:w-auto">
+    <!-- Below md: an icon that opens the overlay strip -->
+    <button
+      type="button"
+      class="md:hidden w-9 h-9 rounded-full flex items-center justify-center hover:bg-base-200 transition-colors"
+      aria-label="Search"
+      title="Search"
+      @click="openMobile"
+    >
+      <Search class="w-4 h-4 text-base-content/70" :stroke-width="1.75" />
+    </button>
+
+    <!-- md and up: the inline input -->
     <label
-      class="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 hover:bg-base-200/40 focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/40 transition-colors"
+      class="hidden md:flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 hover:bg-base-200/40 focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/40 transition-colors"
     >
       <Search class="w-4 h-4 text-base-content/50" :stroke-width="1.75" />
       <input
@@ -216,16 +252,42 @@ function parts(text: string) {
         @focus="open = query.length > 0 || flatResults.length > 0"
       />
       <kbd
-        class="text-[0.65rem] text-base-content/50 border border-base-300 rounded px-1 py-0.5 font-sans hidden sm:inline-flex"
+        class="text-[0.65rem] text-base-content/50 border border-base-300 rounded px-1 py-0.5 font-sans hidden lg:inline-flex"
       >
         {{ shortcutKey }}
       </kbd>
     </label>
 
+    <!-- Mobile overlay: backdrop + full-width search strip across the top -->
+    <template v-if="mobileOpen">
+      <div class="fixed inset-0 z-[60] bg-black/30" @click="closeMobile" />
+      <div class="fixed inset-x-0 top-0 z-[61] bg-base-100 border-b border-base-300 p-2 flex items-center gap-2">
+        <label class="flex-1 flex items-center gap-2 px-2.5 py-2 rounded-lg border border-base-300 bg-base-100 focus-within:ring-2 focus-within:ring-primary/40">
+          <Search class="w-4 h-4 text-base-content/50 shrink-0" :stroke-width="1.75" />
+          <input
+            ref="mobileInputEl"
+            v-model="query"
+            type="text"
+            placeholder="Search messages, tasks, people…"
+            class="flex-1 min-w-0 bg-transparent outline-none text-sm placeholder:text-base-content/40"
+            @focus="open = query.length > 0 || flatResults.length > 0"
+          />
+        </label>
+        <button type="button" class="text-sm font-medium text-base-content/60 px-2 py-1 shrink-0" @click="closeMobile">
+          Cancel
+        </button>
+      </div>
+    </template>
+
     <div
       v-if="open"
       id="global-search-list"
-      class="absolute left-0 right-0 mt-1 rounded-lg border border-base-300 bg-base-100 shadow-xl overflow-hidden z-30 max-h-[60vh] overflow-y-auto"
+      :class="[
+        'rounded-lg border border-base-300 bg-base-100 shadow-xl overflow-hidden max-h-[60vh] overflow-y-auto',
+        mobileOpen
+          ? 'fixed inset-x-2 top-[3.7rem] z-[61]'
+          : 'absolute left-0 right-0 mt-1 z-30 max-md:hidden'
+      ]"
       role="listbox"
     >
       <div v-if="loading" class="px-4 py-3 flex items-center gap-2 text-sm text-base-content/60">

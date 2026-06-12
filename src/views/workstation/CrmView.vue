@@ -1,33 +1,51 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
-import { Handshake, LayoutGrid, Filter, Building2, Users, Plus, Upload, AlertTriangle } from 'lucide-vue-next'
+import { useRoute, useRouter } from 'vue-router'
+import { Handshake, LayoutGrid, Filter, Building2, Users, Plus, Upload, AlertTriangle, Mail, Palette } from 'lucide-vue-next'
 import CrmOverview from '@/components/crm/CrmOverview.vue'
 import CrmPipelineBoard from '@/components/crm/CrmPipelineBoard.vue'
 import CrmCompaniesTable from '@/components/crm/CrmCompaniesTable.vue'
 import CrmContactsTable from '@/components/crm/CrmContactsTable.vue'
+import CrmCampaigns from '@/components/crm/CrmCampaigns.vue'
+import CrmCampaignPanel from '@/components/crm/CrmCampaignPanel.vue'
+import CrmCampaignReport from '@/components/crm/CrmCampaignReport.vue'
+import CrmDesignStudio from '@/components/crm/CrmDesignStudio.vue'
 import CrmDealDetail from '@/components/crm/CrmDealDetail.vue'
 import CrmCompanyDetail from '@/components/crm/CrmCompanyDetail.vue'
 import CrmNewDealPanel from '@/components/crm/CrmNewDealPanel.vue'
 import CrmImportPanel from '@/components/crm/CrmImportPanel.vue'
 import { useCrmStore } from '@/stores/crm'
+import { useCampaignsStore, type Campaign } from '@/stores/campaigns'
+import { useEmailTemplatesStore, type EmailTemplate } from '@/stores/emailTemplates'
 import { useClientsStore } from '@/stores/clients'
 import type { Company, Deal, StageId } from '@/lib/crmData'
 
-type ViewId = 'overview' | 'pipeline' | 'companies' | 'contacts'
+type ViewId = 'overview' | 'pipeline' | 'companies' | 'contacts' | 'designs' | 'campaigns'
 const TABS: { id: ViewId; label: string; icon: unknown }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutGrid },
   { id: 'pipeline', label: 'Pipeline', icon: Filter },
   { id: 'companies', label: 'Companies', icon: Building2 },
   { id: 'contacts', label: 'Contacts', icon: Users },
+  { id: 'designs', label: 'Designs', icon: Palette },
+  { id: 'campaigns', label: 'Campaigns', icon: Mail },
 ]
 
 const crm = useCrmStore()
+const campaignsStore = useCampaignsStore()
 const clients = useClientsStore()
+const route = useRoute()
+const router = useRouter()
 const view = ref<ViewId>('overview')
 const activeId = ref<string | null>(null)
 const activeCompanyId = ref<string | null>(null)
 const importOpen = ref(false)
 const newDeal = ref<{ open: boolean; stage?: StageId }>({ open: false })
+const campaignPanel = ref<{ open: boolean; campaign: Campaign | null; duplicate: boolean; template: EmailTemplate | null }>(
+  { open: false, campaign: null, duplicate: false, template: null })
+const reportCampaignId = ref<string | null>(null)
+// Resolve from the store so live count updates (polling/realtime) flow into the panel.
+const reportCampaign = computed(() =>
+  reportCampaignId.value ? campaignsStore.campaigns.find((c) => c.id === reportCampaignId.value) ?? null : null)
 const toast = ref<{ title: string; sub: string; error?: boolean } | null>(null)
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -39,8 +57,21 @@ function fireToast(title: string, sub = '', error = false) {
   clearTimeout(toastTimer)
   toastTimer = setTimeout(() => (toast.value = null), 4200)
 }
+// The open deal mirrors into ?deal=<id> so deals are deep-linkable from the
+// task drawer, chat, or a pasted URL.
+function setDealQuery(id: string | null) {
+  const q = { ...route.query }
+  if (id) q.deal = id
+  else delete q.deal
+  void router.replace({ query: q })
+}
 function open(deal: Deal) {
   activeId.value = deal.id
+  setDealQuery(deal.id)
+}
+function closeDeal() {
+  activeId.value = null
+  setDealQuery(null)
 }
 function openCompany(company: Company) {
   activeCompanyId.value = company.id
@@ -48,14 +79,25 @@ function openCompany(company: Company) {
 // From the company panel's deals list — swap panels.
 function openDealFromCompany(deal: Deal) {
   activeCompanyId.value = null
-  activeId.value = deal.id
+  open(deal)
 }
+
+// Deep-link: open the queried deal once this client's pipeline is in. Watching
+// crm.deals (not just loaded) also catches client-switch reloads.
+watch(
+  [() => crm.loaded, () => crm.deals, () => route.query.deal] as const,
+  ([loaded, deals, q]) => {
+    if (!loaded || typeof q !== 'string' || !q) return
+    if (deals.some((d) => d.id === q)) activeId.value = q
+  },
+  { immediate: true },
+)
 function move(id: string, stage: StageId) {
   void crm.move(id, stage)
 }
 function convert(deal: Deal) {
   const co = crm.company(deal.companyId)
-  activeId.value = null
+  closeDeal()
   void crm.convert(deal).then((ok) => {
     if (ok) fireToast((co?.name ?? 'Company') + ' is now an active client', 'Client record created — set up its workspace in Comms.')
   })
@@ -70,6 +112,13 @@ watch(() => crm.error, (msg) => {
   fireToast(msg, '', true)
   crm.error = null
 })
+// Campaign failures too — except while the compose panel is open, which shows
+// them inline next to the send button.
+watch(() => campaignsStore.error, (msg) => {
+  if (!msg || campaignPanel.value.open) return
+  fireToast(msg, '', true)
+  campaignsStore.error = null
+})
 
 // Re-scope the CRM whenever the active client workspace changes.
 watch(() => clients.currentClientId, () => {
@@ -77,14 +126,51 @@ watch(() => clients.currentClientId, () => {
   activeCompanyId.value = null
   newDeal.value.open = false
   importOpen.value = false
+  campaignPanel.value = { open: false, campaign: null, duplicate: false, template: null }
+  reportCampaignId.value = null
   void crm.load()
+  void campaignsStore.load()
 })
 
 onMounted(() => {
   void crm.load()
   crm.subscribe()
+  void campaignsStore.load()
+  campaignsStore.subscribe()
 })
-onBeforeUnmount(() => void crm.unsubscribe())
+onBeforeUnmount(() => {
+  void crm.unsubscribe()
+  void campaignsStore.unsubscribe()
+})
+
+// Drafts open in the composer; everything else opens the report panel.
+function openCampaign(campaign: Campaign | null) {
+  campaignsStore.error = null
+  if (campaign && campaign.status !== 'draft') {
+    reportCampaignId.value = campaign.id
+    // Engagement lands long after sending stops — pull fresh numbers on open.
+    void campaignsStore.refreshCounts()
+    return
+  }
+  campaignPanel.value = { open: true, campaign, duplicate: false, template: null }
+}
+function duplicateCampaign(campaign: Campaign) {
+  campaignsStore.error = null
+  reportCampaignId.value = null
+  campaignPanel.value = { open: true, campaign, duplicate: true, template: null }
+}
+function onCampaignSent(summary: string) {
+  campaignPanel.value = { open: false, campaign: null, duplicate: false, template: null }
+  fireToast('Campaign sending', summary)
+}
+// "Use in a campaign" from the design studio.
+const templatesStore = useEmailTemplatesStore()
+function composeFromTemplate(template: EmailTemplate) {
+  campaignsStore.error = null
+  view.value = 'campaigns'
+  campaignPanel.value = { open: true, campaign: null, duplicate: false, template }
+  templatesStore.bumpUsage(template.id)
+}
 </script>
 
 <template>
@@ -139,13 +225,31 @@ onBeforeUnmount(() => void crm.unsubscribe())
       <CrmOverview v-if="view === 'overview'" :deals="crm.deals" @open="open" />
       <CrmPipelineBoard v-else-if="view === 'pipeline'" :deals="crm.deals" @open="open" @move="move" @new-deal="openNewDeal" />
       <CrmCompaniesTable v-else-if="view === 'companies'" @open-company="openCompany" />
+      <CrmDesignStudio v-else-if="view === 'designs'" @compose="composeFromTemplate" />
+      <CrmCampaigns v-else-if="view === 'campaigns'" @new="openCampaign(null)" @open="openCampaign" @duplicate="duplicateCampaign" />
       <CrmContactsTable v-else />
     </div>
 
-    <CrmDealDetail v-if="active" :key="active.id" :deal="active" @close="activeId = null" @move="move" @convert="convert" />
+    <CrmDealDetail v-if="active" :key="active.id" :deal="active" @close="closeDeal" @move="move" @convert="convert" />
     <CrmCompanyDetail v-else-if="activeCompany" :key="activeCompany.id" :company="activeCompany" @close="activeCompanyId = null" @open-deal="openDealFromCompany" />
     <CrmNewDealPanel v-if="newDeal.open" @close="newDeal.open = false" @created="fireToast('Deal created', 'Added to your pipeline.')" />
     <CrmImportPanel v-if="importOpen" @close="importOpen = false" @done="(s) => fireToast('Import complete', s)" />
+    <CrmCampaignPanel
+      v-if="campaignPanel.open"
+      :key="(campaignPanel.campaign?.id ?? campaignPanel.template?.id ?? 'new') + (campaignPanel.duplicate ? '-dup' : '')"
+      :campaign="campaignPanel.campaign"
+      :duplicate="campaignPanel.duplicate"
+      :template="campaignPanel.template"
+      @close="campaignPanel = { open: false, campaign: null, duplicate: false, template: null }"
+      @sent="onCampaignSent"
+    />
+    <CrmCampaignReport
+      v-if="reportCampaign"
+      :key="reportCampaign.id"
+      :campaign="reportCampaign"
+      @close="reportCampaignId = null"
+      @duplicate="duplicateCampaign"
+    />
 
     <!-- toast -->
     <Transition name="crm-toast">

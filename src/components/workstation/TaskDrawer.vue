@@ -11,8 +11,11 @@ import {
   Search,
   Check,
   UserPlus,
-  Send
+  Send,
+  Handshake,
+  ArrowUpRight
 } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
 import { useTasksStore, type TaskStatus, type TaskActivityEvent } from '@/stores/tasks'
 import { useStatusesStore } from '@/stores/statuses'
 import { statusClasses } from '@/lib/statusColors'
@@ -21,6 +24,9 @@ import { useTeamStore, type MemberProfile } from '@/stores/team'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectMembersStore } from '@/stores/projectMembers'
 import { useProjectsStore } from '@/stores/projects'
+import { useClientsStore } from '@/stores/clients'
+import { useDealLinksStore, type TaskDealLink } from '@/stores/dealLinks'
+import { STAGES, LOST, type StageId } from '@/lib/crmData'
 import TaskAttachments from '@/components/workstation/TaskAttachments.vue'
 import RichTextEditor from '@/components/workstation/RichTextEditor.vue'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
@@ -31,9 +37,28 @@ const team = useTeamStore()
 const auth = useAuthStore()
 const members = useProjectMembersStore()
 const projects = useProjectsStore()
+const clients = useClientsStore()
+const dealLinksStore = useDealLinksStore()
+const router = useRouter()
 
 const open = computed(() => tasks.selectedTask !== null)
 const t = computed(() => tasks.selectedTask)
+
+// ── CRM: deals this task is linked to (crm_deal_tasks, live) ────────────────
+const dealLinks = computed(() => dealLinksStore.forTask(t.value?.id))
+const STAGE_BY_ID = Object.fromEntries([...STAGES, LOST].map((s) => [s.id, s]))
+function stageOf(id: StageId) {
+  return STAGE_BY_ID[id] ?? STAGES[0]
+}
+// The deal lives in a CRM workspace (its client_id); switch to it so the CRM
+// view loads the right pipeline, then deep-link the deal panel open.
+async function goDeal(link: TaskDealLink) {
+  if (link.clientId && link.clientId !== clients.currentClientId) {
+    clients.setCurrentClient(link.clientId)
+  }
+  close()
+  await router.push({ name: 'workstation-crm', query: { deal: link.dealId } })
+}
 
 // ── Per-task chat (task_comments + Realtime) ───────────────────────────────
 const taskId = computed(() => t.value?.id ?? null)
@@ -871,6 +896,42 @@ function openDuePicker(triggerEl: HTMLElement) {
                 </div>
               </Transition>
             </div>
+          </div>
+
+          <!-- CRM: deal(s) this task is linked to -->
+          <div v-if="dealLinks.length" class="px-6 pt-3 pb-1 space-y-1.5">
+            <button
+              v-for="l in dealLinks"
+              :key="l.dealId"
+              type="button"
+              class="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border border-base-300 bg-base-100 hover:border-primary/40 hover:bg-base-200/60 transition-colors text-left"
+              :title="'Open ' + l.dealTitle + ' in the CRM'"
+              @click="goDeal(l)"
+            >
+              <span
+                class="w-7 h-7 rounded-md grid place-items-center shrink-0"
+                :style="{ background: 'var(--accent-soft)', color: 'var(--accent-fg)' }"
+              >
+                <Handshake :size="14" />
+              </span>
+              <span class="flex-1 min-w-0">
+                <span class="block text-sm font-medium truncate">{{ l.dealTitle }}</span>
+                <span class="block text-[0.65rem] text-base-content/50 truncate">
+                  {{ l.companyName || 'CRM deal' }}
+                </span>
+              </span>
+              <span
+                class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[0.65rem] font-semibold shrink-0"
+                :style="{
+                  background: `color-mix(in oklab, ${stageOf(l.stage).dot} 16%, transparent)`,
+                  color: stageOf(l.stage).dot
+                }"
+              >
+                <span class="w-1.5 h-1.5 rounded-full" :style="{ background: stageOf(l.stage).dot }" />
+                {{ stageOf(l.stage).label }}
+              </span>
+              <ArrowUpRight class="w-3.5 h-3.5 text-base-content/40 shrink-0" :stroke-width="1.75" />
+            </button>
           </div>
 
           <!-- description -->

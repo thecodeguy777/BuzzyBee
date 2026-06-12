@@ -11,6 +11,7 @@ export default defineConfig({
     }
   },
   server: {
+    host: true, // bind to all interfaces so other devices on the LAN can reach it
     port: 5175
   }
 })

@@ -51,6 +51,7 @@ function mapContact(r: any): Contact {
     primary: !!r.is_primary,
     address: r.address ?? '', city: r.city ?? '', country: r.country ?? '',
     createdAt: r.created_at, lastActivityAt: r.last_activity_at ?? null,
+    unsubscribedAt: r.unsubscribed_at ?? null,
   }
 }
 function mapActivity(r: any): Activity {
@@ -61,7 +62,7 @@ function mapActivity(r: any): Activity {
 }
 
 const COMPANY_COLS = 'id,name,industry,site,color,is_client,client_id,channel_id,address,city,country,employees,annual_revenue,linkedin,created_at,last_activity_at'
-const CONTACT_COLS = 'id,company_id,name,role,email,phone,color,is_primary,address,city,country,created_at,last_activity_at'
+const CONTACT_COLS = 'id,company_id,name,role,email,phone,color,is_primary,address,city,country,created_at,last_activity_at,unsubscribed_at'
 const ACTIVITY_COLS = 'id,deal_id,company_id,contact_id,type,actor_id,body,meta,created_at'
 
 export const useCrmStore = defineStore('crm', () => {
@@ -666,6 +667,31 @@ export const useCrmStore = defineStore('crm', () => {
           deals.value = deals.value.map((d) => (d.id === row.id ? patched : d))
         } else {
           void reloadDeals() // INSERT — needs the channel embed
+        }
+      })
+      // Keep the deal panel's linked-task list in sync when links are made or
+      // removed elsewhere (another tab, the task drawer, another teammate).
+      .on('postgres_changes', { event: '*', schema: 'buzzybee', table: 'crm_deal_tasks' }, (p: any) => {
+        if (p.eventType === 'DELETE') {
+          const { deal_id, task_id } = p.old ?? {}
+          if (!deal_id || !linkedByDeal.value[deal_id]) return
+          linkedByDeal.value = {
+            ...linkedByDeal.value,
+            [deal_id]: linkedByDeal.value[deal_id].filter((t) => t.taskId !== task_id),
+          }
+        } else if (p.eventType === 'INSERT') {
+          const { deal_id, task_id } = p.new ?? {}
+          // Only this client's deals; linkTask already added our own writes.
+          if (!deal_id || !deals.value.some((d) => d.id === deal_id)) return
+          if ((linkedByDeal.value[deal_id] ?? []).some((t) => t.taskId === task_id)) return
+          void supabase.from('tasks').select('reference_number,title,status').eq('id', task_id).single().then(({ data }) => {
+            if (!data || (linkedByDeal.value[deal_id] ?? []).some((t) => t.taskId === task_id)) return
+            const lt: LinkedTask = {
+              taskId: task_id, ref: (data as any).reference_number ?? '', title: (data as any).title ?? 'Linked task',
+              status: (data as any).status ?? '', dot: statusDot((data as any).status),
+            }
+            linkedByDeal.value = { ...linkedByDeal.value, [deal_id]: [...(linkedByDeal.value[deal_id] ?? []), lt] }
+          })
         }
       })
       .subscribe()

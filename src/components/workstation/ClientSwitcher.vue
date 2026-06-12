@@ -63,10 +63,10 @@ function statusDot(c: Client) {
       :disabled="empty"
       @click="toggle"
     >
-      <span class="text-xs text-base-content/60">Client</span>
+      <span class="hidden sm:inline text-xs text-base-content/60">Client</span>
       <span
         :class="[
-          'font-medium max-w-[14rem] truncate',
+          'font-medium max-w-[6.5rem] sm:max-w-[14rem] truncate',
           !clients.currentClient && 'text-base-content/60'
         ]"
       >
