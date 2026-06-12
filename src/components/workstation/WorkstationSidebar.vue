@@ -12,7 +12,8 @@ import {
   UsersRound,
   MessagesSquare,
   MessageCircle,
-  Handshake
+  Handshake,
+  Target
 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useChannelsStore } from '@/stores/channels'
@@ -50,6 +51,8 @@ const topNavItems = computed<NavItem[]>(() => {
   ]
   // Time tracking is a VA-only thing — PMs/admins manage, they don't bill.
   if (auth.role === 'va') items.push({ to: '/app/time', label: 'Time', icon: Clock })
+  // Nectar — the opportunity pool. VAs browse & apply; PMs/admins post.
+  items.push({ to: '/app/nectar', label: 'Nectar', icon: Target })
   return items
 })
 const bottomNavItems = computed<NavItem[]>(() => {

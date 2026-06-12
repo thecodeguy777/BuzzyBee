@@ -120,6 +120,26 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, layout: 'workstation' }
   },
   {
+    path: '/app/nectar',
+    name: 'workstation-nectar',
+    component: () => import('@/views/workstation/NectarView.vue'),
+    meta: { requiresAuth: true, layout: 'workstation' }
+  },
+  {
+    path: '/va/:handle',
+    name: 'public-va-profile',
+    component: () => import('@/views/shared/PublicVaProfile.vue'),
+    props: true,
+    meta: { requiresAuth: false, bareLayout: true }
+  },
+  {
+    path: '/app/va/:userId?',
+    name: 'workstation-va-profile',
+    component: () => import('@/views/workstation/VaProfileView.vue'),
+    props: true,
+    meta: { requiresAuth: true, layout: 'workstation' }
+  },
+  {
     path: '/app/team/:vaId?',
     name: 'workstation-team',
     component: () => import('@/views/workstation/TeamView.vue'),
