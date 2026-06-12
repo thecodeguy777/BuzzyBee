@@ -113,7 +113,7 @@ function statusDot(c: Client) {
             <div class="flex-1 min-w-0">
               <div class="text-sm font-medium truncate">{{ c.name }}</div>
               <div class="text-xs text-base-content/60 capitalize">
-                {{ c.tier ?? '—' }} · {{ c.preferred_channel ?? 'no channel' }}
+                {{ c.tier ?? '—' }}
               </div>
             </div>
             <span

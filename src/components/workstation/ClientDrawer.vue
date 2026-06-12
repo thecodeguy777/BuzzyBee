@@ -2,14 +2,12 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   X,
-  Slack,
   Mail,
   Sparkles,
   Crown,
   UserPlus,
   X as XIcon,
   Search,
-  Hash,
   CircleDashed,
   Pause,
   Archive,
@@ -19,7 +17,7 @@ import {
   ListTodo
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
-import { useClientsStore, type Client, type Channel, type ClientStatus, type ClientTier } from '@/stores/clients'
+import { useClientsStore, type Client, type ClientStatus, type ClientTier } from '@/stores/clients'
 import { useTeamStore } from '@/stores/team'
 import { useTasksStore } from '@/stores/tasks'
 import { useAuthStore } from '@/stores/auth'
@@ -41,8 +39,6 @@ const c = computed<Client | null>(
 )
 
 const name = ref('')
-const channel = ref<Channel | ''>('')
-const slackUrl = ref('')
 const emailTo = ref('')
 const monthlyRate = ref<number | null>(null)
 const tier = ref<ClientTier | ''>('')
@@ -62,8 +58,6 @@ const statusMeta: Record<ClientStatus, { label: string; icon: any; class: string
 function syncFromClient() {
   if (!c.value) return
   name.value = c.value.name
-  channel.value = c.value.preferred_channel ?? ''
-  slackUrl.value = c.value.slack_webhook_url ?? ''
   emailTo.value = c.value.email_to ?? ''
   monthlyRate.value = c.value.monthly_rate
   tier.value = c.value.tier ?? ''
@@ -94,14 +88,6 @@ async function patchField(patch: Partial<Client>) {
 async function saveName() {
   if (!c.value || !name.value.trim() || name.value.trim() === c.value.name) return
   await patchField({ name: name.value.trim() })
-}
-async function saveChannel() {
-  if (!c.value || (c.value.preferred_channel ?? '') === channel.value) return
-  await patchField({ preferred_channel: channel.value || null })
-}
-async function saveSlack() {
-  if (!c.value || (c.value.slack_webhook_url ?? '') === slackUrl.value) return
-  await patchField({ slack_webhook_url: slackUrl.value || null })
 }
 async function saveEmail() {
   if (!c.value || (c.value.email_to ?? '') === emailTo.value) return
@@ -509,7 +495,7 @@ watch(open, (is) => {
             <div class="space-y-1">
               <label class="block text-[0.65rem] text-base-content/50 font-medium">Monthly rate</label>
               <div class="flex items-center gap-1 border-b border-base-300 focus-within:border-primary transition-colors">
-                <span class="text-sm text-base-content/60 pb-1">₱</span>
+                <span class="text-sm text-base-content/60 pb-1">$</span>
                 <input
                   v-model.number="monthlyRate"
                   type="number"
@@ -557,53 +543,9 @@ watch(open, (is) => {
 
         <!-- Comms -->
         <section class="px-6 py-4 border-t border-base-300/60 space-y-3">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2 text-[0.65rem] uppercase tracking-wider text-base-content/60 font-semibold">
-              <Hash class="w-3 h-3" :stroke-width="1.75" />
-              Communications
-            </div>
-            <div class="flex items-center gap-1 rounded-md bg-base-200/60 p-0.5">
-              <button
-                type="button"
-                class="px-2 py-0.5 rounded text-[0.65rem] font-medium uppercase tracking-wider transition-colors"
-                :class="channel === 'slack' ? 'bg-base-100 shadow-sm text-base-content' : 'text-base-content/50 hover:text-base-content/80'"
-                @click="channel = 'slack'; saveChannel()"
-              >
-                Slack
-              </button>
-              <button
-                type="button"
-                class="px-2 py-0.5 rounded text-[0.65rem] font-medium uppercase tracking-wider transition-colors"
-                :class="channel === 'email' ? 'bg-base-100 shadow-sm text-base-content' : 'text-base-content/50 hover:text-base-content/80'"
-                @click="channel = 'email'; saveChannel()"
-              >
-                Email
-              </button>
-              <button
-                v-if="channel"
-                type="button"
-                class="px-2 py-0.5 rounded text-[0.65rem] text-base-content/40 hover:text-error transition-colors"
-                title="Clear"
-                @click="channel = ''; saveChannel()"
-              >
-                <X class="w-3 h-3" :stroke-width="2" />
-              </button>
-            </div>
-          </div>
-
-          <!-- Slack webhook -->
-          <div class="space-y-1">
-            <label class="flex items-center gap-1.5 text-[0.65rem] text-base-content/50 font-medium">
-              <Slack class="w-3 h-3" :stroke-width="1.75" />
-              Slack webhook URL
-            </label>
-            <input
-              v-model="slackUrl"
-              type="url"
-              placeholder="https://hooks.slack.com/services/…"
-              class="w-full text-sm bg-transparent outline-none py-1 border-b border-base-300 focus:border-primary transition-colors font-mono"
-              @blur="saveSlack"
-            />
+          <div class="flex items-center gap-2 text-[0.65rem] uppercase tracking-wider text-base-content/60 font-semibold">
+            <Mail class="w-3 h-3" :stroke-width="1.75" />
+            Communications
           </div>
 
           <!-- Email destination -->
