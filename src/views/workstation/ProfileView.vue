@@ -1,11 +1,50 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useAuthStore, type UserRole } from '@/stores/auth'
-import { Save, Check, KeyRound } from 'lucide-vue-next'
+import { Save, Check, KeyRound, Camera, Trash2, IdCard } from 'lucide-vue-next'
 import { supabase } from '@/lib/supabase'
+import { uploadAvatar, removeAvatarFile } from '@/lib/avatarUpload'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
 
 const auth = useAuthStore()
+
+// ── Profile picture upload ────────────────────────────────────────────────────
+const fileInput = ref<HTMLInputElement | null>(null)
+const uploading = ref(false)
+const avatarError = ref<string | null>(null)
+
+async function onPickAvatar(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  ;(e.target as HTMLInputElement).value = ''
+  if (!file || !auth.user || uploading.value) return
+  avatarError.value = null
+  uploading.value = true
+  const previous = auth.profile?.avatar_url
+  try {
+    const url = await uploadAvatar(auth.user.id, file)
+    await auth.updateProfile({ avatar_url: url })
+    void removeAvatarFile(previous)
+  } catch (err) {
+    avatarError.value = (err as Error).message
+  } finally {
+    uploading.value = false
+  }
+}
+
+async function removeAvatar() {
+  if (!auth.profile?.avatar_url || uploading.value) return
+  avatarError.value = null
+  uploading.value = true
+  const previous = auth.profile.avatar_url
+  try {
+    await auth.updateProfile({ avatar_url: null })
+    void removeAvatarFile(previous)
+  } catch (err) {
+    avatarError.value = (err as Error).message
+  } finally {
+    uploading.value = false
+  }
+}
 
 // ── Password (invited users land here from the email link with a session but
 // no password yet — this is where they set one) ──────────────────────────────
@@ -39,7 +78,6 @@ async function savePassword() {
 
 const fullName = ref('')
 const timezone = ref('')
-const avatarUrl = ref('')
 const role = ref<UserRole>('va')
 const saved = ref(false)
 
@@ -48,7 +86,6 @@ const dirty = computed(
   () =>
     fullName.value !== (auth.profile?.full_name ?? '') ||
     timezone.value !== (auth.profile?.timezone ?? '') ||
-    avatarUrl.value !== (auth.profile?.avatar_url ?? '') ||
     role.value !== (auth.profile?.role ?? 'va')
 )
 
@@ -65,7 +102,6 @@ const timezones = [
 function syncFromProfile() {
   fullName.value = auth.profile?.full_name ?? ''
   timezone.value = auth.profile?.timezone ?? 'Asia/Manila'
-  avatarUrl.value = auth.profile?.avatar_url ?? ''
   role.value = auth.profile?.role ?? 'va'
 }
 
@@ -80,12 +116,10 @@ async function handleSave() {
   const patch: {
     full_name?: string | null
     timezone?: string | null
-    avatar_url?: string | null
     role?: UserRole
   } = {
     full_name: fullName.value.trim() || null,
-    timezone: timezone.value || null,
-    avatar_url: avatarUrl.value.trim() || null
+    timezone: timezone.value || null
   }
   if (canEditRole.value) patch.role = role.value
   try {
@@ -100,27 +134,84 @@ async function handleSave() {
 
 <template>
   <div class="max-w-2xl space-y-6">
-    <header>
-      <h1 class="font-display text-xl font-semibold">Profile</h1>
-      <p class="text-xs text-base-content/60 mt-0.5">
-        How you appear across the Workstation.
-      </p>
+    <header class="flex items-end gap-4">
+      <div>
+        <h1 class="font-display text-xl font-semibold">Profile</h1>
+        <p class="text-xs text-base-content/60 mt-0.5">
+          How you appear across the Workstation.
+        </p>
+      </div>
+      <div class="flex-1" />
+      <RouterLink
+        :to="{ name: 'workstation-va-profile' }"
+        class="btn btn-outline btn-sm gap-1.5"
+        title="Your shareable résumé — skills, portfolio, live stats"
+      >
+        <IdCard class="w-4 h-4" :stroke-width="1.75" />
+        My VA Profile
+      </RouterLink>
     </header>
 
     <div class="card bg-base-100 border border-base-300 shadow-sm">
       <div class="card-body p-6 space-y-5">
         <div class="flex items-center gap-4">
-          <HexAvatar
-            :avatar-url="avatarUrl || null"
-            :name="fullName"
-            :label="avatarUrl ? undefined : auth.initials"
-            :size="64"
-            tint="primary"
-          />
-          <div class="min-w-0">
+          <button
+            type="button"
+            class="group/av relative shrink-0 rounded-full"
+            :disabled="uploading"
+            title="Change photo"
+            @click="fileInput?.click()"
+          >
+            <HexAvatar
+              :avatar-url="auth.profile?.avatar_url"
+              :name="fullName"
+              :label="auth.profile?.avatar_url ? undefined : auth.initials"
+              :size="64"
+              tint="primary"
+              :class="uploading && 'opacity-40'"
+            />
+            <span
+              class="absolute inset-0 grid place-items-center rounded-full bg-black/45 text-white transition-opacity"
+              :class="uploading ? 'opacity-100' : 'opacity-0 group-hover/av:opacity-100'"
+            >
+              <span v-if="uploading" class="loading loading-spinner loading-sm" />
+              <Camera v-else class="w-5 h-5" :stroke-width="1.9" />
+            </span>
+          </button>
+          <div class="min-w-0 flex-1">
             <div class="font-medium truncate">{{ auth.user?.email }}</div>
             <div class="text-xs text-base-content/60">Email is managed by your sign-in account.</div>
+            <div class="flex items-center gap-2 mt-2">
+              <button
+                type="button"
+                class="btn btn-outline btn-xs gap-1.5"
+                :disabled="uploading"
+                @click="fileInput?.click()"
+              >
+                <Camera class="w-3 h-3" :stroke-width="2" />
+                {{ uploading ? 'Uploading…' : 'Upload photo' }}
+              </button>
+              <button
+                v-if="auth.profile?.avatar_url"
+                type="button"
+                class="btn btn-ghost btn-xs gap-1 text-base-content/60 hover:text-error"
+                :disabled="uploading"
+                @click="removeAvatar"
+              >
+                <Trash2 class="w-3 h-3" :stroke-width="2" />
+                Remove
+              </button>
+              <span class="text-[0.65rem] text-base-content/40">JPG, PNG, WebP or GIF · up to 5 MB</span>
+            </div>
+            <p v-if="avatarError" class="text-xs text-error mt-1.5">{{ avatarError }}</p>
           </div>
+          <input
+            ref="fileInput"
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            class="hidden"
+            @change="onPickAvatar"
+          />
         </div>
 
         <form class="grid gap-4 sm:grid-cols-2" @submit.prevent="handleSave">
@@ -157,19 +248,6 @@ async function handleSave() {
             <select v-model="timezone" class="select select-bordered w-full">
               <option v-for="tz in timezones" :key="tz" :value="tz">{{ tz }}</option>
             </select>
-          </label>
-
-          <label class="form-control sm:col-span-2">
-            <span class="label-text text-sm font-medium mb-1">Avatar URL</span>
-            <input
-              v-model="avatarUrl"
-              type="url"
-              placeholder="https://…"
-              class="input input-bordered w-full"
-            />
-            <span class="text-xs text-base-content/50 mt-1">
-              Optional. Direct image URL — uploads come later.
-            </span>
           </label>
 
           <div class="sm:col-span-2 flex items-center gap-3 pt-2">
