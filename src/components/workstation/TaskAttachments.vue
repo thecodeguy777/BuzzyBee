@@ -59,6 +59,16 @@ watch(
 const images = computed(() => list.value.filter((a) => isImage(a.mime_type)))
 const lightboxIndex = ref<number | null>(null)
 
+// The lightbox index and any error message belong to the previous task's
+// attachment list — reset them when the open task changes.
+watch(
+  () => props.task?.id,
+  () => {
+    lightboxIndex.value = null
+    errorMsg.value = null
+  }
+)
+
 async function openFile(a: TaskAttachmentMeta) {
   if (isImage(a.mime_type)) {
     const idx = images.value.findIndex((img) => img.id === a.id)
@@ -85,23 +95,31 @@ function pickFiles() {
 }
 
 async function handleFiles(files: FileList | File[] | null) {
-  if (!files || !props.task) return
+  // Pin the target task now — if the user switches tasks mid-upload (the
+  // drawer stays mounted), the remaining files must not land on the new task.
+  const taskId = props.task?.id
+  if (!files || !taskId) return
   errorMsg.value = null
   uploading.value = true
+  const errors: string[] = []
   try {
     for (const f of Array.from(files)) {
       if (f.size > 25 * 1024 * 1024) {
-        errorMsg.value = `${f.name} is over 25 MB`
+        errors.push(`${f.name} is over 25 MB`)
         continue
       }
-      await tasks.addAttachment(props.task.id, f)
+      try {
+        await tasks.addAttachment(taskId, f)
+      } catch (e) {
+        // Keep going — one failed file shouldn't silently drop the rest.
+        errors.push(`${f.name}: ${(e as Error).message}`)
+      }
     }
-  } catch (e) {
-    errorMsg.value = (e as Error).message
   } finally {
     uploading.value = false
     if (fileInput.value) fileInput.value.value = ''
   }
+  if (errors.length) errorMsg.value = errors.join(' · ')
 }
 
 function onDrop(e: DragEvent) {

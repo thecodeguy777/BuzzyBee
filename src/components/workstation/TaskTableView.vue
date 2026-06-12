@@ -29,6 +29,7 @@ import { useProjectsStore } from '@/stores/projects'
 import { useDealLinksStore } from '@/stores/dealLinks'
 import { statusClasses } from '@/lib/statusColors'
 import { useColumnWidths } from '@/composables/useColumnWidths'
+import { useTaskCommentCounts } from '@/composables/useTaskCommentCounts'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
 
 const tasks = useTasksStore()
@@ -144,7 +145,12 @@ const groups = computed(() => {
   const cols = columns.value
   const map = new Map<TaskStatus, Task[]>()
   for (const c of cols) map.set(c.value, [])
-  for (const t of tasks.tasksForCurrentProject) map.get(t.status)?.push(t)
+  for (const t of tasks.tasksForCurrentProject) {
+    // A task whose status references a removed column falls back to the first
+    // column's group (same fallback as statusOf) so it never silently vanishes.
+    const bucket = map.get(t.status) ?? map.get(cols[0]?.value)
+    bucket?.push(t)
+  }
   for (const list of map.values()) {
     list.sort(
       (a, b) =>
@@ -178,11 +184,15 @@ const suggestion = computed(() => {
   const inFlight = tasks.tasksForCurrentProject.filter(
     (t) => statusesStore.isOpen(pid, t.status)
   )
+  // Overdue = strictly before today (a task due today isn't late yet) —
+  // matches dueClass and the other views.
+  const todayMid = new Date()
+  todayMid.setHours(0, 0, 0, 0)
   const overdue = tasks.tasksForCurrentProject.filter(
     (t) =>
       t.due_on &&
       statusesStore.isOpen(pid, t.status) &&
-      new Date(t.due_on + 'T00:00:00').getTime() < Date.now()
+      new Date(t.due_on + 'T00:00:00').getTime() < todayMid.getTime()
   )
   const unassigned = tasks.tasksForCurrentProject.filter(
     (t) =>
@@ -285,10 +295,24 @@ async function deleteCol(d: TaskFieldDef) {
 // Keyed by status key (dynamic per project), so we use a partial record.
 const newTitleByStatus = ref<Record<string, string>>({})
 const adderOpenFor = ref<TaskStatus | null>(null)
+const addError = ref<string | null>(null)
+// In-flight guard: the adder commits on both Enter and blur, which can fire
+// back-to-back before the insert resolves — without this, one title becomes
+// two tasks.
+let committing = false
+
+// Focus inputs that appear via v-if (plain `autofocus` is ignored when the
+// document already has focus — e.g. on the button that revealed the input).
+const vFocus = { mounted: (el: HTMLElement) => el.focus() }
 
 // Opens the inline adder under the project's default (first) column.
 function openDefaultAdder() {
   adderOpenFor.value = statusesStore.defaultKey(projects.currentProjectId) ?? null
+}
+
+function cancelNew(status: TaskStatus) {
+  newTitleByStatus.value[status] = ''
+  adderOpenFor.value = null
 }
 
 async function commitNew(status: TaskStatus) {
@@ -297,16 +321,19 @@ async function commitNew(status: TaskStatus) {
     adderOpenFor.value = null
     return
   }
-  // createTask inserts into the project's default (first) column. If the user
-  // added from a different group, follow up with a status change so the row
-  // lands in the right group.
-  const created = await tasks.createTask({ title })
-  const defaultKey = statusesStore.defaultKey(projects.currentProjectId)
-  if (status !== defaultKey && created?.id) {
-    await tasks.setStatus(created.id, status)
-  }
+  if (committing) return
+  committing = true
+  // Clear synchronously so a trailing blur/Enter can't re-commit the same title.
   newTitleByStatus.value[status] = ''
-  adderOpenFor.value = status
+  try {
+    await tasks.createTask({ title, status })
+    adderOpenFor.value = status
+  } catch (e) {
+    newTitleByStatus.value[status] = title // let the user retry
+    addError.value = `Couldn't add "${title}": ${(e as Error).message}`
+  } finally {
+    committing = false
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -374,10 +401,26 @@ function initials(name: string) {
     .join('') || '?'
 }
 
-// Activity count (proxy for chat until Comms ships)
-function chatCount(t: Task) {
-  return (t.activity_log ?? []).length
+// Chat column: real task_comments totals + unread, batch-fetched for the
+// visible project's tasks (the old version counted activity_log entries).
+const projectTaskIds = computed(() => tasks.tasksForCurrentProject.map((t) => t.id))
+const {
+  counts: commentCounts,
+  unread: commentUnread,
+  refresh: refreshCommentCounts
+} = useTaskCommentCounts(projectTaskIds)
+// The drawer is where messages get sent and read — refresh whenever it
+// opens, switches task, or closes so the column doesn't go stale.
+watch(
+  () => tasks.selectedTaskId,
+  () => void refreshCommentCounts()
+)
+function chatTitle(t: Task) {
+  const n = commentCounts.value[t.id] ?? 0
+  const u = commentUnread.value[t.id] ?? 0
+  return `${n} message${n === 1 ? '' : 's'}` + (u > 0 ? ` · ${u} new` : '')
 }
+
 function fileCount(t: Task) {
   return (t.attachments ?? []).length
 }
@@ -458,21 +501,45 @@ function readNewPriorityOrder(toEl: HTMLElement, taskId: string, status: TaskSta
   return 0
 }
 
+// Sortable physically moves the dragged row, but Vue's keyed v-for still owns
+// it. Put the row back where Vue left it before mutating state, so the keyed
+// re-render is the single source of truth — otherwise a failed drop leaves the
+// row stuck in the wrong group, and successful moves can ghost/duplicate.
+function revertSortableMove(evt: Sortable.SortableEvent) {
+  const { item, from, oldIndex } = evt
+  item.remove()
+  const siblings = Array.from(from.querySelectorAll(':scope > tr[data-task-id]'))
+  const ref = siblings[oldIndex ?? siblings.length] ?? null
+  if (ref) {
+    from.insertBefore(item, ref)
+  } else if (siblings.length) {
+    const last = siblings[siblings.length - 1]
+    from.insertBefore(item, last.nextSibling)
+  } else {
+    from.insertBefore(item, from.firstChild)
+  }
+}
+
 async function onRowSortEnd(evt: Sortable.SortableEvent) {
   const taskId = evt.item.getAttribute('data-task-id') ?? ''
   const toStatus = evt.to.getAttribute('data-status') as TaskStatus | null
+
+  // Read the dropped position from the DOM *before* reverting Sortable's move.
+  const newPriorityOrder =
+    taskId && toStatus ? readNewPriorityOrder(evt.to as HTMLElement, taskId, toStatus) : 0
+  revertSortableMove(evt)
   if (!taskId || !toStatus) return
 
   const dragged = tasks.tasks.find((t) => t.id === taskId)
   if (!dragged) return
 
-  const newPriorityOrder = readNewPriorityOrder(evt.to as HTMLElement, taskId, toStatus)
   const patch: Partial<Task> = { priority_order: newPriorityOrder }
   if (dragged.status !== toStatus) patch.status = toStatus
 
   try {
     await tasks.updateTask(taskId, patch)
   } catch (e) {
+    addError.value = `Couldn't move the task: ${(e as Error).message}`
     console.warn('[task table] reorder failed:', (e as Error).message)
   }
 }
@@ -491,6 +558,7 @@ function buildSortables() {
         animation: 150,
         ghostClass: 'bb-row-ghost',
         chosenClass: 'bb-row-chosen',
+        draggable: 'tr[data-task-id]',
         // Don't start a drag from inputs, selects, or buttons inside the row.
         filter: 'input, select, textarea, button, a, [data-no-drag]',
         preventOnFilter: false,
@@ -510,9 +578,15 @@ onMounted(async () => {
 })
 onBeforeUnmount(() => destroySortables())
 
-// Rebuild when the group structure changes (collapse/expand or task list churn).
+// Rebuild when the group structure changes (collapse/expand or task list
+// churn). Collapse state must be part of the signature: expanding a group
+// recreates its <tbody> (v-if), and the new element needs a fresh Sortable —
+// groups that start collapsed would otherwise never become draggable.
 watch(
-  () => groups.value.map((g) => g.value + ':' + g.tasks.length).join('|'),
+  () =>
+    groups.value.map((g) => g.value + ':' + g.tasks.length).join('|') +
+    '#' +
+    [...collapsed.value].join(','),
   async () => {
     await nextTick()
     buildSortables()
@@ -609,17 +683,17 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
 
 <template>
   <div class="space-y-3">
-    <!-- Toolbar -->
+    <!-- Toolbar (Filter / Sort / Group / HiveMindAI not wired up yet) -->
     <div class="flex items-center gap-2 flex-wrap">
-      <button type="button" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 text-xs font-medium hover:bg-base-200/60 transition-colors">
+      <button type="button" disabled title="Coming soon" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 text-xs font-medium opacity-50 cursor-not-allowed">
         <Filter class="w-3.5 h-3.5" :stroke-width="1.75" />
         Filter
       </button>
-      <button type="button" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 text-xs font-medium hover:bg-base-200/60 transition-colors">
+      <button type="button" disabled title="Coming soon" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 text-xs font-medium opacity-50 cursor-not-allowed">
         <ArrowUpDown class="w-3.5 h-3.5" :stroke-width="1.75" />
         Sort
       </button>
-      <button type="button" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 text-xs font-medium hover:bg-base-200/60 transition-colors">
+      <button type="button" disabled title="Coming soon" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 text-xs font-medium opacity-50 cursor-not-allowed">
         <GroupIcon class="w-3.5 h-3.5" :stroke-width="1.75" />
         Group: <span class="text-base-content/60">Status</span>
       </button>
@@ -628,7 +702,9 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
 
       <button
         type="button"
-        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-base-100 border border-base-300 text-xs font-medium hover:bg-base-200/60 transition-colors shadow-hc-1"
+        disabled
+        title="Coming soon"
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-base-100 border border-base-300 text-xs font-medium opacity-50 cursor-not-allowed shadow-hc-1"
       >
         <Sparkles class="w-3.5 h-3.5" :stroke-width="1.75" style="color: var(--hc-accent)" />
         Ask HiveMindAI
@@ -643,6 +719,11 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
         New task
       </button>
     </div>
+
+    <p v-if="addError" class="text-error text-xs flex items-center gap-2">
+      {{ addError }}
+      <button type="button" class="underline hover:no-underline" @click="addError = null">dismiss</button>
+    </p>
 
     <!-- Table card -->
     <div class="bg-base-100 rounded-2xl border border-base-300 shadow-hc-1 overflow-hidden">
@@ -780,13 +861,14 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
               </td>
             </tr>
 
-            <!-- Empty state -->
+            <!-- Loading / empty state -->
             <tr
               v-if="groups.every((g) => g.tasks.length === 0)"
               class="border-b border-base-300/40"
             >
               <td :colspan="totalCols" class="px-3 py-12 text-center text-sm text-base-content/50">
-                No tasks for {{ clients.currentClient?.name ?? 'this client' }} yet.
+                <template v-if="tasks.loading">Loading tasks…</template>
+                <template v-else>No tasks for {{ clients.currentClient?.name ?? 'this client' }} yet.</template>
               </td>
             </tr>
           </tbody>
@@ -846,12 +928,12 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
                 <td :colspan="totalCols - 1" class="px-3 py-1.5">
                   <input
                     v-model="newTitleByStatus[g.value]"
-                    autofocus
+                    v-focus
                     type="text"
                     placeholder="Task title — Enter to add, Esc to cancel"
                     class="w-full bg-transparent outline-none text-sm placeholder:text-base-content/40"
                     @keydown.enter="commitNew(g.value)"
-                    @keydown.esc="adderOpenFor = null"
+                    @keydown.esc="cancelNew(g.value)"
                     @blur="commitNew(g.value)"
                   />
                 </td>
@@ -1078,16 +1160,26 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
                     <span v-else class="text-base-content/35 text-sm">—</span>
                   </td>
 
-                  <!-- chat (activity-log proxy until Comms ships) -->
+                  <!-- chat (task_comments count; primary + dot when unread) -->
                   <td :class="[cellBase, 'px-3 py-1.5']">
                     <button
-                      v-if="chatCount(t) > 0"
+                      v-if="(commentCounts[t.id] ?? 0) > 0"
                       type="button"
-                      class="inline-flex items-center gap-1 text-xs text-base-content/70 hover:text-base-content transition-colors"
+                      class="inline-flex items-center gap-1 text-xs transition-colors"
+                      :class="
+                        (commentUnread[t.id] ?? 0) > 0
+                          ? 'text-primary font-semibold'
+                          : 'text-base-content/70 hover:text-base-content'
+                      "
+                      :title="chatTitle(t)"
                       @click="openDrawer(t)"
                     >
                       <MessageSquare class="w-3 h-3" :stroke-width="1.75" />
-                      {{ chatCount(t) }}
+                      {{ commentCounts[t.id] }}
+                      <span
+                        v-if="(commentUnread[t.id] ?? 0) > 0"
+                        class="w-1.5 h-1.5 rounded-full bg-primary"
+                      />
                     </button>
                     <span v-else class="text-base-content/35 text-sm">—</span>
                   </td>
@@ -1166,7 +1258,7 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
                       <template v-else-if="d.field_type === 'url'">
                         <input
                           v-if="isEditingUrl(t.id, d.key)"
-                          autofocus
+                          v-focus
                           :value="(customValue(t, d.key) as string) ?? ''"
                           type="url"
                           placeholder="https://…"

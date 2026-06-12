@@ -652,10 +652,13 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     const i = allMessages.value.findIndex((m) => m.id === id)
     const prev = i !== -1 ? { ...allMessages.value[i] } : null
     if (i !== -1) allMessages.value[i] = { ...allMessages.value[i], ...patch }
-    const { error } = await supabase.from('messages').update(patch).eq('id', id)
-    if (error) {
-      if (prev && i !== -1) allMessages.value[i] = prev
-      console.warn('[comms] patchMessage:', error.message)
+    // .select() so an RLS-filtered 0-row update (not the author / not a
+    // manager) is detected and rolled back — PostgREST returns no error for it.
+    const { data, error } = await supabase.from('messages').update(patch).eq('id', id).select('id')
+    if (error || (data ?? []).length === 0) {
+      const j = allMessages.value.findIndex((m) => m.id === id)
+      if (prev && j !== -1) allMessages.value[j] = prev
+      console.warn('[comms] patchMessage:', error?.message ?? 'no rows updated (RLS)')
     }
   }
   const togglePin = (m: CommsMessage) => patchMessage(m.id, { is_pinned: !m.is_pinned })
@@ -701,8 +704,25 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     if (opts.statusKey && opts.statusKey !== task.status) {
       void tasks.setStatus(task.id, opts.statusKey)
     }
-    // Best-effort back-link (works for the author / managers per RLS).
-    void patchMessage(m.id, { linked_task_id: task.id })
+    // Back-link so the task card renders under the message for everyone.
+    // messages_update RLS only covers the author/managers, so this goes
+    // through a security-definer RPC gated on channel visibility instead —
+    // a Task action from anyone in the channel must persist, not just look
+    // persisted.
+    const i = allMessages.value.findIndex((x) => x.id === m.id)
+    const prevLink = i !== -1 ? allMessages.value[i].linked_task_id : null
+    if (i !== -1) allMessages.value[i] = { ...allMessages.value[i], linked_task_id: task.id }
+    const { data: linked, error: linkErr } = await supabase.rpc('link_task_to_message', {
+      p_message_id: m.id,
+      p_task_id: task.id,
+    })
+    if (linkErr || !linked) {
+      // Roll back the optimistic link (someone linked a task first, or the
+      // function rejected it); the task itself still exists on the board.
+      const j = allMessages.value.findIndex((x) => x.id === m.id)
+      if (j !== -1) allMessages.value[j] = { ...allMessages.value[j], linked_task_id: prevLink }
+      console.warn('[comms] link_task_to_message:', linkErr?.message ?? 'link not applied')
+    }
     return task.id
   }
 

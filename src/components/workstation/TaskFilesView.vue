@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   Paperclip,
   FileText,
@@ -18,6 +18,7 @@ import {
 import { useTasksStore } from '@/stores/tasks'
 import { useAuthStore } from '@/stores/auth'
 import { useClientsStore } from '@/stores/clients'
+import { useTeamStore } from '@/stores/team'
 import {
   signedAttachmentUrl,
   isImage,
@@ -29,6 +30,7 @@ import ImageLightbox from '@/components/workstation/ImageLightbox.vue'
 const tasks = useTasksStore()
 const auth = useAuthStore()
 const clients = useClientsStore()
+const team = useTeamStore()
 
 interface FileRow extends TaskAttachmentMeta {
   taskId: string
@@ -92,6 +94,7 @@ async function activate(f: FileRow) {
 }
 
 function openParentTask(f: FileRow) {
+  openShareId.value = null
   tasks.selectTask(f.taskId)
 }
 
@@ -101,11 +104,30 @@ function iconFor(f: TaskAttachmentMeta) {
   return FileIcon
 }
 
+// Resolve uploader names from the team profile cache; lazy-fetch any we don't
+// have yet so other people's uploads don't all render as "—".
+watch(
+  allFiles,
+  (list) => {
+    const missing = [
+      ...new Set(
+        list
+          .map((f) => f.uploaded_by)
+          .filter((id): id is string => !!id && !team.profiles[id])
+      )
+    ]
+    if (missing.length) void team.fetchProfiles(missing)
+  },
+  { immediate: true }
+)
+
 function uploaderName(f: FileRow) {
-  if (f.uploaded_by && auth.user && f.uploaded_by === auth.user.id) {
+  if (!f.uploaded_by) return 'Unknown'
+  if (auth.user && f.uploaded_by === auth.user.id) {
     return auth.fullName || auth.user.email || 'You'
   }
-  return f.uploaded_by ? '—' : 'Unknown'
+  const p = team.profiles[f.uploaded_by]
+  return p?.full_name || p?.email || '—'
 }
 function uploaderInitials(name: string) {
   return (
@@ -121,6 +143,24 @@ function uploaderInitials(name: string) {
 function toggleShare(id: string) {
   openShareId.value = openShareId.value === id ? null : id
 }
+
+// Dismiss the share popover on click-outside or Escape.
+function onDocClick(e: MouseEvent) {
+  if (!openShareId.value) return
+  const target = e.target as HTMLElement | null
+  if (!target?.closest('[data-share-root]')) openShareId.value = null
+}
+function onDocKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') openShareId.value = null
+}
+onMounted(() => {
+  document.addEventListener('click', onDocClick)
+  document.addEventListener('keydown', onDocKeydown)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocClick)
+  document.removeEventListener('keydown', onDocKeydown)
+})
 
 const connectors = [
   { key: 'slack', label: 'Slack', icon: Slack, soon: true },
@@ -226,6 +266,7 @@ const connectors = [
 
               <button
                 type="button"
+                data-share-root
                 class="btn btn-ghost btn-xs gap-1 shrink-0"
                 :aria-expanded="openShareId === f.id"
                 @click="toggleShare(f.id)"
@@ -241,6 +282,7 @@ const connectors = [
         <!-- share popover (positioned to bottom-right of card) -->
         <div
           v-if="openShareId === f.id"
+          data-share-root
           class="absolute right-2 top-full mt-1 w-48 rounded-lg bg-base-100 border border-base-300 shadow-lg z-20 py-1"
           role="menu"
           @click.stop

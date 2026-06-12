@@ -1,4 +1,4 @@
-import { ref, watch } from 'vue'
+import { onScopeDispose, ref, watch } from 'vue'
 
 /**
  * Excel-style column resize state, persisted to localStorage.
@@ -69,6 +69,11 @@ export function useColumnWidths(storageKey: string) {
    * stop propagation; this attaches mousemove/mouseup to the document so
    * the cursor can travel outside the cell.
    */
+  // Cleanup hook for the active drag, so listeners and the body cursor are
+  // released even if the component unmounts mid-drag.
+  let endActiveDrag: (() => void) | null = null
+  onScopeDispose(() => endActiveDrag?.())
+
   function beginDrag(
     key: string,
     e: MouseEvent,
@@ -98,10 +103,12 @@ export function useColumnWidths(storageKey: string) {
       document.body.style.userSelect = ''
       isDragging.value = false
       draggingKey.value = null
+      endActiveDrag = null
     }
 
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
+    endActiveDrag = onUp
   }
 
   return {

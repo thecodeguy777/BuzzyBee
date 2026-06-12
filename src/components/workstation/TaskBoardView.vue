@@ -82,23 +82,47 @@ function readNewPriorityOrder(toEl: HTMLElement, taskId: string, status: TaskSta
   return 0
 }
 
+// Sortable physically moves the dragged node, but Vue's keyed v-for still owns
+// it. Put the node back where Vue left it before mutating state, so the keyed
+// re-render is the single source of truth — otherwise a failed drop leaves the
+// card stuck in the wrong column, and successful moves can ghost/duplicate.
+function revertSortableMove(evt: Sortable.SortableEvent) {
+  const { item, from, oldIndex } = evt
+  item.remove()
+  const siblings = Array.from(from.querySelectorAll(':scope > [data-task-id]'))
+  const ref = siblings[oldIndex ?? siblings.length] ?? null
+  if (ref) {
+    from.insertBefore(item, ref)
+  } else if (siblings.length) {
+    const last = siblings[siblings.length - 1]
+    from.insertBefore(item, last.nextSibling)
+  } else {
+    from.insertBefore(item, from.firstChild)
+  }
+}
+
 async function onSortEnd(evt: Sortable.SortableEvent) {
   const taskId = evt.item.getAttribute('data-task-id') ?? ''
   const toStatus =
     (evt.to.getAttribute('data-status') as TaskStatus) ??
     (evt.to.parentElement?.getAttribute('data-status') as TaskStatus)
+
+  // Read the dropped position from the DOM *before* reverting Sortable's move.
+  const newPriorityOrder =
+    taskId && toStatus ? readNewPriorityOrder(evt.to as HTMLElement, taskId, toStatus) : 0
+  revertSortableMove(evt)
   if (!taskId || !toStatus) return
 
   const dragged = tasks.tasks.find((t) => t.id === taskId)
   if (!dragged) return
 
-  const newPriorityOrder = readNewPriorityOrder(evt.to as HTMLElement, taskId, toStatus)
   const patch: Partial<Task> = { priority_order: newPriorityOrder }
   if (dragged.status !== toStatus) patch.status = toStatus
 
   try {
     await tasks.updateTask(taskId, patch)
   } catch (e) {
+    boardError.value = `Couldn't move the task: ${(e as Error).message}`
     console.warn('[board] move failed:', (e as Error).message)
   }
 }
@@ -119,6 +143,8 @@ function buildSortables() {
         ghostClass: 'bb-sort-ghost',
         chosenClass: 'bb-sort-chosen',
         dragClass: 'bb-sort-drag',
+        // Only task cards are draggable — not the "Drop tasks here." placeholder.
+        draggable: '[data-task-id]',
         // Don't start a drag from the pencil button or input.
         filter: '[data-no-drag]',
         preventOnFilter: false,
@@ -238,11 +264,12 @@ async function quickAdd(status: TaskStatus) {
   if (!title || !clients.currentClientId) return
   newTitleByCol.value[status] = ''
   try {
-    const created = await tasks.createTask({ title })
-    if (created.status !== status) {
-      await tasks.updateTask(created.id, { status })
-    }
+    // Create directly in this column — no default-column flash, and
+    // priority_order is computed against the right column's tasks.
+    await tasks.createTask({ title, status })
   } catch (e) {
+    newTitleByCol.value[status] = title // let the user retry
+    boardError.value = `Couldn't add "${title}": ${(e as Error).message}`
     console.warn('[board] quickAdd:', (e as Error).message)
   }
 }

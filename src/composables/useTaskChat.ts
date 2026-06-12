@@ -77,13 +77,16 @@ export function useTaskChat(taskId: Ref<string | null | undefined>) {
         .eq('task_id', id)
         .order('created_at', { ascending: true })
       if (error) throw error
+      // Stale guard: if the open task changed while this request was in
+      // flight, don't overwrite the new task's conversation.
+      if (activeId !== id) return
       messages.value = (data ?? []) as TaskComment[]
       void hydrateProfiles()
     } catch (e) {
       console.warn('[task chat] loadHistory:', (e as Error).message)
-      if (!opts.silent) messages.value = []
+      if (!opts.silent && activeId === id) messages.value = []
     } finally {
-      if (!opts.silent) loading.value = false
+      if (!opts.silent && activeId === id) loading.value = false
     }
   }
 
@@ -250,6 +253,7 @@ export function useTaskChat(taskId: Ref<string | null | undefined>) {
       .eq('task_id', id)
       .eq('user_id', uid)
       .maybeSingle()
+    if (activeId !== id) return // task switched while the request was in flight
     lastReadAt.value = (data as { last_read_at: string } | null)?.last_read_at ?? null
   }
 
@@ -316,6 +320,7 @@ export function useTaskChat(taskId: Ref<string | null | undefined>) {
       await teardown()
       messages.value = []
       lastReadAt.value = null
+      loading.value = false
       activeId = null
       // Bail if an even-newer switch arrived during teardown.
       if (id && token === setupToken) await setup(id, token)

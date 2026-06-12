@@ -202,7 +202,7 @@ function isNew(t: Task): boolean {
 
       <div v-if="shown.length === 0" class="text-center text-sm text-base-content/40 py-10">
         <span class="block">No tasks here yet.</span>
-        <span class="block text-xs mt-1">Hover a message → <ArrowUpRight class="inline w-3 h-3" /> Task, react ✅, or type <span class="font-mono">/task</span>.</span>
+        <span class="block text-xs mt-1">Hover a message → <ArrowUpRight class="inline w-3 h-3" /> Task, or type <span class="font-mono">/task</span>.</span>
       </div>
     </div>
   </aside>

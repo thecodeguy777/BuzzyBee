@@ -15,24 +15,32 @@ import { useProfileHover } from '@/composables/useProfileHover'
 import type { CommsMessage } from '@/composables/useChannelStream'
 import type { Task } from '@/stores/tasks'
 
-const props = defineProps<{
-  message: CommsMessage
-  reactions: { emoji: string; count: number; mine: boolean }[]
-  replyCount: number
-  lastReplyAt?: string | null
-  linkedTask?: Task | null
-  canManage?: boolean
-  /** Compact follow-up of the previous message from the same author. */
-  continuation?: boolean
-  /** Members whose last-read position is this message ("seen by" honeycomb). */
-  seen?: { id: string; name: string; avatarUrl: string | null }[]
-  /** Pulse this line — you haven't seen it yet. */
-  unseen?: boolean
-  /** This channel maps to a CRM company/deal — offer "Log to CRM". */
-  canLogCrm?: boolean
-  /** Offer "turn into task" (off in personal DMs, which have no board). */
-  canTask?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    message: CommsMessage
+    reactions: { emoji: string; count: number; mine: boolean }[]
+    replyCount: number
+    lastReplyAt?: string | null
+    linkedTask?: Task | null
+    canManage?: boolean
+    /** Compact follow-up of the previous message from the same author. */
+    continuation?: boolean
+    /** Members whose last-read position is this message ("seen by" honeycomb). */
+    seen?: { id: string; name: string; avatarUrl: string | null }[]
+    /** Pulse this line — you haven't seen it yet. */
+    unseen?: boolean
+    /** This channel maps to a CRM company/deal — offer "Log to CRM". */
+    canLogCrm?: boolean
+    /** Offer "turn into task" (off in personal DMs, which have no board). */
+    canTask?: boolean
+  }>(),
+  {
+    // Vue casts absent Boolean props to false, so without an explicit default
+    // the Task button would be hidden on every surface that doesn't bind
+    // :can-task — only DMs opt out by passing false.
+    canTask: true,
+  }
+)
 
 const emit = defineEmits<{
   (e: 'react', emoji: string): void
@@ -100,8 +108,13 @@ function react(e: string) {
       <button class="w-7 h-7 rounded-md hover:bg-base-200 flex items-center justify-center text-base-content/60" title="Reply in thread" @click="emit('open-thread')">
         <MessageSquare class="w-4 h-4" :stroke-width="1.75" />
       </button>
-      <button v-if="canTask !== false" class="inline-flex items-center gap-1 h-7 px-2 rounded-md bg-primary/10 text-primary text-xs font-semibold" title="Turn into task" @click="emit('make-task')">
-        <CheckSquare class="w-3.5 h-3.5" :stroke-width="1.75" /> Task
+      <button
+        v-if="canTask"
+        class="w-7 h-7 rounded-md hover:bg-primary/10 flex items-center justify-center text-primary"
+        title="Turn into task"
+        @click="emit('make-task')"
+      >
+        <CheckSquare class="w-4 h-4" :stroke-width="1.75" />
       </button>
       <button
         v-if="canLogCrm"

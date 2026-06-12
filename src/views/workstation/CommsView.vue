@@ -823,21 +823,11 @@ async function onTaskCreate(payload: {
     commsError.value = (e as Error).message
   }
 }
-// React handler — *adding* a ✅ to a message also spins up a quick linked task.
-async function onReact(m: CommsMsg, emoji: string) {
-  const hadMine = stream.reactionList(m.id).some((r) => r.emoji === emoji && r.mine)
+// React handler — reactions are just reactions. Turning a message into a task
+// is the explicit hover "Task" button / "/task" only (a ✅ used to auto-create
+// a task, which read as "I approve" and surprised people with board entries).
+function onReact(m: CommsMsg, emoji: string) {
   stream.toggleReaction(m.id, emoji)
-  if (emoji === '✅' && !hadMine && !m.linked_task_id) {
-    try {
-      const id = await stream.createTaskFromMessage(m)
-      if (id) {
-        activityOpen.value = true
-        fireToast('Quick task created', `From ✅ · #${channels.currentChannel?.name ?? ''}`)
-      }
-    } catch (e) {
-      commsError.value = (e as Error).message
-    }
-  }
 }
 function openTask(taskId: string) {
   tasks.selectTask(taskId)

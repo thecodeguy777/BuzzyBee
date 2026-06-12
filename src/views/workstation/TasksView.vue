@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useTasksStore, type Task } from '@/stores/tasks'
 import { useClientsStore } from '@/stores/clients'
 import { useStatusesStore } from '@/stores/statuses'
@@ -31,14 +31,18 @@ const newError = ref<string | null>(null)
 // Brief success-ring pulse on the quick-add card after a task is created.
 const justAdded = ref(false)
 let justAddedTimer: ReturnType<typeof setTimeout> | null = null
+onBeforeUnmount(() => {
+  if (justAddedTimer) clearTimeout(justAddedTimer)
+})
 
 const VIEW_KEY = 'buzzybee.workstation.tasks-view'
 type ViewMode = 'overview' | 'table' | 'board' | 'calendar' | 'files'
-const stored = (typeof window === 'undefined'
-  ? null
-  : window.localStorage.getItem(VIEW_KEY)) as ViewMode | 'list' | null
+const VIEW_MODES: ViewMode[] = ['overview', 'table', 'board', 'calendar', 'files']
+const stored = typeof window === 'undefined' ? null : window.localStorage.getItem(VIEW_KEY)
+// Validate the persisted value — a stale/corrupt entry (or the retired 'list'
+// mode) would otherwise land in a view with no tab highlighted.
 const view = ref<ViewMode>(
-  stored === 'list' || !stored ? 'overview' : (stored as ViewMode)
+  VIEW_MODES.includes(stored as ViewMode) ? (stored as ViewMode) : 'overview'
 )
 watch(view, (v) => {
   if (typeof window !== 'undefined') window.localStorage.setItem(VIEW_KEY, v)

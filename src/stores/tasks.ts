@@ -133,8 +133,14 @@ export const useTasksStore = defineStore('tasks', () => {
     tasks.value.find((t) => t.id === selectedTaskId.value) ?? null
   )
 
+  // Monotonic request ids so a slow, stale response can't overwrite the
+  // result of a newer fetch (or newer optimistic/realtime state).
+  let fetchSeq = 0
+  let assigneesSeq = 0
+
   async function fetchAll() {
     if (!auth.isAuthenticated) return
+    const seq = ++fetchSeq
     loading.value = true
     error.value = null
     try {
@@ -144,12 +150,12 @@ export const useTasksStore = defineStore('tasks', () => {
         .order('priority_order', { ascending: true })
         .order('created_at', { ascending: false })
       if (err) throw err
-      tasks.value = (data ?? []) as Task[]
+      if (seq === fetchSeq) tasks.value = (data ?? []) as Task[]
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to load tasks.'
       console.warn('[tasks] fetchAll:', error.value)
     } finally {
-      loading.value = false
+      if (seq === fetchSeq) loading.value = false
     }
     // Pull task_assignees in parallel — separate query because RLS lives on
     // its own table.
@@ -157,6 +163,7 @@ export const useTasksStore = defineStore('tasks', () => {
   }
 
   async function fetchAssignees() {
+    const seq = ++assigneesSeq
     const { data, error: err } = await supabase
       .from('task_assignees')
       .select('*')
@@ -164,6 +171,7 @@ export const useTasksStore = defineStore('tasks', () => {
       console.warn('[tasks] fetchAssignees:', err.message)
       return
     }
+    if (seq !== assigneesSeq) return
     const grouped: Record<string, TaskAssignee[]> = {}
     for (const r of (data ?? []) as TaskAssignee[]) {
       if (!grouped[r.task_id]) grouped[r.task_id] = []
@@ -313,6 +321,7 @@ export const useTasksStore = defineStore('tasks', () => {
     priority?: 1 | 2 | 3 | 4
     due_on?: string | null
     assignee_id?: string | null
+    status?: TaskStatus
   }) {
     if (!auth.user) throw new Error('Not authenticated')
     const pid = input.project_id ?? projects.currentProjectId
@@ -322,11 +331,12 @@ export const useTasksStore = defineStore('tasks', () => {
     if (!cid) throw new Error('No client selected')
     const client = clients.clients.find((c) => c.id === cid)
 
-    // New tasks land at the top of the target project's first column. Status
-    // keys are per-project — 'todo' only exists where a project kept the
-    // default set, and the target project isn't necessarily the current one
-    // (e.g. tasks created from a CRM deal).
-    const statusKey = statuses.defaultKey(pid) ?? 'todo'
+    // New tasks land at the top of the target column — the caller's status if
+    // given (e.g. a board column's quick-add), else the project's first
+    // column. Status keys are per-project — 'todo' only exists where a
+    // project kept the default set, and the target project isn't necessarily
+    // the current one (e.g. tasks created from a CRM deal).
+    const statusKey = input.status ?? statuses.defaultKey(pid) ?? 'todo'
     const minOrder = Math.min(
       0,
       ...tasks.value
@@ -382,7 +392,11 @@ export const useTasksStore = defineStore('tasks', () => {
       if (i !== -1) tasks.value[i] = row
       return row
     } catch (e) {
-      if (idx !== -1 && prev) tasks.value[idx] = prev
+      // Re-find by id — the array may have shifted (realtime insert/delete)
+      // while the request was in flight, so the captured index can point at
+      // a different task.
+      const j = tasks.value.findIndex((t) => t.id === id)
+      if (j !== -1 && prev) tasks.value[j] = prev
       throw e
     }
   }
@@ -456,6 +470,7 @@ export const useTasksStore = defineStore('tasks', () => {
         startRealtime()
       } else {
         tasks.value = []
+        assigneesByTask.value = {}
         selectedTaskId.value = null
         void stopRealtime()
       }

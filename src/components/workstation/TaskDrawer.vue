@@ -80,6 +80,9 @@ function isNearBottom() {
 const pendingInitialScroll = ref(true)
 watch(taskId, () => {
   pendingInitialScroll.value = true
+  // The composer draft belongs to the previous task's conversation — drop it
+  // so it can't be sent into the newly opened task by accident.
+  draft.value = ''
 })
 
 const typingLabel = computed(() => {
@@ -216,10 +219,27 @@ function syncFromTask() {
   saveState.value = 'idle'
 }
 
-// Sync local fields from t whenever the selected task changes (open/realtime).
-// We re-sync on every t change; if the user is mid-edit on a field, the next
-// blur still wins because saveX() runs against the latest local value.
-watch(t, () => syncFromTask(), { immediate: true })
+// Full sync when a different task opens. For same-task store updates (our own
+// optimistic save, a realtime update from a teammate, or an error rollback),
+// merge field-by-field: a field is only refreshed when its local value still
+// matches the *previous* store value — if the user has diverged (mid-edit,
+// unsaved), their input is kept instead of being clobbered.
+watch(
+  t,
+  (nv, ov) => {
+    if (!nv) return
+    if (!ov || nv.id !== ov.id) {
+      syncFromTask()
+      return
+    }
+    if (title.value === ov.title) title.value = nv.title
+    if (description.value === (ov.description ?? '')) description.value = nv.description ?? ''
+    if (status.value === ov.status) status.value = nv.status
+    if (priority.value === ov.priority) priority.value = nv.priority
+    if (dueOn.value === (ov.due_on ?? '')) dueOn.value = nv.due_on ?? ''
+  },
+  { immediate: true }
+)
 
 function close() {
   tasks.selectTask(null)
@@ -238,8 +258,8 @@ async function patch(patchObj: Record<string, unknown>) {
   } catch (e) {
     console.warn('[task drawer] save failed:', (e as Error).message)
     saveState.value = 'idle'
-    // Roll back local fields to whatever the store has now.
-    syncFromTask()
+    // The store rolls the task back on failure; the merge watch above picks
+    // that up per-field without clobbering whatever else the user is typing.
   }
 }
 
@@ -468,7 +488,9 @@ async function pickPriority(value: 1 | 2 | 3 | 4) {
 
 function onEsc(e: KeyboardEvent) {
   if (e.key === 'Escape' && open.value) {
-    if (confirmDelete.value) confirmDelete.value = false
+    // Innermost layer first: open popovers, then armed confirms, then the drawer.
+    if (assigneeMenuOpen.value) assigneeMenuOpen.value = false
+    else if (confirmDelete.value) confirmDelete.value = false
     else close()
   }
 }
@@ -478,6 +500,11 @@ onUnmounted(() => document.removeEventListener('keydown', onEsc))
 watch(open, (is) => {
   if (typeof document === 'undefined') return
   document.body.style.overflow = is ? 'hidden' : ''
+})
+// If the drawer unmounts while open (route change), release the scroll lock —
+// otherwise the whole app stays unscrollable.
+onUnmounted(() => {
+  if (typeof document !== 'undefined') document.body.style.overflow = ''
 })
 
 function fmtTimestamp(ts: string) {
@@ -1056,7 +1083,7 @@ function openDuePicker(triggerEl: HTMLElement) {
             <ul v-if="showHistory" class="mt-3 space-y-1 text-xs">
               <li
                 v-for="(h, i) in [...t.activity_log].reverse()"
-                :key="i"
+                :key="t.activity_log.length - 1 - i"
                 class="flex items-start gap-3 py-0.5"
               >
                 <span class="text-base-content/40 tabular-nums shrink-0 w-28 truncate">

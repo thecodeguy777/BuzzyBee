@@ -96,10 +96,34 @@ function setDayRef(key: string, el: Element | any) {
   else dayRefs.value.delete(key)
 }
 
+const calError = ref<string | null>(null)
+
+// Sortable physically moves the dragged node, but Vue's keyed v-for still owns
+// it. Put the node back where Vue left it before mutating state, so the keyed
+// re-render is the single source of truth — otherwise a failed (or no-op) drop
+// leaves the card stuck in the wrong day, and successful moves can ghost.
+function revertSortableMove(evt: Sortable.SortableEvent) {
+  const { item, from, oldIndex } = evt
+  item.remove()
+  const siblings = Array.from(from.querySelectorAll(':scope > [data-task-id]'))
+  const ref = siblings[oldIndex ?? siblings.length] ?? null
+  if (ref) {
+    from.insertBefore(item, ref)
+  } else if (siblings.length) {
+    const last = siblings[siblings.length - 1]
+    from.insertBefore(item, last.nextSibling)
+  } else {
+    from.insertBefore(item, from.firstChild)
+  }
+}
+
 async function onSortEnd(evt: Sortable.SortableEvent) {
   const taskId = evt.item.getAttribute('data-task-id') ?? ''
   const target = (evt.to as HTMLElement)
-  const newDue = target.getAttribute('data-day') ?? null
+  // The Unscheduled rail renders data-day="" — coerce empty string to null so
+  // we never send due_on: '' (Postgres rejects '' for a date column).
+  const newDue = target.getAttribute('data-day') || null
+  revertSortableMove(evt)
   if (!taskId) return
 
   const t = tasks.tasks.find((x) => x.id === taskId)
@@ -110,6 +134,7 @@ async function onSortEnd(evt: Sortable.SortableEvent) {
   try {
     await tasks.updateTask(taskId, { due_on: newDue })
   } catch (e) {
+    calError.value = `Couldn't move the task: ${(e as Error).message}`
     console.warn('[calendar] drop failed:', (e as Error).message)
   }
 }
@@ -128,6 +153,9 @@ function buildSortables() {
         ghostClass: 'bb-sort-ghost',
         chosenClass: 'bb-sort-chosen',
         dragClass: 'bb-sort-drag',
+        // Only task chips are draggable — not "+N more", "Show less", or the
+        // quick-add input that share the same container.
+        draggable: '[data-task-id]',
         filter: '[data-no-drag]',
         preventOnFilter: false,
         onEnd: onSortEnd
@@ -142,6 +170,7 @@ function buildSortables() {
         ghostClass: 'bb-sort-ghost',
         chosenClass: 'bb-sort-chosen',
         dragClass: 'bb-sort-drag',
+        draggable: '[data-task-id]',
         filter: '[data-no-drag]',
         preventOnFilter: false,
         onEnd: onSortEnd
@@ -242,6 +271,7 @@ async function submitQuickAdd(key: string) {
     const created = await tasks.createTask({ title, due_on: key })
     if (!created.due_on) await tasks.updateTask(created.id, { due_on: key })
   } catch (e) {
+    calError.value = `Couldn't add "${title}": ${(e as Error).message}`
     console.warn('[calendar] quick-add failed:', (e as Error).message)
   }
 }
@@ -286,6 +316,21 @@ function statusLabel(t: Task) {
   <div class="flex gap-4 -mx-4 px-4">
     <!-- Calendar grid -->
     <div class="flex-1 min-w-0 bg-base-100 rounded-xl border border-base-300 shadow-md overflow-hidden">
+      <!-- error banner -->
+      <div
+        v-if="calError"
+        class="flex items-center justify-between gap-3 px-4 py-2 bg-error/10 border-b border-error/20 text-sm text-error"
+      >
+        <span>{{ calError }}</span>
+        <button
+          type="button"
+          class="text-xs font-medium underline-offset-2 hover:underline"
+          @click="calError = null"
+        >
+          dismiss
+        </button>
+      </div>
+
       <!-- overdue banner -->
       <div
         v-if="overdueCount > 0"

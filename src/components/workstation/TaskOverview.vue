@@ -100,6 +100,7 @@ const name = ref('')
 const description = ref('')
 const status = ref<Project['status']>('active')
 const saveState = ref<'idle' | 'saving' | 'saved'>('idle')
+const confirmDelete = ref(false)
 let savedTimer: ReturnType<typeof setTimeout> | undefined
 
 function syncFromProject() {
@@ -109,7 +110,27 @@ function syncFromProject() {
   status.value = p.value.status
   saveState.value = 'idle'
 }
-watch(p, () => syncFromProject(), { immediate: true })
+// Full sync (and reset of transient UI state) when a *different* project is
+// selected. For same-project store updates (our own save, realtime), merge
+// field-by-field so an unsaved edit in one field isn't clobbered by saving
+// another.
+watch(
+  p,
+  (nv, ov) => {
+    if (!nv) return
+    if (!ov || nv.id !== ov.id) {
+      syncFromProject()
+      // A "Yes, delete" armed on the previous project must not carry over.
+      confirmDelete.value = false
+      showMemberPicker.value = false
+      return
+    }
+    if (name.value === ov.name) name.value = nv.name
+    if (description.value === (ov.description ?? '')) description.value = nv.description ?? ''
+    if (status.value === ov.status) status.value = nv.status
+  },
+  { immediate: true }
+)
 
 async function saveField(patch: Partial<Project>) {
   if (!p.value) return
@@ -208,7 +229,6 @@ async function createProject() {
   }
 }
 
-const confirmDelete = ref(false)
 async function destroy() {
   if (!p.value) return
   try {

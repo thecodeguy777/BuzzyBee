@@ -178,7 +178,10 @@ export const useTaskFieldsStore = defineStore('taskFields', () => {
       if (i !== -1) defs.value[i] = row
       return row
     } catch (e) {
-      if (idx !== -1 && prev) defs.value[idx] = prev
+      // Re-find by id — realtime events may have shifted the array while the
+      // request was in flight.
+      const j = defs.value.findIndex((d) => d.id === id)
+      if (j !== -1 && prev) defs.value[j] = prev
       throw e
     }
   }
