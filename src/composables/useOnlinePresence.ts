@@ -10,7 +10,7 @@
  * entries) — this is "in the building".
  */
 
-import { computed, ref } from 'vue'
+import { computed, effectScope, ref, watch } from 'vue'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth'
@@ -104,11 +104,37 @@ async function stop() {
   ready.value = false
 }
 
-export function useOnlinePresence() {
-  const auth = useAuthStore()
+// Wire exactly once, in a detached scope: components call this during setup
+// — often BEFORE the session has restored — so joining must be reactive to
+// auth, and must survive any individual component unmounting.
+let wired = false
+function wire() {
+  if (wired) return
+  wired = true
+  const scope = effectScope(true) // detached — never disposed
+  scope.run(() => {
+    const auth = useAuthStore()
+    watch(
+      () => auth.user?.id ?? null,
+      (id) => {
+        if (id) start(id)
+        else void stop()
+      },
+      { immediate: true },
+    )
+    // The profile (name/role/avatar) loads after the session — re-broadcast
+    // when it lands so the list doesn't show fallbacks.
+    watch(
+      () => [auth.profile?.full_name, auth.profile?.role, auth.profile?.avatar_url],
+      () => {
+        if (channel && subscribed && trackedFor) void channel.track(payload(trackedFor))
+      },
+    )
+  })
+}
 
-  // Auto-join on first call when authenticated (watch handles later changes).
-  if (auth.user?.id && trackedFor !== auth.user.id) start(auth.user.id)
+export function useOnlinePresence() {
+  wire()
 
   const list = computed(() =>
     Object.values(online.value).sort((a, b) => a.name.localeCompare(b.name)))
