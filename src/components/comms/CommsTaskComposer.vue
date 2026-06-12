@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, inject, onMounted } from 'vue'
-import { CheckSquare, ChevronDown, User as UserIcon, Link2, Hash } from 'lucide-vue-next'
+import { ref, computed, inject, onMounted, watch } from 'vue'
+import { CheckSquare, ChevronDown, User as UserIcon, Link2, Hash, X } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
 import { useTeamStore } from '@/stores/team'
 import { useStatusesStore } from '@/stores/statuses'
@@ -11,7 +11,7 @@ import type { CommsMessage } from '@/composables/useChannelStream'
 
 const props = defineProps<{ message: CommsMessage }>()
 const emit = defineEmits<{
-  create: [payload: { title: string; statusKey?: string; assignee_id: string | null; due_on: string | null; priority: 1 | 2 | 3 | 4 }]
+  create: [payload: { title: string; projectId?: string; statusKey?: string; assignee_id: string | null; due_on: string | null; priority: 1 | 2 | 3 | 4 }]
   close: []
 }>()
 
@@ -24,7 +24,9 @@ function stripHtml(s: string) {
   return s.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim()
 }
 
-const project = computed(() => (stream ? stream.projectsForMessage(props.message)[0] ?? null : null))
+const projectOptions = computed(() => (stream ? stream.projectsForMessage(props.message) : []))
+const projectId = ref<string | null>(null)
+const project = computed(() => projectOptions.value.find((p) => p.id === projectId.value) ?? null)
 const projectStatuses = computed(() => (project.value ? statuses.forProject(project.value.id) : []))
 const channelName = computed(() => channels.channels.find((c) => c.id === props.message.channel_id)?.name ?? '')
 
@@ -32,16 +34,23 @@ const title = ref((stripHtml(props.message.body) || 'New task').slice(0, 140))
 const statusKey = ref<string | undefined>(undefined)
 const assignee = ref<string | null>(null)
 const priority = ref<'Low' | 'Medium' | 'High'>('Medium')
-const due = ref<'Today' | 'Tomorrow' | 'None'>('Today')
-const link = ref(true)
+const due = ref(ymd(new Date()))
 const asgOpen = ref(false)
 const titleInput = ref<HTMLInputElement | null>(null)
 
+function defaultStatus() {
+  return projectStatuses.value.find((s) => !s.is_done && !s.is_cancelled)?.key ?? projectStatuses.value[0]?.key
+}
+
 onMounted(() => {
-  statusKey.value = projectStatuses.value.find((s) => !s.is_done && !s.is_cancelled)?.key ?? projectStatuses.value[0]?.key
+  projectId.value = projectOptions.value[0]?.id ?? null
+  statusKey.value = defaultStatus()
   titleInput.value?.focus()
   titleInput.value?.select()
 })
+
+// Columns are per-project, so the picked status must follow the picked project.
+watch(projectId, () => { statusKey.value = defaultStatus() })
 
 const assignees = computed(() => (team.myTeam.length ? team.myTeam : Object.values(team.profiles)))
 const assigneeProfile = computed(() => assignees.value.find((m) => m.id === assignee.value) ?? null)
@@ -56,10 +65,14 @@ function ymd(d: Date) {
 }
 function submit() {
   const prio = priority.value === 'High' ? 2 : priority.value === 'Low' ? 4 : 3
-  let due_on: string | null = null
-  if (due.value === 'Today') due_on = ymd(new Date())
-  else if (due.value === 'Tomorrow') { const d = new Date(); d.setDate(d.getDate() + 1); due_on = ymd(d) }
-  emit('create', { title: title.value.trim() || 'New task', statusKey: statusKey.value, assignee_id: assignee.value, due_on, priority: prio as 1 | 2 | 3 | 4 })
+  emit('create', {
+    title: title.value.trim() || 'New task',
+    projectId: projectId.value ?? undefined,
+    statusKey: statusKey.value,
+    assignee_id: assignee.value,
+    due_on: due.value || null,
+    priority: prio as 1 | 2 | 3 | 4,
+  })
 }
 </script>
 
@@ -91,6 +104,17 @@ function submit() {
               class="w-full px-3 py-2 rounded-lg border border-base-300 bg-base-200/40 text-sm font-medium outline-none focus:border-primary"
               @keydown.enter="submit"
             />
+          </div>
+
+          <!-- project -->
+          <div v-if="projectOptions.length > 1">
+            <div class="text-[0.65rem] font-bold uppercase tracking-wider text-base-content/40 mb-1.5">Project</div>
+            <select
+              v-model="projectId"
+              class="w-full px-2.5 py-2 rounded-lg border border-base-300 bg-base-200/40 text-sm font-medium outline-none focus:border-primary cursor-pointer"
+            >
+              <option v-for="p in projectOptions" :key="p.id" :value="p.id">{{ p.name }}</option>
+            </select>
           </div>
 
           <!-- status -->
@@ -167,35 +191,31 @@ function submit() {
           <!-- due -->
           <div>
             <div class="text-[0.65rem] font-bold uppercase tracking-wider text-base-content/40 mb-1.5">Due</div>
-            <div class="flex gap-1 bg-base-200 p-1 rounded-lg">
+            <div class="flex items-center gap-1.5">
+              <input
+                v-model="due"
+                type="date"
+                class="flex-1 px-2.5 py-2 rounded-lg border border-base-300 bg-base-200/40 text-sm font-medium outline-none focus:border-primary cursor-pointer"
+              />
               <button
-                v-for="d in ['Today', 'Tomorrow', 'None']"
-                :key="d"
-                class="flex-1 py-1.5 rounded-md text-xs font-semibold transition-all"
-                :class="due === d ? 'bg-base-100 shadow-sm text-base-content' : 'text-base-content/60'"
-                @click="due = d as 'Today' | 'Tomorrow' | 'None'"
+                v-if="due"
+                class="w-8 h-8 rounded-lg grid place-items-center text-base-content/40 hover:text-base-content hover:bg-base-200 shrink-0"
+                title="No due date"
+                @click="due = ''"
               >
-                {{ d }}
+                <X class="w-3.5 h-3.5" :stroke-width="2" />
               </button>
             </div>
           </div>
 
-          <!-- link toggle -->
-          <label class="flex items-center gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer" style="background: var(--accent-soft)">
-            <button
-              type="button"
-              class="w-9 h-5 rounded-full relative shrink-0 transition-colors"
-              :class="link ? 'bg-primary' : 'bg-base-300'"
-              @click="link = !link"
-            >
-              <span class="absolute top-0.5 w-4 h-4 rounded-full bg-base-100 shadow transition-all" :class="link ? 'left-[18px]' : 'left-0.5'" />
-            </button>
-            <div class="flex-1">
-              <div class="text-xs font-semibold">Link to the task board</div>
-              <div class="text-[0.65rem] text-base-content/60">Syncs status both ways with the tracker</div>
+          <!-- always linked to the board -->
+          <div class="flex items-center gap-2.5 px-2.5 py-2 rounded-lg" style="background: var(--accent-soft)">
+            <Link2 class="w-3.5 h-3.5 text-primary shrink-0" :stroke-width="1.75" />
+            <div class="text-[0.65rem] text-base-content/60">
+              <span class="font-semibold text-base-content text-xs">Linked to the task board</span>
+              — syncs status both ways with the tracker
             </div>
-            <Link2 class="w-3.5 h-3.5 text-primary" :stroke-width="1.75" />
-          </label>
+          </div>
 
           <!-- actions -->
           <div class="flex gap-2 pt-0.5">

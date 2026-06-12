@@ -796,6 +796,7 @@ function startSlashTask() {
 }
 async function onTaskCreate(payload: {
   title: string
+  projectId?: string
   statusKey?: string
   assignee_id: string | null
   due_on: string | null
@@ -829,9 +830,10 @@ async function onTaskCreate(payload: {
 function onReact(m: CommsMsg, emoji: string) {
   stream.toggleReaction(m.id, emoji)
 }
+// The TaskDrawer mounts at the layout level and self-gates on selectedTask,
+// so the drawer opens right here over the chat — no jump to the task board.
 function openTask(taskId: string) {
   tasks.selectTask(taskId)
-  router.push({ name: 'workstation-tasks' })
 }
 
 const headerMembers = computed(() => stream.online.value.slice(0, 6))
