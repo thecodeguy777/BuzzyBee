@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { GripVertical, ChevronUp, ChevronDown, Copy, Trash2, Palette as PaletteIcon, Image as ImageIcon } from 'lucide-vue-next'
-import { designerDrag, type EmailDoc, type DocBlock } from '@/lib/emailDoc'
+import { designerDrag, makeDocBlock, type EmailDoc, type DocBlock, type DocBlockType } from '@/lib/emailDoc'
 import DesignerEditable from './DesignerEditable.vue'
+
+const GHOST_ID = '__ghost'
 
 // The WYSIWYG canvas: blocks render as the actual email and edit in place.
 // Click selects (ring + floating toolbar), drag the grip — or a palette tile —
@@ -21,7 +23,43 @@ const emit = defineEmits<{
 }>()
 
 const dropIndex = ref<number | null>(null)
+const cardEl = ref<HTMLElement | null>(null)
 const g = computed(() => props.doc.g)
+
+// ── Ghost preview ──────────────────────────────────────────────────────────────
+// While dragging a new block from the palette, show a low-opacity preview of
+// the actual module at the drop position — rendered through the very same block
+// chain, so the ghost looks exactly like what you'll get. (Reordering keeps the
+// dimmed original + drop line; the native drag image already ghosts that one.)
+const isMoveDrag = () => designerDrag.current?.kind === 'move'
+let ghostCache: { type: DocBlockType; block: DocBlock } | null = null
+function ghostForNew(type: DocBlockType): DocBlock {
+  if (ghostCache?.type !== type) ghostCache = { type, block: { ...makeDocBlock(type), id: GHOST_ID } }
+  return ghostCache.block
+}
+const renderList = computed<DocBlock[]>(() => {
+  const d = designerDrag.current
+  if (d?.kind === 'new' && dropIndex.value != null) {
+    const arr = [...props.doc.blocks]
+    arr.splice(Math.min(dropIndex.value, arr.length), 0, ghostForNew(d.type))
+    return arr
+  }
+  return props.doc.blocks
+})
+
+// Stable hit-testing: snapshot the real blocks' Y-midpoints once per drag (taken
+// before any ghost exists), then map cursor → insertion index against that
+// frozen geometry. Because inserting the ghost can't change the cached
+// midpoints, the slot never oscillates as content reflows.
+const blockMids = ref<number[]>([])
+function measureMids() {
+  const host = cardEl.value
+  if (!host) return
+  blockMids.value = [...host.querySelectorAll<HTMLElement>('[data-real-block]')].map((el) => {
+    const r = el.getBoundingClientRect()
+    return r.top + r.height / 2
+  })
+}
 const width = computed(() => (props.device === 'mobile' ? 380 : g.value.width))
 
 const ALIGN: Record<string, string> = { left: 'flex-start', center: 'center', right: 'flex-end' }
@@ -41,17 +79,35 @@ function onBlockDragStart(e: DragEvent, id: string) {
     e.dataTransfer.setData('text/plain', id)
   }
 }
-function onBlockDragOver(e: DragEvent, i: number) {
-  if (!designerDrag.current) return
+function onCardDragOver(e: DragEvent) {
+  const d = designerDrag.current
+  if (!d) return
   e.preventDefault()
-  const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
-  dropIndex.value = e.clientY < r.top + r.height / 2 ? i : i + 1
+  if (!blockMids.value.length && props.doc.blocks.length) measureMids()
+  const idx = blockMids.value.findIndex((m) => e.clientY < m)
+  let next = idx === -1 ? props.doc.blocks.length : idx
+  // Reordering onto either side of the block's own slot is a no-op — don't
+  // tease an insertion point that wouldn't move anything.
+  if (d.kind === 'move') {
+    const from = props.doc.blocks.findIndex((b) => b.id === d.id)
+    if (next === from || next === from + 1) { dropIndex.value = null; return }
+  }
+  dropIndex.value = next
+}
+function resetDrag() {
+  dropIndex.value = null
+  blockMids.value = []
+}
+function onCanvasLeave(e: DragEvent) {
+  const host = e.currentTarget as HTMLElement
+  if (!host.contains(e.relatedTarget as Node)) resetDrag()
 }
 function onCanvasDrop(e: DragEvent) {
   e.preventDefault()
-  if (!designerDrag.current) { dropIndex.value = null; return }
-  emit('drop-block', dropIndex.value ?? props.doc.blocks.length)
-  dropIndex.value = null
+  const had = designerDrag.current
+  const at = dropIndex.value
+  resetDrag()
+  if (had) emit('drop-block', at ?? props.doc.blocks.length)
 }
 const isDragging = (id: string) =>
   designerDrag.current?.kind === 'move' && designerDrag.current.id === id
@@ -63,10 +119,13 @@ const isDragging = (id: string) =>
     :style="{ background: g.bg, fontFamily: `'${g.font}', system-ui, sans-serif` }"
     @click="emit('select', null)"
     @dragover.prevent
+    @dragleave="onCanvasLeave"
+    @dragend="resetDrag"
     @drop="onCanvasDrop"
   >
     <div class="self-start max-w-full transition-[width] duration-200" :style="{ width: width + 'px' }">
       <div
+        ref="cardEl"
         :style="{
           background: g.card ? g.cardBg : 'transparent',
           borderRadius: g.card ? '14px' : '0',
@@ -74,11 +133,11 @@ const isDragging = (id: string) =>
           padding: '22px 0',
           minHeight: '200px',
         }"
-        @dragover.prevent.stop="designerDrag.current && $event.target === $event.currentTarget && (dropIndex = doc.blocks.length)"
+        @dragover="onCardDragOver"
       >
         <!-- empty state -->
         <div
-          v-if="!doc.blocks.length"
+          v-if="!renderList.length"
           class="mx-6 px-5 py-11 text-center rounded-xl"
           style="border: 2px dashed #d9d5e0; color: #9a98a3"
         >
@@ -87,17 +146,17 @@ const isDragging = (id: string) =>
           <div class="text-[12.5px] mt-1">or pick a template on the left</div>
         </div>
 
-        <template v-for="(b, i) in doc.blocks" :key="b.id">
-          <div class="crm-dz-indicator" :class="dropIndex === i && 'active'" />
-          <div @dragover="onBlockDragOver($event, i)">
+        <template v-for="(b, i) in renderList" :key="b.id">
+          <div v-if="isMoveDrag()" class="crm-dz-indicator" :class="dropIndex === i && 'active'" />
+          <div :data-real-block="b.id === GHOST_ID ? null : ''">
             <div
               class="crm-dz-block"
-              :class="[selectedId === b.id && 'selected', isDragging(b.id) && 'dragging']"
+              :class="[b.id === GHOST_ID && 'is-ghost', selectedId === b.id && 'selected', isDragging(b.id) && 'dragging']"
               style="padding: 10px 32px"
-              @click.stop="emit('select', b.id)"
+              @click.stop="b.id !== GHOST_ID && emit('select', b.id)"
             >
               <!-- floating toolbar on the selected block -->
-              <div v-if="selectedId === b.id" class="crm-blk-tool" @click.stop>
+              <div v-if="b.id !== GHOST_ID && selectedId === b.id" class="crm-blk-tool" @click.stop>
                 <button
                   type="button"
                   class="crm-blk-grip"
@@ -234,7 +293,7 @@ const isDragging = (id: string) =>
             </div>
           </div>
         </template>
-        <div class="crm-dz-indicator" :class="dropIndex === doc.blocks.length && 'active'" />
+        <div v-if="isMoveDrag()" class="crm-dz-indicator" :class="dropIndex === doc.blocks.length && 'active'" />
       </div>
       <div class="text-center text-[11px] mt-3.5 opacity-70" style="color: #9a98a3">Sent via HiveMind · {{ width }}px wide</div>
     </div>
@@ -247,23 +306,39 @@ const isDragging = (id: string) =>
 .crm-dz-block.selected { box-shadow: 0 0 0 2px var(--accent); }
 .crm-dz-block.dragging { opacity: 0.35; }
 
+/* Ghost preview of the module being placed (palette drags). */
+.crm-dz-block.is-ghost {
+  opacity: 0.5;
+  pointer-events: none;
+  outline: 2px dashed var(--accent);
+  outline-offset: -4px;
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--accent) 6%, transparent);
+  animation: crm-ghost-in 0.12s ease both;
+}
+@keyframes crm-ghost-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 0.5; transform: none; }
+}
+
 .crm-dz-indicator { height: 0; position: relative; }
 .crm-dz-indicator.active::before {
   content: '';
   position: absolute;
-  left: 12px; right: 12px; top: -1.5px;
-  height: 3px;
-  border-radius: 3px;
+  left: 10px; right: 10px; top: -2px;
+  height: 4px;
+  border-radius: 999px;
   background: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 18%, transparent);
 }
 .crm-dz-indicator.active::after {
   content: '';
   position: absolute;
-  left: 8px; top: -4px;
-  width: 8px; height: 8px;
+  left: 5px; top: -5.5px;
+  width: 11px; height: 11px;
   border-radius: 50%;
-  background: var(--accent);
+  border: 3px solid var(--accent);
+  background: var(--color-base-100);
 }
 
 .crm-blk-tool {
