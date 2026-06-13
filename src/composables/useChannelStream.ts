@@ -1,6 +1,7 @@
 import { ref, computed, watch, onUnmounted, type Ref } from 'vue'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { broadcast } from '@/lib/realtime'
 import { useAuthStore } from '@/stores/auth'
 import { useTeamStore } from '@/stores/team'
 import { useTasksStore } from '@/stores/tasks'
@@ -115,6 +116,13 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     pc: RTCPeerConnection
     audioEl?: HTMLAudioElement
     screenSender?: RTCRtpSender
+    audioSender?: RTCRtpSender
+    /** Last video stream received from them (their screen), live or not. */
+    remoteVideo?: MediaStream
+    /** ICE candidates that raced ahead of the remote description — flushed after it lands. */
+    pendingIce: RTCIceCandidateInit[]
+    /** True once presence has confirmed this user in the huddle (see reconcilePeers). */
+    confirmed: boolean
     makingOffer: boolean
     ignoreOffer: boolean
     polite: boolean
@@ -406,6 +414,18 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     for (const uid of Object.keys(remoteScreens.value)) {
       if (!sharers.has(uid)) removeRemoteScreen(uid)
     }
+    // Heal the reverse race: frames (track unmute → show) can land before the
+    // sharer's presence flips to sharing, so the hide above just ate the screen
+    // — and 'unmute' won't re-fire. Once presence confirms a share, re-show any
+    // live stream we already hold.
+    for (const uid of sharers) {
+      if (remoteScreens.value[uid]) continue
+      const stream = peers.get(uid)?.remoteVideo
+      const track = stream?.getVideoTracks()[0]
+      if (stream && track && !track.muted && track.readyState === 'live') {
+        remoteScreens.value = { ...remoteScreens.value, [uid]: stream }
+      }
+    }
 
     // Audio cues for huddle activity — only while *you're* in the huddle, and
     // never for your own presence (self join/leave/share play their own cues).
@@ -459,11 +479,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     const now = Date.now()
     if (now - lastTypingSent < 1800) return
     lastTypingSent = now
-    void channel.send({
-      type: 'broadcast',
-      event: 'typing',
-      payload: { userId: me(), name: auth.fullName, avatarUrl: auth.profile?.avatar_url ?? null },
-    })
+    broadcast(channel, 'typing', { userId: me(), name: auth.fullName, avatarUrl: auth.profile?.avatar_url ?? null })
   }
 
   // Pull every member's read position once on entry; the broadcast keeps it live.
@@ -728,7 +744,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
 
   // ── Huddle: WebRTC audio mesh ───────────────────────────────────────────────
   function sendRtc(to: string, kind: string, data: unknown) {
-    void channel?.send({ type: 'broadcast', event: 'rtc', payload: { from: me(), to, kind, data } })
+    broadcast(channel, 'rtc', { from: me(), to, kind, data })
   }
 
   function setupAnalyser(userId: string, stream: MediaStream) {
@@ -821,7 +837,14 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     if (existing) return existing
     const myId = me() ?? ''
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
-    const entry: PeerEntry = { pc, makingOffer: false, ignoreOffer: false, polite: myId > userId }
+    const entry: PeerEntry = {
+      pc,
+      pendingIce: [],
+      confirmed: false,
+      makingOffer: false,
+      ignoreOffer: false,
+      polite: myId > userId
+    }
     peers.set(userId, entry)
 
     // Fixed transceiver layout — created in the SAME order on both peers so the
@@ -830,10 +853,11 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     // addTrack/removeTrack), so there's no per-share renegotiation and the
     // "order of m-lines doesn't match" glare can't occur.
     const micTrack = localStream?.getAudioTracks()[0] ?? null
-    pc.addTransceiver(micTrack ?? 'audio', {
+    const audioTx = pc.addTransceiver(micTrack ?? 'audio', {
       direction: 'sendrecv',
       streams: localStream ? [localStream] : [],
     })
+    entry.audioSender = audioTx.sender
     const videoTx = pc.addTransceiver('video', { direction: 'sendrecv' })
     entry.screenSender = videoTx.sender
     if (screenStream) {
@@ -865,6 +889,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
         // while the peer is actually sharing. Their replaceTrack(track|null)
         // mutes/unmutes the remote track — use that to show/hide their screen.
         const stream = e.streams[0]
+        entry.remoteVideo = stream
         const show = () => { remoteScreens.value = { ...remoteScreens.value, [userId]: stream } }
         const hide = () => removeRemoteScreen(userId)
         if (!e.track.muted) show()
@@ -897,12 +922,26 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     const myId = me()
     if (!inHuddle.value || !myId) return
     const wanted = new Set(huddlePeople.value.map((p) => p.userId).filter((u) => u !== myId))
-    for (const uid of wanted) if (!peers.has(uid)) getPeer(uid)
-    for (const uid of [...peers.keys()]) if (!wanted.has(uid)) closePeer(uid)
+    for (const uid of wanted) {
+      getPeer(uid).confirmed = true
+    }
+    for (const uid of [...peers.keys()]) {
+      if (wanted.has(uid)) continue
+      // A joiner's offer can outrun their presence join — a peer born from that
+      // early signal must survive until presence confirms them, or any stray
+      // heartbeat sync reaps the connection mid-negotiation. Only reap peers
+      // presence has CONFIRMED and then dropped; the rest die via
+      // connectionState 'failed' if their owner truly never shows.
+      if (peers.get(uid)?.confirmed) closePeer(uid)
+    }
   }
 
   async function handleSignal(p: any) {
     if (!p || p.to !== me()) return
+    // Signals can outlive membership (we just left, or are mid-rejoin before
+    // the mic exists). Answering them would mint a half-configured peer with
+    // no audio sender — the classic "in the huddle but nobody hears you".
+    if (!inHuddle.value) return
     const from = p.from as string
     const entry = getPeer(from)
     const pc = entry.pc
@@ -913,11 +952,28 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
         entry.ignoreOffer = !entry.polite && collision
         if (entry.ignoreOffer) return
         await pc.setRemoteDescription(desc)
+        // Candidates that raced ahead of this description were parked — flush
+        // them now that addIceCandidate can succeed. Dropping them instead is
+        // an intermittent one-way-audio generator on stricter NATs.
+        while (entry.pendingIce.length) {
+          const c = entry.pendingIce.shift()!
+          try {
+            await pc.addIceCandidate(c)
+          } catch (e) {
+            if (!entry.ignoreOffer) console.warn('[huddle] flush ice:', (e as Error).message)
+          }
+        }
         if (desc.type === 'offer') {
           await pc.setLocalDescription()
           sendRtc(from, 'desc', pc.localDescription)
         }
       } else if (p.kind === 'ice') {
+        // Broadcast gives no ordering guarantee vs. the 'desc' send — park
+        // early candidates instead of letting addIceCandidate throw them away.
+        if (!pc.remoteDescription) {
+          entry.pendingIce.push(p.data as RTCIceCandidateInit)
+          return
+        }
         try {
           await pc.addIceCandidate(p.data)
         } catch (e) {
@@ -1003,6 +1059,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
       e.audioEl.srcObject = null
       e.audioEl.remove()
     }
+    removeRemoteScreen(userId)
     analysers.delete(userId)
     peers.delete(userId)
   }
@@ -1011,6 +1068,14 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     huddleError.value = null
     try {
       await ensureLocalStream()
+      // Any peer minted before the mic existed has a trackless audio sender —
+      // it would negotiate fine and carry silence. Arm them all now.
+      const mic = localStream?.getAudioTracks()[0] ?? null
+      if (mic) {
+        for (const entry of peers.values()) {
+          if (entry.audioSender && !entry.audioSender.track) void entry.audioSender.replaceTrack(mic)
+        }
+      }
       huddleSince = Date.now()
       inHuddle.value = true
       playSelfJoin()
