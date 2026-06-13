@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UserCheck, UserX } from 'lucide-vue-next'
+import { UserCheck, UserX, Info } from 'lucide-vue-next'
 import MemberAvatar from './MemberAvatar.vue'
 import RoleChip from './RoleChip.vue'
 import CapacityBar from './CapacityBar.vue'
@@ -27,9 +27,18 @@ const GRID = 'minmax(220px,1.4fr) 112px 150px minmax(130px,1fr) 60px 72px 64px 3
       <span class="tr-head">Role</span>
       <span class="tr-head">Workload</span>
       <span class="tr-head">Clients</span>
-      <span class="tr-head text-center">Open</span>
-      <span class="tr-head text-center">Overdue</span>
-      <span class="tr-head text-center">Done</span>
+      <span
+        class="tr-head flex items-center justify-center gap-1 cursor-help"
+        title="Open tasks — active assigned tasks that aren't done or cancelled."
+      >Open <Info class="w-3 h-3" :stroke-width="2.25" /></span>
+      <span
+        class="tr-head flex items-center justify-center gap-1 cursor-help"
+        title="Overdue — open tasks past their due date (a subset of Open)."
+      >Overdue <Info class="w-3 h-3" :stroke-width="2.25" /></span>
+      <span
+        class="tr-head flex items-center justify-center gap-1 cursor-help"
+        title="Done — tasks this member completed since Monday this week."
+      >Done <Info class="w-3 h-3" :stroke-width="2.25" /></span>
       <span />
     </div>
 
