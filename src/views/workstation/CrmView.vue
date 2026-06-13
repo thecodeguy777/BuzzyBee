@@ -5,6 +5,7 @@ import { Handshake, LayoutGrid, Filter, Building2, Users, Plus, Upload, AlertTri
 import CrmOverview from '@/components/crm/CrmOverview.vue'
 import CrmPipelineBoard from '@/components/crm/CrmPipelineBoard.vue'
 import CrmDealsTable from '@/components/crm/CrmDealsTable.vue'
+import CrmSkeleton from '@/components/crm/CrmSkeleton.vue'
 import CrmCompaniesTable from '@/components/crm/CrmCompaniesTable.vue'
 import CrmContactsTable from '@/components/crm/CrmContactsTable.vue'
 import CrmCampaigns from '@/components/crm/CrmCampaigns.vue'
@@ -36,7 +37,13 @@ const campaignsStore = useCampaignsStore()
 const clients = useClientsStore()
 const route = useRoute()
 const router = useRouter()
-const view = ref<ViewId>('overview')
+// Remember the last tab so a reload/return lands where you were (and the
+// loading skeleton matches it).
+const view = ref<ViewId>(((): ViewId => {
+  const saved = localStorage.getItem('crm.view') as ViewId | null
+  return saved && TABS.some((t) => t.id === saved) ? saved : 'overview'
+})())
+watch(view, (v) => localStorage.setItem('crm.view', v))
 const activeId = ref<string | null>(null)
 const activeCompanyId = ref<string | null>(null)
 const importOpen = ref(false)
@@ -47,6 +54,15 @@ const pipelineMode = ref<'board' | 'table'>(
   (localStorage.getItem('crm.pipelineMode') as 'board' | 'table') || 'table',
 )
 watch(pipelineMode, (m) => localStorage.setItem('crm.pipelineMode', m))
+
+// Pick the skeleton shape that matches the tab being loaded.
+const skelVariant = computed(() => {
+  if (view.value === 'pipeline') return pipelineMode.value === 'board' ? 'board' : 'table'
+  if (view.value === 'companies' || view.value === 'contacts') return 'table'
+  if (view.value === 'designs') return 'designs'
+  if (view.value === 'campaigns') return 'campaigns'
+  return 'overview'
+})
 const campaignPanel = ref<{ open: boolean; campaign: Campaign | null; duplicate: boolean; template: EmailTemplate | null }>(
   { open: false, campaign: null, duplicate: false, template: null })
 const reportCampaignId = ref<string | null>(null)
@@ -218,15 +234,8 @@ function composeFromTemplate(template: EmailTemplate) {
 
     <div class="h-3" />
 
-    <!-- loading skeleton -->
-    <div v-if="!crm.loaded" class="flex-1 overflow-hidden px-5 pt-1">
-      <div class="flex gap-3.5">
-        <div v-for="n in 4" :key="n" class="w-[286px] flex-none rounded-xl border border-base-300 bg-base-200 p-2.5 flex flex-col gap-2.5">
-          <div class="h-7 rounded-md bg-base-300/60 animate-pulse" />
-          <div v-for="m in 3" :key="m" class="h-24 rounded-[11px] bg-base-100 border border-base-300 animate-pulse" />
-        </div>
-      </div>
-    </div>
+    <!-- loading skeleton — shape-matched to the active tab -->
+    <CrmSkeleton v-if="!crm.loaded" :variant="skelVariant" />
 
     <div v-else class="flex-1 flex min-h-0">
       <CrmOverview v-if="view === 'overview'" :deals="crm.deals" @open="open" />

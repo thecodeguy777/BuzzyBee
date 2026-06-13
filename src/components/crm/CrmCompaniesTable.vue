@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, nextTick } from 'vue'
-import { Hash, Plus, Trash2, Loader2 } from 'lucide-vue-next'
+import { ref, computed, nextTick, watch } from 'vue'
+import { Hash, Plus, Trash2, Loader2, Search, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import CrmAvatar from './CrmAvatar.vue'
 import { useCrmStore } from '@/stores/crm'
 import { fmtMoney, fmtDate, relTime, type Company } from '@/lib/crmData'
@@ -14,6 +14,25 @@ const COLS = 'minmax(220px,1.4fr) 110px 130px 90px 110px 110px 100px 110px 100px
 const openDeals = (id: string) => crm.dealsFor(id).filter((d) => d.stage !== 'won' && d.stage !== 'lost')
 const openValue = (id: string) => openDeals(id).reduce((s, d) => s + d.value, 0)
 const location = (co: Company) => [co.city, co.country].filter(Boolean).join(', ')
+
+// Search + pagination — a client can hold thousands of companies; rendering them
+// all at once locks the page. Only the 50/page slice is ever in the DOM.
+const PAGE_SIZE = 50
+const search = ref('')
+const page = ref(0)
+const filtered = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  if (!q) return companies.value
+  return companies.value.filter((c) =>
+    c.name.toLowerCase().includes(q)
+    || (c.industry ?? '').toLowerCase().includes(q)
+    || location(c).toLowerCase().includes(q))
+})
+const sorted = computed(() => [...filtered.value].sort((a, b) => a.name.localeCompare(b.name)))
+const pageCount = computed(() => Math.max(1, Math.ceil(sorted.value.length / PAGE_SIZE)))
+const pageSafe = computed(() => Math.min(Math.max(0, page.value), pageCount.value - 1))
+const paged = computed(() => sorted.value.slice(pageSafe.value * PAGE_SIZE, pageSafe.value * PAGE_SIZE + PAGE_SIZE))
+watch(search, () => { page.value = 0 })
 
 // ── Inline edits: click a value cell to change it; the rest of the row still
 // opens the detail panel (which has the full field set).
@@ -87,11 +106,16 @@ async function submitAdd() {
 
 <template>
   <div class="flex-1 overflow-auto px-5 pb-6">
-    <div class="flex items-center justify-between mb-3">
-      <div class="flex items-center gap-2 text-[12.5px] text-base-content/40">
+    <div class="flex items-center gap-3 mb-3">
+      <div class="flex items-center gap-2 text-[12.5px] text-base-content/40 flex-none whitespace-nowrap">
         <template v-if="crm.loading"><Loader2 :size="14" class="animate-spin" /> Loading companies…</template>
-        <template v-else>{{ companies.length }} {{ companies.length === 1 ? 'company' : 'companies' }} — click a name, industry, or location to edit; click the row for everything else.</template>
+        <template v-else>{{ sorted.length.toLocaleString() }}<span v-if="search.trim() && sorted.length !== companies.length"> of {{ companies.length.toLocaleString() }}</span> {{ companies.length === 1 ? 'company' : 'companies' }}</template>
       </div>
+      <div class="relative flex-1 max-w-[300px]">
+        <Search :size="15" class="absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 pointer-events-none" />
+        <input v-model="search" class="crm-in w-full !h-9 !pl-9" placeholder="Search companies…" />
+      </div>
+      <div class="flex-1" />
       <button
         type="button"
         class="flex items-center gap-[7px] h-[32px] px-3 rounded-[9px] text-[13px] font-bold text-white whitespace-nowrap"
@@ -126,12 +150,12 @@ async function submitAdd() {
           class="text-[11px] font-bold tracking-wider uppercase text-base-content/40">{{ h }}</span>
       </div>
 
-      <div v-if="!companies.length" class="px-4 py-10 text-center text-[13px] text-base-content/40">
+      <div v-if="!sorted.length" class="px-4 py-10 text-center text-[13px] text-base-content/40">
         <span v-if="crm.loading" class="inline-flex items-center gap-2"><Loader2 :size="15" class="animate-spin" /> Loading companies…</span>
-        <span v-else>No companies yet.</span>
+        <span v-else>{{ search.trim() ? 'No companies match your search.' : 'No companies yet.' }}</span>
       </div>
       <div
-        v-for="co in companies"
+        v-for="co in paged"
         :key="co.id"
         class="crm-row grid items-center px-4 h-[54px] cursor-pointer border-b border-base-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-inset"
         :style="{ gridTemplateColumns: COLS }"
@@ -219,6 +243,17 @@ async function submitAdd() {
           </button>
         </div>
       </div>
+    </div>
+
+    <!-- pagination -->
+    <div v-if="sorted.length > 0" class="flex items-center gap-3 mt-3">
+      <span class="text-[12.5px] text-base-content/40">
+        Showing <strong class="text-base-content">{{ pageSafe * PAGE_SIZE + 1 }}–{{ Math.min((pageSafe + 1) * PAGE_SIZE, sorted.length) }}</strong> of {{ sorted.length.toLocaleString() }}
+      </span>
+      <div class="flex-1" />
+      <button type="button" class="flex items-center gap-1.5 h-[32px] px-3 rounded-[9px] border border-base-300 bg-base-100 text-[13px] font-semibold disabled:opacity-40" :disabled="pageSafe === 0" @click="page = pageSafe - 1"><ChevronLeft :size="15" /> Prev</button>
+      <span class="text-[12.5px] font-semibold text-base-content/60">Page {{ pageSafe + 1 }} / {{ pageCount }}</span>
+      <button type="button" class="flex items-center gap-1.5 h-[32px] px-3 rounded-[9px] border border-base-300 bg-base-100 text-[13px] font-semibold disabled:opacity-40" :disabled="pageSafe >= pageCount - 1" @click="page = pageSafe + 1">Next <ChevronRight :size="15" /></button>
     </div>
   </div>
 </template>
