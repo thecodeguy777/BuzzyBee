@@ -1,6 +1,7 @@
 import { ref, computed, onUnmounted } from 'vue'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { broadcast } from '@/lib/realtime'
 import { useAuthStore } from '@/stores/auth'
 import { iceServers } from '@/lib/iceServers'
 import { createNoisePipeline, type NoisePipeline } from '@/lib/noiseSuppressor'
@@ -29,7 +30,22 @@ export interface Participant {
   admitted: boolean
   muted: boolean
   sharing?: boolean
+  hand?: boolean
   since?: number
+}
+
+export interface MeetingChatMsg {
+  from: string
+  name: string
+  text: string
+  at: number
+}
+
+export interface FlyingReaction {
+  id: string
+  emoji: string
+  /** Horizontal launch position, % of stage width. */
+  x: number
 }
 
 function guestId(): string {
@@ -52,9 +68,16 @@ export function useMeetingRoom() {
   const online = ref<Participant[]>([])
 
   const muted = ref(false)
+  const handRaised = ref(false)
   const sharingScreen = ref(false)
+  /** My own share stream — so the presenter sees what everyone else sees. */
+  const localScreen = ref<MediaStream | null>(null)
   const remoteScreens = ref<Record<string, MediaStream>>({})
   const speaking = ref<Set<string>>(new Set())
+  // In-call chat + reactions are ephemeral by design — they live exactly as
+  // long as the call does, so plain broadcast (no DB) is the right transport.
+  const chat = ref<MeetingChatMsg[]>([])
+  const reactions = ref<FlyingReaction[]>([])
   const noiseSuppression = ref(
     typeof window === 'undefined' || window.localStorage.getItem('buzzybee.comms.noise-suppression') !== '0',
   )
@@ -78,6 +101,10 @@ export function useMeetingRoom() {
     pc: RTCPeerConnection
     audioEl?: HTMLAudioElement
     screenSender?: RTCRtpSender
+    /** ICE candidates that raced ahead of the remote description — flushed after it lands. */
+    pendingIce: RTCIceCandidateInit[]
+    /** True once presence has confirmed this user admitted (see reconcilePeers). */
+    confirmed: boolean
     makingOffer: boolean
     ignoreOffer: boolean
     polite: boolean
@@ -100,6 +127,14 @@ export function useMeetingRoom() {
     }
     const row = (Array.isArray(data) ? data[0] : data) as RoomMeta | undefined
     return row ?? null
+  }
+
+  /** Resolve room meta without joining — powers the guest landing portal
+   *  (title + validity before we ask for a name). */
+  async function peek(tk: string): Promise<RoomMeta | null> {
+    const meta = await resolve(tk)
+    if (meta) room.value = meta
+    return meta
   }
 
   async function join(tk: string, displayName?: string) {
@@ -145,6 +180,14 @@ export function useMeetingRoom() {
     ch.on('presence', { event: 'leave' }, onPresence)
     ch.on('broadcast', { event: 'rtc' }, (m: { payload?: any }) => void handleSignal(m.payload))
     ch.on('broadcast', { event: 'ctrl' }, (m: { payload?: any }) => onCtrl(m.payload))
+    ch.on('broadcast', { event: 'chat' }, (m: { payload?: any }) => {
+      const p = m.payload as MeetingChatMsg | undefined
+      if (p?.text) chat.value = [...chat.value, p]
+    })
+    ch.on('broadcast', { event: 'react' }, (m: { payload?: any }) => {
+      const emoji = (m.payload as { emoji?: string } | undefined)?.emoji
+      if (emoji) launchReaction(emoji)
+    })
     await ch.subscribe((s) => {
       if (s === 'SUBSCRIBED') trackPresence()
     })
@@ -160,6 +203,7 @@ export function useMeetingRoom() {
       admitted: amAdmitted.value,
       muted: muted.value,
       sharing: sharingScreen.value,
+      hand: handRaised.value,
       since: undefined,
     } satisfies Participant)
   }
@@ -179,7 +223,7 @@ export function useMeetingRoom() {
 
   // ── Lobby control ─────────────────────────────────────────────────────────
   function sendCtrl(type: string, to?: string) {
-    void channel?.send({ type: 'broadcast', event: 'ctrl', payload: { type, to, from: myId.value } })
+    broadcast(channel, 'ctrl', { type, to, from: myId.value })
   }
   function onCtrl(p: any) {
     if (!p) return
@@ -214,6 +258,17 @@ export function useMeetingRoom() {
       await ensureLocalStream()
     } catch {
       error.value = 'Microphone access is needed to join.'
+    }
+    // amAdmitted flipped before the mic existed, so offers arriving while the
+    // permission prompt was up minted peers with NO audio track — they
+    // negotiate fine and carry silence ("muted but not muted"). Back-fill the
+    // mic onto every trackless peer; addTrack renegotiates automatically.
+    const mic = localStream?.getAudioTracks()[0]
+    if (mic && localStream) {
+      for (const entry of peers.values()) {
+        const hasAudio = entry.pc.getSenders().some((s) => s.track?.kind === 'audio')
+        if (!hasAudio) entry.pc.addTrack(mic, localStream)
+      }
     }
     trackPresence()
     reconcilePeers()
@@ -287,13 +342,20 @@ export function useMeetingRoom() {
 
   // ── WebRTC mesh (perfect negotiation) ────────────────────────────────────────
   function sendRtc(to: string, kind: string, data: unknown) {
-    void channel?.send({ type: 'broadcast', event: 'rtc', payload: { from: myId.value, to, kind, data } })
+    broadcast(channel, 'rtc', { from: myId.value, to, kind, data })
   }
   function getPeer(userId: string): PeerEntry {
     const existing = peers.get(userId)
     if (existing) return existing
     const pc = new RTCPeerConnection({ iceServers: ICE })
-    const entry: PeerEntry = { pc, makingOffer: false, ignoreOffer: false, polite: myId.value > userId }
+    const entry: PeerEntry = {
+      pc,
+      pendingIce: [],
+      confirmed: false,
+      makingOffer: false,
+      ignoreOffer: false,
+      polite: myId.value > userId,
+    }
     peers.set(userId, entry)
 
     localStream?.getTracks().forEach((t) => pc.addTrack(t, localStream!))
@@ -343,8 +405,17 @@ export function useMeetingRoom() {
   function reconcilePeers() {
     if (!amAdmitted.value) return
     const wanted = new Set(admittedPeople.value.map((p) => p.userId).filter((u) => u !== myId.value))
-    for (const uid of wanted) if (!peers.has(uid)) getPeer(uid)
-    for (const uid of [...peers.keys()]) if (!wanted.has(uid)) closePeer(uid)
+    for (const uid of wanted) {
+      getPeer(uid).confirmed = true
+    }
+    for (const uid of [...peers.keys()]) {
+      if (wanted.has(uid)) continue
+      // A joiner's offer can outrun their presence join — only reap peers
+      // presence has CONFIRMED and then dropped, or a stray heartbeat sync
+      // kills the connection mid-negotiation. Unconfirmed ghosts die via
+      // connectionState 'failed' if their owner never shows.
+      if (peers.get(uid)?.confirmed) closePeer(uid)
+    }
   }
   async function handleSignal(p: any) {
     if (!p || p.to !== myId.value || !amAdmitted.value) return
@@ -357,11 +428,25 @@ export function useMeetingRoom() {
         entry.ignoreOffer = !entry.polite && collision
         if (entry.ignoreOffer) return
         await pc.setRemoteDescription(desc)
+        // Flush candidates that raced ahead of the description — dropping them
+        // is an intermittent one-way-audio generator on stricter NATs.
+        while (entry.pendingIce.length) {
+          const c = entry.pendingIce.shift()!
+          try {
+            await pc.addIceCandidate(c)
+          } catch { /* aborted negotiation — harmless */ }
+        }
         if (desc.type === 'offer') {
           await pc.setLocalDescription()
           sendRtc(p.from, 'desc', pc.localDescription)
         }
       } else if (p.kind === 'ice') {
+        // Broadcast gives no ordering guarantee vs. 'desc' — park early
+        // candidates instead of letting addIceCandidate throw them away.
+        if (!pc.remoteDescription) {
+          entry.pendingIce.push(p.data as RTCIceCandidateInit)
+          return
+        }
         try {
           await pc.addIceCandidate(p.data)
         } catch (e) {
@@ -401,6 +486,7 @@ export function useMeetingRoom() {
     if (!track) return
     if ('contentHint' in track) (track as any).contentHint = 'detail'
     sharingScreen.value = true
+    localScreen.value = screenStream
     for (const entry of peers.values()) {
       entry.screenSender = entry.pc.addTrack(track, screenStream)
       void tuneScreenSender(entry.screenSender)
@@ -418,6 +504,7 @@ export function useMeetingRoom() {
     }
     screenStream?.getTracks().forEach((t) => t.stop())
     screenStream = null
+    localScreen.value = null
     sharingScreen.value = false
     trackPresence()
   }
@@ -431,6 +518,31 @@ export function useMeetingRoom() {
     muted.value = !muted.value
     ;(rawStream ?? localStream)?.getAudioTracks().forEach((t) => (t.enabled = !muted.value))
     trackPresence()
+  }
+  function toggleHand() {
+    handRaised.value = !handRaised.value
+    trackPresence()
+  }
+
+  // ── In-call chat + reactions ──────────────────────────────────────────────
+  // Broadcast is self:false, so the sender appends locally before sending.
+  function sendChat(text: string) {
+    const t = text.trim()
+    if (!t || !channel) return
+    const msg: MeetingChatMsg = { from: myId.value, name: myName.value, text: t, at: Date.now() }
+    chat.value = [...chat.value, msg]
+    broadcast(channel, 'chat', msg)
+  }
+  function launchReaction(emoji: string) {
+    const id = Math.random().toString(36).slice(2)
+    reactions.value = [...reactions.value, { id, emoji, x: 15 + Math.random() * 70 }]
+    window.setTimeout(() => {
+      reactions.value = reactions.value.filter((r) => r.id !== id)
+    }, 2600)
+  }
+  function sendReaction(emoji: string) {
+    launchReaction(emoji)
+    broadcast(channel, 'react', { emoji })
   }
   function toggleNoise() {
     noiseSuppression.value = !noiseSuppression.value
@@ -496,19 +608,27 @@ export function useMeetingRoom() {
     isHost,
     myId,
     muted,
+    handRaised,
     sharingScreen,
+    localScreen,
     remoteScreens,
     speaking,
+    chat,
+    reactions,
     noiseSuppression,
     rnnoiseActive,
     me,
+    peek,
     join,
     admit,
     deny,
     endMeeting,
     leave,
     toggleMute,
+    toggleHand,
     toggleScreenShare,
     toggleNoise,
+    sendChat,
+    sendReaction,
   }
 }
