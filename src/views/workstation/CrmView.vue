@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Handshake, LayoutGrid, Filter, Building2, Users, Plus, Upload, AlertTriangle, Mail, Palette } from 'lucide-vue-next'
+import { Handshake, LayoutGrid, Filter, Building2, Users, Plus, Upload, AlertTriangle, Mail, Palette, Columns3, Table2 } from 'lucide-vue-next'
 import CrmOverview from '@/components/crm/CrmOverview.vue'
 import CrmPipelineBoard from '@/components/crm/CrmPipelineBoard.vue'
+import CrmDealsTable from '@/components/crm/CrmDealsTable.vue'
 import CrmCompaniesTable from '@/components/crm/CrmCompaniesTable.vue'
 import CrmContactsTable from '@/components/crm/CrmContactsTable.vue'
 import CrmCampaigns from '@/components/crm/CrmCampaigns.vue'
@@ -40,6 +41,12 @@ const activeId = ref<string | null>(null)
 const activeCompanyId = ref<string | null>(null)
 const importOpen = ref(false)
 const newDeal = ref<{ open: boolean; stage?: StageId }>({ open: false })
+// Pipeline tab renders as a kanban board OR a dense table (the high-volume
+// surface). Remember the user's choice; default to the table since it scales.
+const pipelineMode = ref<'board' | 'table'>(
+  (localStorage.getItem('crm.pipelineMode') as 'board' | 'table') || 'table',
+)
+watch(pipelineMode, (m) => localStorage.setItem('crm.pipelineMode', m))
 const campaignPanel = ref<{ open: boolean; campaign: Campaign | null; duplicate: boolean; template: EmailTemplate | null }>(
   { open: false, campaign: null, duplicate: false, template: null })
 const reportCampaignId = ref<string | null>(null)
@@ -223,7 +230,27 @@ function composeFromTemplate(template: EmailTemplate) {
 
     <div v-else class="flex-1 flex min-h-0">
       <CrmOverview v-if="view === 'overview'" :deals="crm.deals" @open="open" />
-      <CrmPipelineBoard v-else-if="view === 'pipeline'" :deals="crm.deals" @open="open" @move="move" @new-deal="openNewDeal" />
+      <div v-else-if="view === 'pipeline'" class="flex-1 flex flex-col min-h-0">
+        <!-- Board | Table toggle — the Pipeline tab keeps its name -->
+        <div class="flex items-center px-5 pb-2 pt-0.5">
+          <div class="flex gap-0.5 bg-base-200 p-[3px] rounded-lg">
+            <button
+              type="button"
+              class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[12.5px] font-semibold transition-colors"
+              :class="pipelineMode === 'board' ? 'bg-base-100 shadow-sm text-base-content' : 'text-base-content/50 hover:text-base-content'"
+              @click="pipelineMode = 'board'"
+            ><Columns3 :size="15" /> Board</button>
+            <button
+              type="button"
+              class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[12.5px] font-semibold transition-colors"
+              :class="pipelineMode === 'table' ? 'bg-base-100 shadow-sm text-base-content' : 'text-base-content/50 hover:text-base-content'"
+              @click="pipelineMode = 'table'"
+            ><Table2 :size="15" /> Table</button>
+          </div>
+        </div>
+        <CrmPipelineBoard v-if="pipelineMode === 'board'" :deals="crm.deals" @open="open" @move="move" @new-deal="openNewDeal" />
+        <CrmDealsTable v-else :deals="crm.deals" @open="open" @move="move" @new-deal="openNewDeal" @toast="(t, s) => fireToast(t, s)" />
+      </div>
       <CrmCompaniesTable v-else-if="view === 'companies'" @open-company="openCompany" />
       <CrmDesignStudio v-else-if="view === 'designs'" @compose="composeFromTemplate" />
       <CrmCampaigns v-else-if="view === 'campaigns'" @new="openCampaign(null)" @open="openCampaign" @duplicate="duplicateCampaign" />

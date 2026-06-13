@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
-import { Hash, Plus, Trash2 } from 'lucide-vue-next'
+import { Hash, Plus, Trash2, Loader2 } from 'lucide-vue-next'
 import CrmAvatar from './CrmAvatar.vue'
 import { useCrmStore } from '@/stores/crm'
 import { fmtMoney, fmtDate, relTime, type Company } from '@/lib/crmData'
@@ -88,8 +88,9 @@ async function submitAdd() {
 <template>
   <div class="flex-1 overflow-auto px-5 pb-6">
     <div class="flex items-center justify-between mb-3">
-      <div class="text-[12.5px] text-base-content/40">
-        {{ companies.length }} {{ companies.length === 1 ? 'company' : 'companies' }} — click a name, industry, or location to edit; click the row for everything else.
+      <div class="flex items-center gap-2 text-[12.5px] text-base-content/40">
+        <template v-if="crm.loading"><Loader2 :size="14" class="animate-spin" /> Loading companies…</template>
+        <template v-else>{{ companies.length }} {{ companies.length === 1 ? 'company' : 'companies' }} — click a name, industry, or location to edit; click the row for everything else.</template>
       </div>
       <button
         type="button"
@@ -126,7 +127,8 @@ async function submitAdd() {
       </div>
 
       <div v-if="!companies.length" class="px-4 py-10 text-center text-[13px] text-base-content/40">
-        No companies yet.
+        <span v-if="crm.loading" class="inline-flex items-center gap-2"><Loader2 :size="15" class="animate-spin" /> Loading companies…</span>
+        <span v-else>No companies yet.</span>
       </div>
       <div
         v-for="co in companies"

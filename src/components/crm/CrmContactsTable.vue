@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
-import { Plus, Star, Trash2 } from 'lucide-vue-next'
+import { Plus, Star, Trash2, Loader2 } from 'lucide-vue-next'
 import CrmAvatar from './CrmAvatar.vue'
 import { useCrmStore } from '@/stores/crm'
 import { fmtDate, relTime, type Contact } from '@/lib/crmData'
@@ -89,8 +89,9 @@ async function submitAdd() {
 <template>
   <div class="flex-1 overflow-auto px-5 pb-6">
     <div class="flex items-center justify-between mb-3">
-      <div class="text-[12.5px] text-base-content/40">
-        {{ crm.contacts.length }} {{ crm.contacts.length === 1 ? 'contact' : 'contacts' }} — click any value to edit it.
+      <div class="flex items-center gap-2 text-[12.5px] text-base-content/40">
+        <template v-if="crm.loading"><Loader2 :size="14" class="animate-spin" /> Loading contacts…</template>
+        <template v-else>{{ crm.contacts.length }} {{ crm.contacts.length === 1 ? 'contact' : 'contacts' }} — click any value to edit it.</template>
       </div>
       <button
         type="button"
@@ -133,7 +134,8 @@ async function submitAdd() {
       </div>
 
       <div v-if="!crm.contacts.length" class="px-4 py-10 text-center text-[13px] text-base-content/40">
-        No contacts yet.
+        <span v-if="crm.loading" class="inline-flex items-center gap-2"><Loader2 :size="15" class="animate-spin" /> Loading contacts…</span>
+        <span v-else>No contacts yet.</span>
       </div>
       <div
         v-for="c in crm.contacts"

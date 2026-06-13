@@ -64,6 +64,39 @@ function mapActivity(r: any): Activity {
 const COMPANY_COLS = 'id,name,industry,site,color,is_client,client_id,channel_id,address,city,country,employees,annual_revenue,linkedin,created_at,last_activity_at'
 const CONTACT_COLS = 'id,company_id,name,role,email,phone,color,is_primary,address,city,country,created_at,last_activity_at,unsubscribed_at'
 const ACTIVITY_COLS = 'id,deal_id,company_id,contact_id,type,actor_id,body,meta,created_at'
+const DEALS_SELECT = 'id,title,company_id,stage,value,owner_id,close_on,source,health,priority,channel_id,sort, channel:channels(name)'
+
+// Page through a client-scoped query so a load isn't silently truncated by the
+// data API's max-rows cap (the imported dialer leads put HiveMind well past it).
+// A stable secondary sort by id keeps .range() pages from overlapping when many
+// rows share created_at (the bulk import does).
+async function fetchAllPaged(build: (from: number, to: number) => any): Promise<any[]> {
+  const PAGE = 1000
+  const out: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await build(from, from + PAGE - 1)
+    if (error) { console.warn('[crm] paged fetch:', error.message); break }
+    const rows = (data ?? []) as any[]
+    out.push(...rows)
+    if (rows.length < PAGE) break
+  }
+  return out
+}
+
+// PostgREST encodes .in() lists in the URL, so a client with thousands of
+// companies/deals overflows the URL length limit. Fetch in parallel batches
+// and concatenate so load() scales (e.g. the 6k+ imported dialer leads).
+async function fetchIn(table: string, columns: string, column: string, ids: string[], chunk = 200): Promise<any[]> {
+  if (!ids.length) return []
+  const batches: any[] = []
+  for (let i = 0; i < ids.length; i += chunk) {
+    batches.push(supabase.from(table).select(columns).in(column, ids.slice(i, i + chunk)))
+  }
+  const results = await Promise.all(batches)
+  const out: any[] = []
+  for (const r of results) if (r.data) out.push(...(r.data as any[]))
+  return out
+}
 
 export const useCrmStore = defineStore('crm', () => {
   const companies = ref<Record<string, Company>>({})
@@ -98,31 +131,32 @@ export const useCrmStore = defineStore('crm', () => {
         loaded.value = true
         return
       }
-      const [coRes, deRes] = await Promise.all([
-        supabase.from('crm_companies').select(COMPANY_COLS + ', channel:channels(name)').eq('client_id', cid),
-        supabase.from('crm_deals').select('id,title,company_id,stage,value,owner_id,close_on,source,health,priority,channel_id,sort, channel:channels(name)').eq('client_id', cid).order('sort').order('created_at'),
+      const [coData, deData] = await Promise.all([
+        fetchAllPaged((f, t) => supabase.from('crm_companies')
+          .select(COMPANY_COLS + ', channel:channels(name)')
+          .eq('client_id', cid).order('created_at').order('id').range(f, t)),
+        fetchAllPaged((f, t) => supabase.from('crm_deals')
+          .select(DEALS_SELECT)
+          .eq('client_id', cid).order('sort').order('created_at').order('id').range(f, t)),
       ])
 
       const coMap: Record<string, Company> = {}
-      for (const r of (coRes.data ?? []) as any[]) coMap[r.id] = mapCompany(r)
+      for (const r of coData as any[]) coMap[r.id] = mapCompany(r)
       companies.value = coMap
-      deals.value = ((deRes.data ?? []) as any[]).map(mapDeal)
+      deals.value = (deData as any[]).map(mapDeal)
 
       const companyIds = Object.keys(coMap)
       const dealIds = deals.value.map((d) => d.id)
-      const [ctRes, dtRes] = await Promise.all([
-        companyIds.length
-          ? supabase.from('crm_contacts').select(CONTACT_COLS).in('company_id', companyIds)
-          : Promise.resolve({ data: [] as any[] }),
-        dealIds.length
-          ? supabase.from('crm_deal_tasks').select('deal_id,task_id, task:tasks(reference_number,title,status)').in('deal_id', dealIds)
-          : Promise.resolve({ data: [] as any[] }),
+      // Chunked .in() — thousands of ids would otherwise overflow the URL.
+      const [ctData, dtData] = await Promise.all([
+        fetchIn('crm_contacts', CONTACT_COLS, 'company_id', companyIds),
+        fetchIn('crm_deal_tasks', 'deal_id,task_id, task:tasks(reference_number,title,status)', 'deal_id', dealIds),
       ])
 
-      contacts.value = ((ctRes.data ?? []) as any[]).map(mapContact)
+      contacts.value = (ctData as any[]).map(mapContact)
 
       const linked: Record<string, LinkedTask[]> = {}
-      for (const r of (dtRes.data ?? []) as any[]) {
+      for (const r of (dtData as any[])) {
         const t = r.task
         ;(linked[r.deal_id] ??= []).push({
           taskId: r.task_id, ref: t?.reference_number ?? '', title: t?.title ?? 'Linked task',
@@ -145,12 +179,12 @@ export const useCrmStore = defineStore('crm', () => {
   async function reloadDeals() {
     const cid = clients.currentClientId
     if (!cid) { deals.value = []; return }
-    const { data } = await supabase
+    const data = await fetchAllPaged((f, t) => supabase
       .from('crm_deals')
-      .select('id,title,company_id,stage,value,owner_id,close_on,source,health,priority,channel_id,sort, channel:channels(name)')
+      .select(DEALS_SELECT)
       .eq('client_id', cid)
-      .order('sort').order('created_at')
-    const next = ((data ?? []) as any[]).map(mapDeal)
+      .order('sort').order('created_at').order('id').range(f, t))
+    const next = (data as any[]).map(mapDeal)
     // Preserve any deal we have a pending local write for.
     deals.value = next.map((d) => (pending.has(d.id) ? deals.value.find((x) => x.id === d.id) ?? d : d))
   }
