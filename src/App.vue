@@ -3,6 +3,12 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import AppLayout from '@/components/shared/AppLayout.vue'
 import WorkstationLayout from '@/components/shared/WorkstationLayout.vue'
+// Mounted at the app root (not inside a layout) so a buzz reaches you on ANY
+// page — workstation, admin, or a bare surface like a live meeting room.
+// It self-gates on an incoming buzz and teleports to <body>, so it costs
+// nothing until someone buzzes. Being always-mounted also keeps the buzz
+// handler registered + the presence channel subscribed everywhere.
+import BuzzOverlay from '@/components/comms/BuzzOverlay.vue'
 
 const route = useRoute()
 
@@ -36,4 +42,7 @@ const layout = computed<'workstation' | 'admin' | 'bare'>(() => {
     </router-view>
   </AppLayout>
   <router-view v-else />
+
+  <!-- App-wide: a buzz takes over the screen wherever you are. -->
+  <BuzzOverlay />
 </template>

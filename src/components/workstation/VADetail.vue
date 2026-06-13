@@ -9,10 +9,13 @@ import {
   MessageSquare,
   X,
   IdCard,
+  Zap,
   Activity as ActivityIcon
 } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 import { supabase } from '@/lib/supabase'
+import { useBuzz, type BuzzResult } from '@/composables/useBuzz'
+import { AVAILABILITY, availabilityOf } from '@/lib/availability'
 import { useClientsStore } from '@/stores/clients'
 import { useChannelsStore } from '@/stores/channels'
 import { useTasksStore, type Task, type TaskActivityEvent } from '@/stores/tasks'
@@ -42,7 +45,28 @@ async function messageVa() {
   }
 }
 
+// Buzz — ring their screen; feedback lands in the action-bar spacer.
+const { buzz } = useBuzz()
+const buzzNote = ref('')
+const BUZZ_NOTES: Record<BuzzResult, string> = {
+  sent: 'Buzzing their screen now',
+  away: 'Away — left a note in your DM',
+  cooldown: 'Buzzed just now — give it a minute',
+  failed: 'Could not buzz right now'
+}
+let buzzNoteTimer: ReturnType<typeof setTimeout> | undefined
+async function buzzVa() {
+  buzzNote.value = BUZZ_NOTES[await buzz(props.vaId)]
+  clearTimeout(buzzNoteTimer)
+  buzzNoteTimer = setTimeout(() => (buzzNote.value = ''), 4000)
+}
+
 const va = computed<MemberProfile | null>(() => team.profiles[props.vaId] ?? null)
+// Person-set availability — only shown when it actually says something.
+const avail = computed(() => {
+  const a = availabilityOf(va.value?.availability)
+  return a === 'active' ? null : AVAILABILITY[a]
+})
 
 // Load profile if missing (e.g. landed via deep link).
 watch(
@@ -243,7 +267,7 @@ const statusMeta: Record<string, { label: string; class: string }> = {
     <!-- Action bar -->
     <div class="px-4 py-2.5 border-b border-base-300 shrink-0 flex items-center gap-2">
       <RoleChip :role="va?.role" />
-      <div class="flex-1" />
+      <div class="flex-1 min-w-0 text-right text-[0.68rem] text-base-content/50 truncate">{{ buzzNote }}</div>
       <button
         type="button"
         class="h-8 px-3 rounded-lg inline-flex items-center gap-1.5 text-xs font-semibold text-base-content/60 hover:bg-base-200 hover:text-base-content"
@@ -259,6 +283,14 @@ const statusMeta: Record<string, { label: string; class: string }> = {
         @click="messageVa"
       >
         <MessageSquare class="w-4 h-4" :stroke-width="1.9" />
+      </button>
+      <button
+        type="button"
+        class="w-8 h-8 rounded-lg grid place-items-center text-base-content/60 hover:bg-base-200 hover:text-warning"
+        title="Buzz — ring their screen"
+        @click="buzzVa"
+      >
+        <Zap class="w-4 h-4" :stroke-width="1.9" />
       </button>
       <button
         type="button"
@@ -288,6 +320,11 @@ const statusMeta: Record<string, { label: string; class: string }> = {
           <span class="truncate">{{ va?.email ?? '—' }}</span>
         </div>
         <div v-if="va?.timezone" class="text-xs text-base-content/50 mt-0.5">{{ va.timezone }}</div>
+        <div v-if="avail" class="flex items-center gap-1.5 text-xs mt-1">
+          <span class="w-2 h-2 rounded-full shrink-0" :style="{ background: avail.dot }" />
+          <span class="font-semibold">{{ avail.label }}</span>
+          <span v-if="va?.status_note" class="text-base-content/55 truncate">— {{ va.status_note }}</span>
+        </div>
       </div>
       <CapacityRing :seconds="hoursThisWeek" :size="92" />
     </header>

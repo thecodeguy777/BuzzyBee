@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, nextTick } from 'vue'
-import { Hash, Plus, ChevronDown, Check, Headphones, MessageCircle } from 'lucide-vue-next'
+import { Hash, Plus, ChevronDown, Check, Headphones, MessageCircle, PenLine } from 'lucide-vue-next'
 import { RouterLink } from 'vue-router'
 import SeenCluster from '@/components/comms/SeenCluster.vue'
 import { useChannelsStore } from '@/stores/channels'
 import { useClientsStore } from '@/stores/clients'
+import { useDraftsStore } from '@/stores/drafts'
 
 const props = defineProps<{
   onlineCount: number
@@ -18,6 +19,7 @@ const emit = defineEmits<{ choose: [id: string]; error: [msg: string] }>()
 
 const channels = useChannelsStore()
 const clients = useClientsStore()
+const drafts = useDraftsStore()
 
 const viewersTitle = (id: string) => {
   const v = props.viewersByChannel?.[id] ?? []
@@ -109,6 +111,12 @@ async function commitAddChannel() {
       >
         <Hash class="w-4 h-4 shrink-0" :stroke-width="2" />
         <span class="flex-1 truncate">{{ c.name }}</span>
+        <PenLine
+          v-if="c.id !== currentChannelId && drafts.has(c.id)"
+          class="w-3.5 h-3.5 shrink-0 text-base-content/40"
+          :stroke-width="2"
+          :title="`Draft: ${drafts.get(c.id)}`"
+        />
         <span v-if="viewersByChannel?.[c.id]?.length" class="shrink-0" :title="viewersTitle(c.id)">
           <SeenCluster :members="viewersByChannel[c.id]" :size="14" :max="3" />
         </span>
@@ -130,6 +138,12 @@ async function commitAddChannel() {
       >
         <Hash class="w-4 h-4 shrink-0" :stroke-width="2" />
         <span class="flex-1 truncate">{{ c.name }}</span>
+        <PenLine
+          v-if="c.id !== currentChannelId && drafts.has(c.id)"
+          class="w-3.5 h-3.5 shrink-0 text-base-content/40"
+          :stroke-width="2"
+          :title="`Draft: ${drafts.get(c.id)}`"
+        />
         <span v-if="viewersByChannel?.[c.id]?.length" class="shrink-0" :title="viewersTitle(c.id)">
           <SeenCluster :members="viewersByChannel[c.id]" :size="14" :max="3" />
         </span>

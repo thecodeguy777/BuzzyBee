@@ -15,6 +15,7 @@
 import { computed, effectScope, ref, watch } from 'vue'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { broadcast } from '@/lib/realtime'
 import { useAuthStore } from '@/stores/auth'
 
 const HEARTBEAT_MS = 10_000
@@ -58,8 +59,8 @@ function payload(userId: string): OnlineUser {
 }
 
 function ping() {
-  if (!channel || !subscribed || !trackedFor) return
-  void channel.send({ type: 'broadcast', event: 'online', payload: payload(trackedFor) })
+  if (!trackedFor) return
+  broadcast(channel, 'online', payload(trackedFor))
 }
 
 /** Call on navigation — updates everyone else's view of where you are. */
@@ -109,6 +110,23 @@ function onVisible() {
   }
 }
 
+// ── Extension point ──────────────────────────────────────────────────────────
+// Buzz (and future ephemeral user-to-user pings) ride this same always-on
+// channel instead of opening their own. Handlers are looked up at event time,
+// so registration order vs. start() doesn't matter.
+const EXTRA_EVENTS = ['buzz', 'buzz-ack'] as const
+type ExtraEvent = (typeof EXTRA_EVENTS)[number]
+const extraHandlers: Partial<Record<ExtraEvent, ((payload: unknown) => void)[]>> = {}
+
+export function onOnlineEvent(event: ExtraEvent, handler: (payload: unknown) => void) {
+  ;(extraHandlers[event] ??= []).push(handler)
+}
+
+/** Fire-and-forget broadcast on the online channel. False when not connected. */
+export function sendOnlineEvent(event: ExtraEvent, payload: unknown): boolean {
+  return broadcast(channel, event, payload)
+}
+
 async function start(userId: string) {
   if (channel && trackedFor === userId) return
   await stop() // supabase-js caches channels by topic — never race a teardown
@@ -118,6 +136,11 @@ async function start(userId: string) {
   const ch = supabase.channel('bb-online', { config: { broadcast: { self: true } } })
   ch.on('broadcast', { event: 'online' }, (m: { payload?: unknown }) => onPing(m.payload as OnlineUser | undefined))
   ch.on('broadcast', { event: 'bye' }, (m: { payload?: unknown }) => onBye((m.payload as { user_id?: string } | undefined)?.user_id))
+  for (const ev of EXTRA_EVENTS) {
+    ch.on('broadcast', { event: ev }, (m: { payload?: unknown }) => {
+      for (const h of extraHandlers[ev] ?? []) h(m.payload)
+    })
+  }
   ch.subscribe((status) => {
     subscribed = status === 'SUBSCRIBED'
     // Announce on every (re)join so a reconnect can't lose us.
@@ -132,10 +155,8 @@ async function start(userId: string) {
 
 async function stop() {
   if (channel && subscribed && trackedFor) {
-    // Best-effort goodbye — TTL catches the rest.
-    try {
-      await channel.send({ type: 'broadcast', event: 'bye', payload: { user_id: trackedFor } })
-    } catch { /* ignore */ }
+    // Best-effort goodbye — only over a live socket; TTL catches the rest.
+    broadcast(channel, 'bye', { user_id: trackedFor })
   }
   trackedFor = null
   joinedAt = null

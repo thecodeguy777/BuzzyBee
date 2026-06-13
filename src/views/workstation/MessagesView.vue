@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick, inject } from 'vue'
 import {
-  Send, Paperclip, Plus, Search, X, Check, Users, LogOut, ArrowLeft, MessagesSquare, Loader2, Smile,
+  Send, Paperclip, Plus, Search, X, Check, Users, LogOut, ArrowLeft, MessagesSquare, Loader2, Smile, Zap,
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
 import SeenCluster from '@/components/comms/SeenCluster.vue'
@@ -9,7 +9,10 @@ import CommsMessage from '@/components/comms/CommsMessage.vue'
 import TypingIndicator from '@/components/comms/TypingIndicator.vue'
 import MediaPicker from '@/components/comms/MediaPicker.vue'
 import { COMMS_STREAM, HUDDLE_PRESENCE } from '@/composables/commsStream'
+import { useBuzz, type BuzzResult } from '@/composables/useBuzz'
+import { AVAILABILITY, availabilityOf } from '@/lib/availability'
 import { useChannelsStore, type Channel } from '@/stores/channels'
+import { useDraftsStore } from '@/stores/drafts'
 import { useTeamStore } from '@/stores/team'
 import { useAuthStore } from '@/stores/auth'
 import { uploadCommsFile } from '@/lib/commsAttachments'
@@ -29,6 +32,7 @@ const huddlePresence = inject(HUDDLE_PRESENCE, null)
 const channels = useChannelsStore()
 const team = useTeamStore()
 const auth = useAuthStore()
+const drafts = useDraftsStore()
 
 const currentId = computed(() => channels.currentChannelId)
 const current = computed(() => channels.dms.find((d) => d.id === currentId.value) ?? null)
@@ -50,6 +54,34 @@ const threads = computed(() =>
 )
 const partnerId = (c: Channel) => channels.dmMembers[c.id]?.[0] ?? null
 const isOnline = (id: string | null) => !!id && (huddlePresence?.onlineUsers.value ?? []).includes(id)
+// "Online · Away — back at 3pm" — presence answers "app open?", availability
+// answers "expect a reply?"; show both when they disagree.
+function presenceLine(id: string | null) {
+  const base = isOnline(id) ? 'Online' : 'Offline'
+  const p = id ? team.profiles[id] : null
+  const a = availabilityOf(p?.availability)
+  if (a === 'active') return base
+  const note = p?.status_note ? ` — ${p.status_note}` : ''
+  return `${base} · ${AVAILABILITY[a].label}${note}`
+}
+
+// Buzz — ring the 1:1 partner's screen; feedback flashes in the header subtitle.
+const { buzz } = useBuzz()
+const buzzNote = ref('')
+const BUZZ_NOTES: Record<BuzzResult, string> = {
+  sent: 'Buzzing their screen now',
+  away: 'Away — they will see your note',
+  cooldown: 'Buzzed just now — give it a minute',
+  failed: 'Could not buzz right now',
+}
+let buzzNoteTimer: ReturnType<typeof setTimeout> | undefined
+async function buzzPartner() {
+  const to = current.value && !current.value.is_group ? partnerId(current.value) : null
+  if (!to) return
+  buzzNote.value = BUZZ_NOTES[await buzz(to)]
+  clearTimeout(buzzNoteTimer)
+  buzzNoteTimer = setTimeout(() => (buzzNote.value = ''), 4000)
+}
 function memberAvatars(c: Channel) {
   return (channels.dmMembers[c.id] ?? []).slice(0, 4).map((id) => ({
     id,
@@ -241,20 +273,29 @@ const threadParent = computed(() =>
 const threadReplies = computed(() =>
   threadParentId.value ? stream.repliesByParent.value[threadParentId.value] ?? [] : [],
 )
-const replyDraft = ref('')
+// Thread replies get their own draft slot, keyed by the parent message.
+const replyDraft = computed({
+  get: () => (threadParentId.value ? drafts.get(`thread:${threadParentId.value}`) : ''),
+  set: (v) => drafts.set(threadParentId.value ? `thread:${threadParentId.value}` : null, v),
+})
 async function sendReply() {
+  const pid = threadParentId.value
   const body = replyDraft.value
-  if (!body.trim() || !threadParentId.value) return
-  replyDraft.value = ''
+  if (!body.trim() || !pid) return
+  drafts.clear(`thread:${pid}`)
   try {
-    await stream.send(body, { parentId: threadParentId.value })
+    await stream.send(body, { parentId: pid })
   } catch {
-    replyDraft.value = body
+    drafts.set(`thread:${pid}`, body)
   }
 }
 
 // ── Composer ──────────────────────────────────────────────────────────────────
-const draft = ref('')
+// Messenger-style draft: persisted per conversation, restored on switch/reload.
+const draft = computed({
+  get: () => drafts.get(currentId.value),
+  set: (v) => drafts.set(currentId.value, v),
+})
 const sending = ref(false)
 const pendingAtts = ref<Attachment[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -291,17 +332,19 @@ function removeAtt(i: number) {
   pendingAtts.value = pendingAtts.value.filter((_, idx) => idx !== i)
 }
 async function send() {
+  const cid = currentId.value
   const body = draft.value
   const atts = pendingAtts.value
   if (!body.trim() && !atts.length) return
-  draft.value = ''
+  drafts.clear(cid)
   pendingAtts.value = []
   sending.value = true
   try {
     await stream.send(body, { attachments: atts })
     scrollToBottom()
   } catch {
-    draft.value = body
+    // Restore to the thread it was typed in — it may no longer be current.
+    drafts.set(cid, body)
     pendingAtts.value = atts
   } finally {
     sending.value = false
@@ -404,8 +447,14 @@ function lastReplyAtFor(m: CommsMsg) {
           </span>
           <span class="flex-1 min-w-0">
             <span class="block text-sm truncate" :class="channels.isUnread(c.id) ? 'font-semibold text-base-content' : 'font-medium text-base-content/80'">{{ threadName(c) }}</span>
-            <span class="block text-[0.7rem] text-base-content/40">
-              <template v-if="c.is_group">{{ (channels.dmMembers[c.id] ?? []).length + 1 }} people · </template>{{ previewFor(c) || 'No messages yet' }}
+            <span class="block text-[0.7rem] text-base-content/40 truncate">
+              <!-- Messenger-style: an unsent draft beats the last-activity line. -->
+              <template v-if="c.id !== currentId && drafts.has(c.id)">
+                <span class="text-error/90 font-semibold">Draft:</span> {{ drafts.get(c.id) }}
+              </template>
+              <template v-else>
+                <template v-if="c.is_group">{{ (channels.dmMembers[c.id] ?? []).length + 1 }} people · </template>{{ previewFor(c) || 'No messages yet' }}
+              </template>
             </span>
           </span>
           <span v-if="channels.mentions[c.id]" class="min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-error text-white text-[0.65rem] font-bold flex items-center justify-center shrink-0">@{{ channels.mentions[c.id] }}</span>
@@ -440,9 +489,18 @@ function lastReplyAtFor(m: CommsMsg) {
               <template v-if="current.is_group">
                 <Users class="w-3 h-3" :stroke-width="2" /> {{ (channels.dmMembers[current.id] ?? []).length + 1 }} people
               </template>
-              <template v-else>{{ isOnline(partnerId(current)) ? 'Online' : 'Offline' }}</template>
+              <template v-else>{{ buzzNote || presenceLine(partnerId(current)) }}</template>
             </div>
           </div>
+          <button
+            v-if="!current.is_group"
+            type="button"
+            class="w-8 h-8 rounded-lg grid place-items-center text-base-content/50 hover:bg-base-200 hover:text-warning"
+            title="Buzz — ring their screen"
+            @click="buzzPartner"
+          >
+            <Zap class="w-4 h-4" :stroke-width="2" />
+          </button>
           <button
             v-if="current.is_group"
             type="button"

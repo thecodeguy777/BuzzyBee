@@ -13,7 +13,9 @@ import {
   MessagesSquare,
   MessageCircle,
   Handshake,
-  Target
+  Target,
+  FileText,
+  Settings
 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useChannelsStore } from '@/stores/channels'
@@ -53,6 +55,8 @@ const topNavItems = computed<NavItem[]>(() => {
   if (auth.role === 'va') items.push({ to: '/app/time', label: 'Time', icon: Clock })
   // Nectar — the opportunity pool. VAs browse & apply; PMs/admins post.
   items.push({ to: '/app/nectar', label: 'Nectar', icon: Target })
+  // Forms — intake builder; submissions land as tasks. PMs/admins build them.
+  if (auth.role === 'pm' || auth.isAdmin) items.push({ to: '/app/forms', label: 'Forms', icon: FileText })
   return items
 })
 const bottomNavItems = computed<NavItem[]>(() => {
@@ -70,6 +74,7 @@ const bottomNavItems = computed<NavItem[]>(() => {
   // Tickets / bug triage is universal — anyone can file and view a bug
   // report. RLS still scopes what each role sees inside the page.
   items.push({ to: '/app/tickets', label: 'Tickets', icon: Bug })
+  items.push({ to: '/app/settings', label: 'Settings', icon: Settings })
   return items
 })
 

@@ -108,3 +108,27 @@ export function playScreenShare() {
     { freq: 1046.5, start: 0.16, dur: 0.2, type: 'triangle', gain: 0.1 },
   ])
 }
+
+// Buzz — the attention ring. Deliberately bypasses the mute switch (a buzz
+// exists to cut through); an insistent square-wave trill that repeats until
+// the returned stop() runs. Callers own the timeout.
+export function startBuzzRing(): () => void {
+  const c = ac()
+  if (!c) return () => {}
+  const burst = () => {
+    const seq: Note[] = []
+    for (let r = 0; r < 2; r++) {
+      const base = r * 0.46
+      seq.push(
+        { freq: 880, start: base, dur: 0.09, type: 'square', gain: 0.07 },
+        { freq: 659.25, start: base + 0.1, dur: 0.09, type: 'square', gain: 0.07 },
+        { freq: 880, start: base + 0.2, dur: 0.09, type: 'square', gain: 0.07 },
+        { freq: 659.25, start: base + 0.3, dur: 0.13, type: 'square', gain: 0.07 },
+      )
+    }
+    for (const n of seq) tone(c, n)
+  }
+  burst()
+  const timer = setInterval(burst, 1400)
+  return () => clearInterval(timer)
+}

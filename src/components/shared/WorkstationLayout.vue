@@ -30,7 +30,9 @@ const fullBleed = computed(
   () =>
     route.path.startsWith('/app/comms') ||
     route.path.startsWith('/app/messages') ||
-    route.path.startsWith('/app/crm'),
+    route.path.startsWith('/app/crm') ||
+    // The form builder is a 3-pane editor that manages its own scroll.
+    /^\/app\/forms\/.+/.test(route.path),
 )
 
 // Tasks keeps the padded canvas but on the white surface — its board columns

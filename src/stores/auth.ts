@@ -13,6 +13,8 @@ export interface Profile {
   timezone: string | null
   avatar_url: string | null
   is_active: boolean
+  availability: string | null
+  status_note: string | null
 }
 
 export const useAuthStore = defineStore('auth', () => {
@@ -56,7 +58,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
     const { data, error: err } = await supabase
       .from('profiles')
-      .select('id, email, full_name, role, timezone, avatar_url, is_active')
+      .select('id, email, full_name, role, timezone, avatar_url, is_active, availability, status_note')
       .eq('id', user.value.id)
       .maybeSingle()
 
@@ -73,7 +75,7 @@ export const useAuthStore = defineStore('auth', () => {
     // nothing); sign them out client-side too so they land on the login page.
     if (profile.value && profile.value.is_active === false) {
       console.warn('[auth] account is deactivated — signing out')
-      await supabase.auth.signOut()
+      await supabase.auth.signOut({ scope: 'local' })
       profile.value = null
     }
   }
@@ -146,7 +148,10 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function signOut() {
-    await supabase.auth.signOut()
+    // scope:'local' signs out THIS device only. The default ('global') revokes
+    // refresh tokens everywhere — signing out at home killed the office tab and
+    // the dialer within the hour, which read as "the app randomly logs us out".
+    await supabase.auth.signOut({ scope: 'local' })
     setSession(null)
     profile.value = null
   }
@@ -156,6 +161,8 @@ export const useAuthStore = defineStore('auth', () => {
     timezone?: string | null
     avatar_url?: string | null
     role?: UserRole
+    availability?: string
+    status_note?: string | null
   }) {
     if (!user.value) throw new Error('Not authenticated')
     loading.value = true
@@ -165,7 +172,7 @@ export const useAuthStore = defineStore('auth', () => {
         .from('profiles')
         .update(patch)
         .eq('id', user.value.id)
-        .select('id, email, full_name, role, timezone, avatar_url, is_active')
+        .select('id, email, full_name, role, timezone, avatar_url, is_active, availability, status_note')
         .single()
       if (err) throw err
       profile.value = data as Profile

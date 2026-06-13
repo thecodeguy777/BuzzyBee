@@ -24,6 +24,7 @@ import { useTasksStore } from '@/stores/tasks'
 import { useAuthStore } from '@/stores/auth'
 import { useTeamStore } from '@/stores/team'
 import { useCrmStore } from '@/stores/crm'
+import { useDraftsStore } from '@/stores/drafts'
 import { uploadCommsFile, linkAttachment } from '@/lib/commsAttachments'
 import { displayName } from '@/lib/format'
 import type { Attachment, CommsMessage as CommsMsg } from '@/composables/useChannelStream'
@@ -332,7 +333,13 @@ const memberList = computed(() => {
 
 // ── Composer ────────────────────────────────────────────────────────────────
 type PendingAtt = Attachment & { _localId: string; status?: 'uploading' | 'error' }
-const draft = ref('')
+// Messenger-style draft: every keystroke lands in the per-channel drafts store,
+// so switching channels (or reloading) brings the half-typed message back.
+const drafts = useDraftsStore()
+const draft = computed({
+  get: () => drafts.get(currentChannelId.value),
+  set: (v) => drafts.set(currentChannelId.value, v)
+})
 const pending = ref<PendingAtt[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
 const fileAccept = ref('*/*')
@@ -423,7 +430,9 @@ watch(
 )
 watch(currentChannelId, () => {
   pending.value = []
-  draft.value = ''
+  // The draft is per-channel (drafts store) — don't wipe it, just re-fit the
+  // composer to whatever draft the new channel has waiting.
+  nextTick(autogrow)
   sendFailed.value = false
   mentionedIds.value = new Set()
   mentionOpen.value = false
@@ -565,6 +574,7 @@ async function onPickGif(g: Gif) {
 }
 
 async function onSend() {
+  const cid = currentChannelId.value
   const body = draft.value
   const prevPending = pending.value
   const atts: Attachment[] = sendableAttachments.value.map((p) => ({
@@ -583,7 +593,8 @@ async function onSend() {
     scrollToBottom()
   } catch (e) {
     // Restore the draft + attachments so nothing is lost, and flag it inline.
-    draft.value = body
+    // Write to the channel it was typed in — it may no longer be current.
+    drafts.set(cid, body)
     pending.value = prevPending
     sendFailed.value = true
     commsError.value = (e as Error).message
@@ -691,7 +702,11 @@ function onDocMouseDown(e: MouseEvent) {
 
 // ── Thread panel ──────────────────────────────────────────────────────────────
 const threadParentId = ref<string | null>(null)
-const threadDraft = ref('')
+// Thread replies get their own draft slot, keyed by the parent message.
+const threadDraft = computed({
+  get: () => (threadParentId.value ? drafts.get(`thread:${threadParentId.value}`) : ''),
+  set: (v) => drafts.set(threadParentId.value ? `thread:${threadParentId.value}` : null, v)
+})
 const threadParent = computed(() =>
   stream.rootMessages.value.find((m) => m.id === threadParentId.value) ?? null
 )
@@ -699,13 +714,14 @@ const threadReplies = computed(() =>
   threadParentId.value ? stream.repliesByParent.value[threadParentId.value] ?? [] : []
 )
 async function sendReply() {
+  const pid = threadParentId.value
   const body = threadDraft.value
-  if (!body.trim() || !threadParentId.value) return
-  threadDraft.value = ''
+  if (!body.trim() || !pid) return
+  drafts.clear(`thread:${pid}`)
   try {
-    await stream.send(body, { parentId: threadParentId.value })
+    await stream.send(body, { parentId: pid })
   } catch (e) {
-    threadDraft.value = body
+    drafts.set(`thread:${pid}`, body)
     commsError.value = (e as Error).message
   }
 }
@@ -869,6 +885,8 @@ onMounted(() => {
   if (currentChannelId.value) void channels.markRead(currentChannelId.value)
   // CRM links power the per-message "Log to CRM" action.
   if (!crm.loaded) void crm.load()
+  // A restored draft can be multi-line — fit the composer to it.
+  nextTick(autogrow)
   scrollToBottom()
 })
 // Keep the channel→CRM mapping scoped to the active workspace.

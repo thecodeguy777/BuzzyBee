@@ -14,6 +14,7 @@ import { userColor } from '@/lib/userColor'
 import { useProfileHover } from '@/composables/useProfileHover'
 import { COMMS_STREAM, HUDDLE_PRESENCE } from '@/composables/commsStream'
 import { useChannelsStore } from '@/stores/channels'
+import { useDraftsStore } from '@/stores/drafts'
 import { useTeamStore } from '@/stores/team'
 import { useAuthStore } from '@/stores/auth'
 
@@ -26,7 +27,13 @@ const route = useRoute()
 const router = useRouter()
 
 const expanded = ref(false)
-const draft = ref('')
+// Same per-channel draft slot as the full Comms page — start typing in the
+// dock, finish on /app/comms (or vice versa), nothing lost on the way.
+const drafts = useDraftsStore()
+const draft = computed({
+  get: () => drafts.get(channels.currentChannelId),
+  set: (v) => drafts.set(channels.currentChannelId, v),
+})
 const channelMenuOpen = ref(false)
 const listEl = ref<HTMLElement | null>(null)
 
@@ -191,14 +198,16 @@ function scrollToBottom() {
   })
 }
 async function send() {
+  const cid = channels.currentChannelId
   const body = draft.value
   if (!body.trim()) return
-  draft.value = ''
+  drafts.clear(cid)
   try {
     await stream.send(body)
     scrollToBottom()
   } catch {
-    draft.value = body
+    // Restore to the channel it was typed in — it may no longer be current.
+    drafts.set(cid, body)
   }
 }
 function open() {

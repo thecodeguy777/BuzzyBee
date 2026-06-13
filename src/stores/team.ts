@@ -22,6 +22,8 @@ export interface MemberProfile {
   timezone: string | null
   avatar_url: string | null
   is_active?: boolean
+  availability?: string | null
+  status_note?: string | null
 }
 
 export const useTeamStore = defineStore('team', () => {
@@ -65,7 +67,7 @@ export const useTeamStore = defineStore('team', () => {
     if (missing.length === 0) return
     const { data, error: err } = await supabase
       .from('profiles')
-      .select('id, full_name, email, role, timezone, avatar_url, is_active')
+      .select('id, full_name, email, role, timezone, avatar_url, is_active, availability, status_note')
       .in('id', missing)
     if (err) {
       console.warn('[team] fetchProfiles:', err.message)

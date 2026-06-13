@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { MessageSquare, Mail, Clock } from 'lucide-vue-next'
+import { computed, ref, watch } from 'vue'
+import { MessageSquare, Mail, Clock, Zap } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
 import { userColor } from '@/lib/userColor'
 import { useTeamStore } from '@/stores/team'
 import { useAuthStore } from '@/stores/auth'
+import { useBuzz, type BuzzResult } from '@/composables/useBuzz'
+import { AVAILABILITY, availabilityOf } from '@/lib/availability'
 
 // Slack-style profile card. Presentational + driven by useProfileHover(): pass
 // the active userId and computed style; emits `start-dm` for the Message action
@@ -25,6 +27,12 @@ const nameColor = computed(() => (props.userId ? userColor(props.userId) : undef
 const isSelf = computed(() => props.userId === auth.user?.id)
 const role = computed(() => (p.value?.role ? p.value.role.replace(/_/g, ' ') : 'Member'))
 const email = computed(() => p.value?.email ?? '')
+// Person-set availability — only shown when it actually says something.
+const avail = computed(() => {
+  const a = availabilityOf(p.value?.availability)
+  return a === 'active' ? null : AVAILABILITY[a]
+})
+const statusNote = computed(() => p.value?.status_note ?? '')
 const localTime = computed(() => {
   const tz = p.value?.timezone
   if (!tz) return ''
@@ -34,6 +42,21 @@ const localTime = computed(() => {
     return ''
   }
 })
+
+// Buzz — ring their screen. One line of feedback under the actions.
+const { buzz } = useBuzz()
+const buzzNote = ref('')
+const BUZZ_NOTES: Record<BuzzResult, string> = {
+  sent: 'Buzzing their screen now',
+  away: 'They are away — left a note in your DM',
+  cooldown: 'You buzzed them just now — give it a minute',
+  failed: 'Could not buzz right now'
+}
+async function doBuzz() {
+  if (!props.userId) return
+  buzzNote.value = BUZZ_NOTES[await buzz(props.userId)]
+}
+watch(() => props.userId, () => (buzzNote.value = ''))
 </script>
 
 <template>
@@ -54,6 +77,15 @@ const localTime = computed(() => {
           </div>
         </div>
 
+        <div
+          v-if="avail"
+          class="mt-3 flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-base-200/70 text-[0.72rem]"
+        >
+          <span class="w-2 h-2 rounded-full shrink-0" :style="{ background: avail.dot }" />
+          <span class="font-semibold">{{ avail.label }}</span>
+          <span v-if="statusNote" class="text-base-content/55 truncate">— {{ statusNote }}</span>
+        </div>
+
         <div class="mt-3 space-y-1.5 text-[0.72rem] text-base-content/60">
           <div v-if="email" class="flex items-center gap-2 min-w-0">
             <Mail class="w-3.5 h-3.5 shrink-0 text-base-content/40" :stroke-width="1.75" />
@@ -65,15 +97,25 @@ const localTime = computed(() => {
           </div>
         </div>
 
-        <button
-          v-if="!isSelf"
-          type="button"
-          class="mt-3.5 w-full inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-content hover:opacity-90"
-          @click="emit('start-dm', userId!)"
-        >
-          <MessageSquare class="w-4 h-4" :stroke-width="2" /> Message
-        </button>
-        <div v-else class="mt-3.5 text-center text-[0.7rem] text-base-content/40">This is you</div>
+        <div v-if="!isSelf" class="mt-3.5 flex gap-2">
+          <button
+            type="button"
+            class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-content hover:opacity-90"
+            @click="emit('start-dm', userId!)"
+          >
+            <MessageSquare class="w-4 h-4" :stroke-width="2" /> Message
+          </button>
+          <button
+            type="button"
+            class="w-10 rounded-lg border border-base-300 grid place-items-center text-base-content/60 hover:text-warning hover:border-warning/50"
+            title="Buzz — ring their screen"
+            @click="doBuzz"
+          >
+            <Zap class="w-4 h-4" :stroke-width="2" />
+          </button>
+        </div>
+        <div v-if="!isSelf && buzzNote" class="mt-2 text-center text-[0.7rem] text-base-content/50">{{ buzzNote }}</div>
+        <div v-if="isSelf" class="mt-3.5 text-center text-[0.7rem] text-base-content/40">This is you</div>
       </div>
     </Transition>
   </Teleport>
