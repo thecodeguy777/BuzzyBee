@@ -12,6 +12,11 @@ const emit = defineEmits<{
   (e: 'new-deal', stage: StageId): void
 }>()
 
+// A single stage can hold thousands of deals (imported leads pile into "lead").
+// Rendering them all locks the browser, so the board only draws the top slice of
+// each column — it's a triage surface; the Table view handles the full volume.
+const CARD_CAP = 100
+
 const dealsByStage = computed<Record<StageId, Deal[]>>(() => {
   const out = Object.fromEntries(STAGES.map((s) => [s.id, [] as Deal[]])) as Record<StageId, Deal[]>
   for (const d of props.deals) out[d.stage]?.push(d)
@@ -123,12 +128,18 @@ watch(
           class="flex-1 overflow-y-auto p-2.5 flex flex-col gap-[9px] min-h-[90px]"
         >
           <CrmDealCard
-            v-for="d in dealsByStage[st.id]"
+            v-for="d in dealsByStage[st.id].slice(0, CARD_CAP)"
             :key="d.id"
             :deal="d"
             :data-deal-id="d.id"
             @open="emit('open', $event)"
           />
+          <div
+            v-if="dealsByStage[st.id].length > CARD_CAP"
+            class="py-2 px-1 text-center text-[11.5px] text-base-content/45 leading-snug"
+          >
+            +{{ (dealsByStage[st.id].length - CARD_CAP).toLocaleString() }} more — switch to <strong class="font-semibold">Table</strong> to see all
+          </div>
           <div
             v-if="dealsByStage[st.id].length === 0"
             class="py-[18px] text-center text-base-content/40 text-[12.5px] italic border-[1.5px] border-dashed border-base-300 rounded-[10px]"

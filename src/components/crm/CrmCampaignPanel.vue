@@ -70,8 +70,16 @@ const htmlArea = ref<HTMLTextAreaElement | null>(null)
 type AudienceMode = 'all' | 'companies' | 'contacts'
 const audienceMode = ref<AudienceMode>('all')
 const selectedCompanyIds = ref<string[]>([])
-const companyList = computed(() =>
-  Object.values(crm.companies).sort((a, b) => a.name.localeCompare(b.name)))
+const companySearch = ref('')
+const companyList = computed(() => {
+  // Cap + search — a workspace can hold thousands of companies; rendering them
+  // all as checkboxes locks the panel.
+  const q = companySearch.value.trim().toLowerCase()
+  const list = q
+    ? Object.values(crm.companies).filter((c) => c.name.toLowerCase().includes(q))
+    : Object.values(crm.companies)
+  return [...list].sort((a, b) => a.name.localeCompare(b.name)).slice(0, 100)
+})
 
 function toggleCompany(id: string) {
   selectedCompanyIds.value = selectedCompanyIds.value.includes(id)
@@ -82,13 +90,17 @@ function toggleCompany(id: string) {
 const selectedContactIds = ref<string[]>([])
 const contactSearch = ref('')
 const contactList = computed(() => {
+  // Only contacts with an email can receive a campaign — don't surface the
+  // email-less ones in the picker (the funnel below still tallies them for the
+  // "all"/"companies" modes).
+  const withEmail = crm.contacts.filter((c) => c.email.trim())
   const q = contactSearch.value.trim().toLowerCase()
   const list = q
-    ? crm.contacts.filter((c) =>
+    ? withEmail.filter((c) =>
         c.name.toLowerCase().includes(q)
         || c.email.toLowerCase().includes(q)
         || (crm.company(c.companyId)?.name ?? '').toLowerCase().includes(q))
-    : crm.contacts
+    : withEmail
   return [...list].sort((a, b) => a.name.localeCompare(b.name)).slice(0, 100)
 })
 function toggleContact(id: string) {
@@ -409,13 +421,20 @@ onBeforeUnmount(() => {
                 </button>
               </div>
 
-              <div v-if="audienceMode === 'companies'" class="max-h-40 overflow-y-auto rounded-[10px] border border-base-300 p-1 mb-2.5">
-                <label v-for="co in companyList" :key="co.id" class="flex items-center gap-2 px-2.5 py-1.5 rounded-md hover:bg-base-200 cursor-pointer">
-                  <input type="checkbox" class="checkbox checkbox-xs" :checked="selectedCompanyIds.includes(co.id)" @change="toggleCompany(co.id)" />
-                  <span class="flex-1 text-[13px] font-semibold text-base-content truncate">{{ co.name }}</span>
-                  <span class="text-[11.5px] text-base-content/40">{{ crm.contactsFor(co.id).length }} contacts</span>
+              <div v-if="audienceMode === 'companies'" class="rounded-[10px] border border-base-300 mb-2.5 overflow-hidden">
+                <label class="flex items-center gap-2 px-2.5 py-2 border-b border-base-200 bg-base-200/40">
+                  <Search :size="13" class="text-base-content/40 flex-none" />
+                  <input v-model="companySearch" class="flex-1 bg-transparent outline-none text-[12.5px] text-base-content placeholder:text-base-content/40" placeholder="Search companies…" />
+                  <span v-if="selectedCompanyIds.length" class="text-[11px] font-bold flex-none" :style="{ color: 'var(--accent-fg)' }">{{ selectedCompanyIds.length }} selected</span>
                 </label>
-                <div v-if="!companyList.length" class="px-2.5 py-3 text-[12.5px] text-base-content/40 text-center">No companies in this workspace yet</div>
+                <div class="max-h-40 overflow-y-auto p-1">
+                  <label v-for="co in companyList" :key="co.id" class="flex items-center gap-2 px-2.5 py-1.5 rounded-md hover:bg-base-200 cursor-pointer">
+                    <input type="checkbox" class="checkbox checkbox-xs" :checked="selectedCompanyIds.includes(co.id)" @change="toggleCompany(co.id)" />
+                    <span class="flex-1 text-[13px] font-semibold text-base-content truncate">{{ co.name }}</span>
+                    <span class="text-[11.5px] text-base-content/40">{{ crm.contactsFor(co.id).length }} contacts</span>
+                  </label>
+                  <div v-if="!companyList.length" class="px-2.5 py-3 text-[12.5px] text-base-content/40 text-center">{{ companySearch ? 'No matches' : 'No companies in this workspace yet' }}</div>
+                </div>
               </div>
 
               <div v-else-if="audienceMode === 'contacts'" class="rounded-[10px] border border-base-300 mb-2.5 overflow-hidden">
@@ -429,12 +448,12 @@ onBeforeUnmount(() => {
                     <input type="checkbox" class="checkbox checkbox-xs" :checked="selectedContactIds.includes(c.id)" @change="toggleContact(c.id)" />
                     <span class="flex-1 min-w-0 flex items-baseline gap-2">
                       <span class="text-[13px] font-semibold text-base-content truncate">{{ c.name }}</span>
-                      <span class="text-[11.5px] truncate" :class="c.email ? 'text-base-content/40' : 'text-[#c2253c]/70 italic'">{{ c.email || 'no email' }}</span>
+                      <span class="text-[11.5px] text-base-content/40 truncate">{{ c.email }}</span>
                     </span>
                     <span class="text-[11.5px] text-base-content/40 truncate max-w-[7rem] flex-none">{{ crm.company(c.companyId)?.name }}</span>
                   </label>
                   <div v-if="!contactList.length" class="px-2.5 py-3 text-[12.5px] text-base-content/40 text-center">
-                    {{ contactSearch ? 'No matches' : 'No contacts in this workspace yet' }}
+                    {{ contactSearch ? 'No matches' : (crm.contacts.length ? 'No contacts have an email address yet' : 'No contacts in this workspace yet') }}
                   </div>
                 </div>
               </div>
