@@ -1,6 +1,7 @@
 import { computed, onUnmounted, ref, watch, type Ref } from 'vue'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { broadcast } from '@/lib/realtime'
 import { useAuthStore } from '@/stores/auth'
 
 /**
@@ -105,7 +106,7 @@ export function useHuddlePresence(opts: {
       channel_id: !leaving && opts.inHuddle.value ? opts.channelId.value ?? null : null,
       viewing: !leaving ? opts.viewingChannelId?.value ?? null : null,
     }
-    void channel.send({ type: 'broadcast', event: 'huddle', payload })
+    broadcast(channel, 'huddle', payload)
     // Our own indicator shouldn't wait for the round trip (self-broadcast is off).
     onPing(payload)
   }

@@ -1,6 +1,7 @@
 import { ref, computed, watch, onUnmounted, type Ref } from 'vue'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { broadcast } from '@/lib/realtime'
 import { useAuthStore } from '@/stores/auth'
 import { useTeamStore } from '@/stores/team'
 
@@ -305,11 +306,7 @@ export function useTaskChat(taskId: Ref<string | null | undefined>) {
     const now = Date.now()
     if (now - lastTypingSent < 1200) return
     lastTypingSent = now
-    void channel.send({
-      type: 'broadcast',
-      event: 'typing',
-      payload: { userId: uid, name: auth.fullName },
-    })
+    broadcast(channel, 'typing', { userId: uid, name: auth.fullName })
   }
 
   // React to the open task changing: tear the old channel down, set the new up.
