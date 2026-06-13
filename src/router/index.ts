@@ -66,6 +66,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, layout: 'workstation' }
   },
   {
+    path: '/app/settings',
+    name: 'workstation-settings',
+    component: () => import('@/views/workstation/SettingsView.vue'),
+    meta: { requiresAuth: true, layout: 'workstation' }
+  },
+  {
     path: '/app/clients',
     name: 'workstation-clients',
     component: () => import('@/views/workstation/ClientsView.vue'),
@@ -124,6 +130,33 @@ const routes: RouteRecordRaw[] = [
     name: 'workstation-nectar',
     component: () => import('@/views/workstation/NectarView.vue'),
     meta: { requiresAuth: true, layout: 'workstation' }
+  },
+  {
+    path: '/app/forms',
+    name: 'workstation-forms',
+    component: () => import('@/views/workstation/FormsView.vue'),
+    meta: { requiresAuth: true, layout: 'workstation' }
+  },
+  {
+    path: '/app/forms/:id',
+    name: 'workstation-form-builder',
+    component: () => import('@/views/workstation/FormBuilderView.vue'),
+    props: true,
+    meta: { requiresAuth: true, layout: 'workstation' }
+  },
+  {
+    path: '/app/forms/:id/responses',
+    name: 'workstation-form-responses',
+    component: () => import('@/views/workstation/FormResponsesView.vue'),
+    props: true,
+    meta: { requiresAuth: true, layout: 'workstation' }
+  },
+  {
+    path: '/f/:token',
+    name: 'public-form',
+    component: () => import('@/views/shared/PublicFormView.vue'),
+    props: true,
+    meta: { requiresAuth: false, bareLayout: true }
   },
   {
     path: '/va/:handle',
