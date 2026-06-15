@@ -14,6 +14,9 @@ import ActivityRail from '@/components/workstation/ActivityRail.vue'
 import SwitchClientModal from '@/components/workstation/SwitchClientModal.vue'
 import ReportButton from '@/components/workstation/ReportButton.vue'
 import CommsDock from '@/components/comms/CommsDock.vue'
+// Floating PiP of the huddle's shared screen — follows you across every page
+// (yields on the Comms page, which shows it inline).
+import HuddleScreenDock from '@/components/comms/HuddleScreenDock.vue'
 // Heavy (rich-text editor, attachments, chat) — load on demand so it doesn't
 // weigh down the eager shell bundle. It self-gates on tasks.selectedTask.
 const TaskDrawer = defineAsyncComponent(() => import('@/components/workstation/TaskDrawer.vue'))
@@ -97,6 +100,7 @@ if (auth.isAuthenticated && !projects.loaded) {
     <SwitchClientModal />
     <ReportButton />
     <CommsDock />
+    <HuddleScreenDock />
     <TaskDrawer />
   </div>
 </template>
