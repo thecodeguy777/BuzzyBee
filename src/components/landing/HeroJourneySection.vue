@@ -14,12 +14,73 @@ import HexClipDef from '@/components/shared/HexClipDef.vue'
 const BEATS = 6 // 0 = cold open, 1..5 = the journey
 const SCROLL_VH = 80
 const sectionEl = ref<HTMLElement | null>(null)
-const active = ref(0)
+const progress = ref(0)
 const reduced = ref(false)
 
 const sectionStyle = computed(() => ({
   height: reduced.value ? 'auto' : `calc(100vh + ${(BEATS - 1) * SCROLL_VH}vh)`,
 }))
+
+const clamp = (v: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v))
+const active = computed(() => Math.round(progress.value * (BEATS - 1)))
+// progress through the cold-open's own scroll share (0..1) — drives chip exit
+const coldp = computed(() => clamp(progress.value * (BEATS - 1)))
+
+// ── pointer parallax: the hero reacts to the cursor at rest ──
+const mx = ref(0) // -1..1
+const my = ref(0)
+const cx = ref(0) // px within the stage (cursor light)
+const cy = ref(0)
+let praf = 0
+function onPointer(e: PointerEvent) {
+  if (reduced.value || praf) return
+  praf = requestAnimationFrame(() => {
+    praf = 0
+    const el = sectionEl.value
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    cx.value = e.clientX - r.left
+    cy.value = e.clientY - r.top
+    mx.value = clamp((cx.value / (r.width || 1)) * 2 - 1, -1, 1)
+    my.value = clamp((cy.value / (window.innerHeight || 1)) * 2 - 1, -1, 1)
+  })
+}
+
+const stageStyle = computed(() => ({
+  '--mx': String(mx.value),
+  '--my': String(my.value),
+  '--cx': cx.value + 'px',
+  '--cy': cy.value + 'px',
+}))
+const fieldStyle = computed(() => ({ opacity: String(reduced.value ? 0.5 : 1 - coldp.value * 0.7) }))
+
+// honeycomb field cells — deterministic layout (no Math.random)
+const CELLS = (() => {
+  const out: { x: number; y: number; d: number }[] = []
+  const cols = 8
+  const rows = 5
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      out.push({ x: (c / (cols - 1)) * 104 - 2 + (r % 2 ? 6 : 0), y: (r / (rows - 1)) * 100, d: ((r * 3 + c) % 7) * 0.45 })
+    }
+  }
+  return out
+})()
+
+// floating glass chips: mouse parallax (by depth) + scroll exit (toward corners)
+const CHIPS = [
+  { depth: 1.0, ex: -54, ey: -34 },
+  { depth: 1.7, ex: 54, ey: -30 },
+  { depth: 1.3, ex: -48, ey: 36 },
+  { depth: 1.9, ex: 52, ey: 34 },
+]
+function chipStyle(i: number) {
+  if (reduced.value) return {}
+  const ch = CHIPS[i]
+  const px = mx.value * ch.depth * 18 + coldp.value * ch.ex
+  const py = my.value * ch.depth * 18 + coldp.value * ch.ey
+  return { transform: `translate(${px}px, ${py}px)`, opacity: String(clamp(1 - coldp.value * 1.7)) }
+}
 
 let raf = 0
 function onScroll() {
@@ -30,8 +91,7 @@ function onScroll() {
     if (!el) return
     const rect = el.getBoundingClientRect()
     const total = el.offsetHeight - window.innerHeight
-    const p = total > 0 ? Math.min(Math.max(-rect.top / total, 0), 1) : 0
-    active.value = Math.round(p * (BEATS - 1))
+    progress.value = total > 0 ? clamp(-rect.top / total) : 0
   })
 }
 
@@ -40,12 +100,17 @@ onMounted(() => {
   if (reduced.value) return
   window.addEventListener('scroll', onScroll, { passive: true })
   window.addEventListener('resize', onScroll)
+  window.addEventListener('pointermove', onPointer, { passive: true })
   onScroll()
+  const el = sectionEl.value
+  if (el) { cx.value = el.getBoundingClientRect().width / 2; cy.value = window.innerHeight * 0.4 }
 })
 onBeforeUnmount(() => {
   window.removeEventListener('scroll', onScroll)
   window.removeEventListener('resize', onScroll)
+  window.removeEventListener('pointermove', onPointer)
   if (raf) cancelAnimationFrame(raf)
+  if (praf) cancelAnimationFrame(praf)
 })
 
 const beatClass = (i: number) => ({
@@ -59,13 +124,19 @@ const beatClass = (i: number) => ({
     <!-- shared rounded-hexagon clip def (same geometry the app uses for avatars) -->
     <HexClipDef />
 
-    <div class="hj-stage">
+    <div class="hj-stage" :style="stageStyle">
       <!-- drifting plum aurora -->
       <div class="hj-aurora" aria-hidden="true">
         <span class="hj-blob hj-blob--1" />
         <span class="hj-blob hj-blob--2" />
         <span class="hj-blob hj-blob--3" />
       </div>
+
+      <!-- living honeycomb field + cursor light -->
+      <div class="hj-hive" :style="fieldStyle" aria-hidden="true">
+        <span v-for="(cell, i) in CELLS" :key="i" class="hj-cell" :style="{ left: cell.x + '%', top: cell.y + '%', animationDelay: cell.d + 's' }" />
+      </div>
+      <div class="hj-glow" aria-hidden="true" />
 
       <!-- hive mark (rounded hexagons) -->
       <div class="hj-mark" aria-hidden="true">
@@ -198,6 +269,22 @@ const beatClass = (i: number) => ({
         </div>
       </div>
 
+      <!-- floating glass chips — mouse parallax + scroll exit -->
+      <div class="hj-chips" aria-hidden="true">
+        <div class="hj-chip hj-chip--a" :style="chipStyle(0)">
+          <div class="hj-chip-in"><span class="hj-chip-hx" style="background:#D6409F">MS</span><span class="hj-chip-msg">Get the spring quote out today?</span></div>
+        </div>
+        <div class="hj-chip hj-chip--b" :style="chipStyle(1)">
+          <div class="hj-chip-in hj-chip-task"><CheckSquare :size="13" :stroke-width="2" /> Turn into task</div>
+        </div>
+        <div class="hj-chip hj-chip--c" :style="chipStyle(2)">
+          <div class="hj-chip-in"><span class="hj-chip-hx" style="background:#8E4EC6">MS</span><span class="hj-chip-name">Maria · VA<span class="hj-on" /></span></div>
+        </div>
+        <div class="hj-chip hj-chip--d" :style="chipStyle(3)">
+          <div class="hj-chip-in hj-chip-won"><Trophy :size="13" :stroke-width="2" /> Deal won · $9,500</div>
+        </div>
+      </div>
+
       <!-- ── honeycomb progress comb ── -->
       <div class="hj-comb" aria-hidden="true">
         <span v-for="n in 5" :key="n" class="hj-comb-cell" :class="{ 'is-on': active >= n, 'is-now': active === n }">
@@ -212,7 +299,7 @@ const beatClass = (i: number) => ({
 .hj { position: relative; background: #120a18; color: #f3ecfa; }
 .hj-stage { position: sticky; top: 0; height: 100vh; overflow: hidden; display: flex; align-items: center; justify-content: center; text-align: center; }
 
-.hj-aurora { position: absolute; inset: 0; pointer-events: none; }
+.hj-aurora { position: absolute; inset: 0; pointer-events: none; transform: translate(calc(var(--mx, 0) * -12px), calc(var(--my, 0) * -12px)); transition: transform 0.3s ease-out; }
 .hj-blob { position: absolute; border-radius: 9999px; filter: blur(90px); opacity: 0.5; }
 .hj-blob--1 { width: 46vw; height: 46vw; left: -8vw; top: -10vw; background: #6a2bd9; animation: hj-drift1 18s ease-in-out infinite; }
 .hj-blob--2 { width: 40vw; height: 40vw; right: -6vw; top: 8vw; background: #b25cff; opacity: 0.4; animation: hj-drift2 22s ease-in-out infinite; }
@@ -220,12 +307,12 @@ const beatClass = (i: number) => ({
 @keyframes hj-drift1 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(4vw,3vw) scale(1.08); } }
 @keyframes hj-drift2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-5vw,2vw) scale(1.1); } }
 
-.hj-mark { position: absolute; top: 6vh; left: 50%; transform: translateX(-50%); width: 46px; height: 46px; }
+.hj-mark { position: absolute; top: 6vh; left: 50%; z-index: 2; transform: translateX(-50%) translate(calc(var(--mx, 0) * 16px), calc(var(--my, 0) * 16px)); transition: transform 0.3s ease-out; width: 46px; height: 46px; }
 .hj-hex { width: 100%; height: 100%; filter: drop-shadow(0 0 14px rgba(168,91,224,0.55)); animation: hj-pulse 3.4s ease-in-out infinite; }
 @keyframes hj-pulse { 0%,100% { opacity: 0.85; } 50% { opacity: 1; } }
 
 .hj-beat {
-  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 1.6rem; padding: 0 1.5rem; opacity: 0; transform: translateY(26px) scale(0.985);
   transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1); pointer-events: none;
 }
@@ -348,7 +435,32 @@ const beatClass = (i: number) => ({
 .hj-btn--ghost:hover { background: rgba(168,91,224,0.12); }
 
 /* comb */
-.hj-comb { position: absolute; bottom: 5vh; left: 50%; transform: translateX(-50%); display: flex; gap: 0.55rem; }
+.hj-comb { position: absolute; bottom: 5vh; left: 50%; z-index: 4; transform: translateX(-50%); display: flex; gap: 0.55rem; }
+
+/* ── living honeycomb field + cursor light ── */
+.hj-hive { position: absolute; inset: -6%; z-index: 1; pointer-events: none; transform: translate(calc(var(--mx, 0) * 10px), calc(var(--my, 0) * 10px)); transition: transform 0.3s ease-out, opacity 0.2s linear; }
+.hj-cell { position: absolute; width: 56px; height: 56px; margin: -28px 0 0 -28px; clip-path: url(#hc-hex-clip); -webkit-clip-path: url(#hc-hex-clip); background: rgba(199,155,239,0.06); animation: hj-cellfloat 7s ease-in-out infinite; }
+@keyframes hj-cellfloat { 0%, 100% { opacity: 0.45; transform: translateY(0); } 50% { opacity: 0.9; transform: translateY(-4px); } }
+.hj-glow { position: absolute; inset: 0; z-index: 1; pointer-events: none; mix-blend-mode: plus-lighter; background: radial-gradient(circle 240px at var(--cx, 50%) var(--cy, 50%), rgba(168,91,224,0.30), rgba(168,91,224,0) 65%); }
+
+/* ── floating glass chips ── */
+.hj-chips { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.hj-chip { position: absolute; will-change: transform, opacity; }
+.hj-chip--a { left: 8%; top: 33%; }
+.hj-chip--b { right: 10%; top: 28%; }
+.hj-chip--c { left: 12%; bottom: 27%; }
+.hj-chip--d { right: 9%; bottom: 25%; }
+.hj-chip-in { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 14px; background: rgba(26,18,36,0.5); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border: 1px solid rgba(199,155,239,0.2); box-shadow: 0 18px 44px -18px rgba(0,0,0,0.7); font-size: 0.8rem; color: #f3ecfa; white-space: nowrap; animation: hj-float 6s ease-in-out infinite; }
+.hj-chip--b .hj-chip-in { animation-delay: -1.5s; }
+.hj-chip--c .hj-chip-in { animation-delay: -3s; }
+.hj-chip--d .hj-chip-in { animation-delay: -4.2s; }
+@keyframes hj-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+.hj-chip-hx { width: 24px; height: 24px; flex: none; display: grid; place-items: center; color: #fff; font-size: 0.56rem; font-weight: 700; clip-path: url(#hc-hex-clip); -webkit-clip-path: url(#hc-hex-clip); }
+.hj-chip-msg { color: rgba(243,236,250,0.9); }
+.hj-chip-name { font-weight: 600; display: inline-flex; align-items: center; }
+.hj-on { display: inline-block; width: 7px; height: 7px; border-radius: 9999px; background: #6cc788; margin-left: 6px; }
+.hj-chip-task { color: #d59bdb; background: rgba(178,102,187,0.18); border-color: rgba(178,102,187,0.45); font-weight: 600; }
+.hj-chip-won { color: #6cc788; background: rgba(34,163,90,0.16); border-color: rgba(34,163,90,0.4); font-weight: 600; }
 .hj-comb-cell { width: 32px; height: 32px; display: grid; place-items: center; clip-path: var(--hex); -webkit-clip-path: var(--hex); background: rgba(255,255,255,0.06); color: rgba(243,236,250,0.35); transition: all 0.4s ease; }
 .hj-comb-cell.is-on { background: rgba(168,91,224,0.3); color: #e4c9ff; }
 .hj-comb-cell.is-now { background: linear-gradient(135deg,#a85be0,#7c3fd1); color: #fff; transform: scale(1.12); box-shadow: 0 0 18px rgba(168,91,224,0.6); }
@@ -358,6 +470,7 @@ const beatClass = (i: number) => ({
 .hj.is-reduced .hj-stage { position: static; height: auto; display: block; padding: 7rem 1.5rem 4rem; }
 .hj.is-reduced .hj-beat { position: static; inset: auto; opacity: 1; transform: none; pointer-events: auto; margin: 0 auto 3.5rem; max-width: 38rem; }
 .hj.is-reduced .hj-cue, .hj.is-reduced .hj-comb { display: none; }
+.hj.is-reduced .hj-hive, .hj.is-reduced .hj-glow, .hj.is-reduced .hj-chips { display: none; }
 .hj.is-reduced .hj-aurora { position: fixed; }
-@media (prefers-reduced-motion: reduce) { .hj-blob, .hj-hex, .hj-cue-icon { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .hj-blob, .hj-hex, .hj-cue-icon, .hj-cell, .hj-chip-in { animation: none; } }
 </style>
