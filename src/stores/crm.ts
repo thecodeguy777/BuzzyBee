@@ -66,21 +66,27 @@ const CONTACT_COLS = 'id,company_id,name,role,email,phone,color,is_primary,addre
 const ACTIVITY_COLS = 'id,deal_id,company_id,contact_id,type,actor_id,body,meta,created_at'
 const DEALS_SELECT = 'id,title,company_id,stage,value,owner_id,close_on,source,health,priority,channel_id,sort, channel:channels(name)'
 
-// Page through a client-scoped query so a load isn't silently truncated by the
-// data API's max-rows cap (the imported dialer leads put HiveMind well past it).
-// A stable secondary sort by id keeps .range() pages from overlapping when many
-// rows share created_at (the bulk import does).
-async function fetchAllPaged(build: (from: number, to: number) => any): Promise<any[]> {
-  const PAGE = 1000
-  const out: any[] = []
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await build(from, from + PAGE - 1)
+const PAGE_SIZE = 1000
+
+// Page through a client-scoped query, invoking onPage after EACH page so the UI
+// can render progressively instead of waiting for the whole book. startFrom lets
+// the first page be fetched on the critical path (fast first paint) while the
+// rest streams in the background. A stable secondary sort by id keeps .range()
+// pages from overlapping when many rows share created_at (the bulk import does).
+async function pageFrom(
+  build: (from: number, to: number) => any,
+  onPage: (rows: any[]) => void,
+  startFrom = 0,
+  abort?: () => boolean,
+): Promise<void> {
+  for (let from = startFrom; ; from += PAGE_SIZE) {
+    if (abort?.()) return // a client switch superseded us — stop fetching
+    const { data, error } = await build(from, from + PAGE_SIZE - 1)
     if (error) { console.warn('[crm] paged fetch:', error.message); break }
     const rows = (data ?? []) as any[]
-    out.push(...rows)
-    if (rows.length < PAGE) break
+    if (rows.length) onPage(rows)
+    if (rows.length < PAGE_SIZE) break
   }
-  return out
 }
 
 // PostgREST encodes .in() lists in the URL, so a client with thousands of
@@ -105,12 +111,17 @@ export const useCrmStore = defineStore('crm', () => {
   const linkedByDeal = ref<Record<string, LinkedTask[]>>({})
   const activitiesByDeal = ref<Record<string, Activity[]>>({})
   const activitiesByCompany = ref<Record<string, Activity[]>>({})
-  const loaded = ref(false)
+  const loaded = ref(false) // first paint ready (first page of deals + companies)
+  const fullyLoaded = ref(false) // whole book (+ contacts + links) in memory
   const loading = ref(false)
   const error = ref<string | null>(null)
   const clients = useClientsStore()
   let channel: RealtimeChannel | null = null
   const pending = new Set<string>() // deal ids with an unconfirmed local write
+  let loadSeq = 0 // bumped per load() so a superseded client's background stream aborts
+  let loadingCid: string | null | undefined // in-flight client, to dedupe concurrent load()s
+  let activeLoad: Promise<void> = Promise.resolve() // current load()'s Phase-1 promise (joined by concurrent callers)
+  let pendingStream: Promise<void> = Promise.resolve() // background: rest of pages + contacts + links
 
   const company = (id: string) => companies.value[id]
   const contactsFor = (companyId: string) => contacts.value.filter((c) => c.companyId === companyId)
@@ -119,59 +130,113 @@ export const useCrmStore = defineStore('crm', () => {
   const companyActivities = (companyId: string) => activitiesByCompany.value[companyId] ?? []
   const dealsFor = (companyId: string) => deals.value.filter((d) => d.companyId === companyId)
 
-  // The CRM is a per-client workspace: only ever load the selected client's
-  // companies/deals (and the contacts/links that belong to them).
-  async function load() {
-    if (loading.value) return
+  function prefetchOwners(ds: Deal[]) {
+    const ids = [...new Set(ds.map((d) => d.ownerId).filter(Boolean))] as string[]
+    if (ids.length) void useTeamStore().fetchProfiles(ids)
+  }
+
+  // The CRM is a per-client workspace. Load in chunks for a fast first paint:
+  //   Phase 1 — first page of companies + deals -> render immediately.
+  //   Phase 2 — remaining pages, then contacts + deal->task links -> stream in
+  //             the background (card badges / counts fill in live; nothing else
+  //             blocks the screen). contacts + links aren't needed for the
+  //             Overview/Pipeline first paint, so they never gate it.
+  function load(): Promise<void> {
     const cid = clients.currentClientId
+    if (loading.value && loadingCid === cid) return activeLoad // join the in-flight same-client load
+    activeLoad = doLoad(cid)
+    return activeLoad
+  }
+
+  async function doLoad(cid: string | null) {
+    const seq = ++loadSeq
+    loadingCid = cid
     loading.value = true
+    loaded.value = false
+    fullyLoaded.value = false
+    companies.value = {}; deals.value = []; contacts.value = []; linkedByDeal.value = {}
     try {
       if (!cid) {
-        companies.value = {}; contacts.value = []; deals.value = []; linkedByDeal.value = {}
-        loaded.value = true
+        loaded.value = true; fullyLoaded.value = true
+        pendingStream = Promise.resolve()
         return
       }
-      const [coData, deData] = await Promise.all([
-        fetchAllPaged((f, t) => supabase.from('crm_companies')
-          .select(COMPANY_COLS + ', channel:channels(name)')
-          .eq('client_id', cid).order('created_at').order('id').range(f, t)),
-        fetchAllPaged((f, t) => supabase.from('crm_deals')
-          .select(DEALS_SELECT)
-          .eq('client_id', cid).order('sort').order('created_at').order('id').range(f, t)),
-      ])
+      const coBuild = (f: number, t: number) => supabase.from('crm_companies')
+        .select(COMPANY_COLS + ', channel:channels(name)')
+        .eq('client_id', cid).order('created_at').order('id').range(f, t)
+      const deBuild = (f: number, t: number) => supabase.from('crm_deals')
+        .select(DEALS_SELECT)
+        .eq('client_id', cid).order('sort').order('created_at').order('id').range(f, t)
 
+      // Phase 1 — first page of each, in parallel, then paint.
+      const [co0, de0] = await Promise.all([coBuild(0, PAGE_SIZE - 1), deBuild(0, PAGE_SIZE - 1)])
+      if (seq !== loadSeq) return // a newer load (client switch) superseded us
+      if (co0.error) console.warn('[crm] companies:', co0.error.message)
+      if (de0.error) console.warn('[crm] deals:', de0.error.message)
       const coMap: Record<string, Company> = {}
-      for (const r of coData as any[]) coMap[r.id] = mapCompany(r)
+      for (const r of (co0.data ?? []) as any[]) coMap[r.id] = mapCompany(r)
       companies.value = coMap
-      deals.value = (deData as any[]).map(mapDeal)
-
-      const companyIds = Object.keys(coMap)
-      const dealIds = deals.value.map((d) => d.id)
-      // Chunked .in() — thousands of ids would otherwise overflow the URL.
-      const [ctData, dtData] = await Promise.all([
-        fetchIn('crm_contacts', CONTACT_COLS, 'company_id', companyIds),
-        fetchIn('crm_deal_tasks', 'deal_id,task_id, task:tasks(reference_number,title,status)', 'deal_id', dealIds),
-      ])
-
-      contacts.value = (ctData as any[]).map(mapContact)
-
-      const linked: Record<string, LinkedTask[]> = {}
-      for (const r of (dtData as any[])) {
-        const t = r.task
-        ;(linked[r.deal_id] ??= []).push({
-          taskId: r.task_id, ref: t?.reference_number ?? '', title: t?.title ?? 'Linked task',
-          status: t?.status ?? '', dot: statusDot(t?.status),
-        })
-      }
-      linkedByDeal.value = linked
-
-      const ownerIds = [...new Set(deals.value.map((d) => d.ownerId).filter(Boolean))] as string[]
-      if (ownerIds.length) void useTeamStore().fetchProfiles(ownerIds)
-
+      deals.value = ((de0.data ?? []) as any[]).map(mapDeal)
       loaded.value = true
+      prefetchOwners(deals.value)
+
+      const coDone = (co0.data?.length ?? 0) < PAGE_SIZE
+      const deDone = (de0.data?.length ?? 0) < PAGE_SIZE
+
+      // Phase 2 — stream the rest + contacts + links in the background.
+      pendingStream = (async () => {
+        const jobs: Promise<void>[] = []
+        if (!coDone) jobs.push(pageFrom(coBuild, (rows) => {
+          if (seq !== loadSeq) return
+          const m = { ...companies.value }
+          for (const r of rows) m[r.id] = mapCompany(r)
+          companies.value = m
+        }, PAGE_SIZE, () => seq !== loadSeq))
+        if (!deDone) jobs.push(pageFrom(deBuild, (rows) => {
+          if (seq !== loadSeq) return
+          // Dedup against rows a realtime event may have already pulled in
+          // (fetchDealInto) during the stream, so a card never doubles.
+          const have = new Set(deals.value.map((d) => d.id))
+          const mapped = (rows as any[]).map(mapDeal).filter((d) => !have.has(d.id))
+          if (mapped.length) {
+            deals.value = [...deals.value, ...mapped]
+            prefetchOwners(mapped)
+          }
+        }, PAGE_SIZE, () => seq !== loadSeq))
+        await Promise.all(jobs)
+        if (seq !== loadSeq) return
+
+        // Full company/deal sets are in memory now — scope contacts + links.
+        const companyIds = Object.keys(companies.value)
+        const dealIds = deals.value.map((d) => d.id)
+        const [ctData, dtData] = await Promise.all([
+          fetchIn('crm_contacts', CONTACT_COLS, 'company_id', companyIds),
+          fetchIn('crm_deal_tasks', 'deal_id,task_id, task:tasks(reference_number,title,status)', 'deal_id', dealIds),
+        ])
+        if (seq !== loadSeq) return
+        contacts.value = (ctData as any[]).map(mapContact)
+        const linked: Record<string, LinkedTask[]> = {}
+        for (const r of (dtData as any[])) {
+          const t = r.task
+          ;(linked[r.deal_id] ??= []).push({
+            taskId: r.task_id, ref: t?.reference_number ?? '', title: t?.title ?? 'Linked task',
+            status: t?.status ?? '', dot: statusDot(t?.status),
+          })
+        }
+        linkedByDeal.value = linked
+        fullyLoaded.value = true
+      })()
     } finally {
       loading.value = false
     }
+  }
+
+  // Await the FULL book — used before bulk import, which dedups against the
+  // complete companies + contacts set (a partial set would create duplicates).
+  async function ensureFullyLoaded() {
+    if (loading.value) await activeLoad // join an in-flight Phase 1 (so pendingStream is the right one)
+    else if (!loaded.value) await load()
+    await pendingStream
   }
 
   // Pull a SINGLE deal (with its channel embed) into the list — used by the
@@ -571,7 +636,7 @@ export const useCrmStore = defineStore('crm', () => {
       error.value = 'Select a client workspace before importing.'
       return null
     }
-    if (!loaded.value) await load()
+    await ensureFullyLoaded()
     const { useAuthStore } = await import('@/stores/auth')
     const me = useAuthStore().user?.id ?? null
 
@@ -748,7 +813,7 @@ export const useCrmStore = defineStore('crm', () => {
   }
 
   return {
-    companies, contacts, deals, loaded, loading, error,
+    companies, contacts, deals, loaded, fullyLoaded, loading, error,
     company, contactsFor, linkedTasks, activities, companyActivities, dealsFor,
     load, loadActivities, loadCompanyActivities, move, convert,
     createDeal, updateDeal, deleteDeal,
