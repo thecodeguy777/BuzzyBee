@@ -109,6 +109,14 @@ watch(
   { immediate: true },
 )
 
+// Clamp into view whenever the dock (re)appears (the window may have shrunk
+// while it was hidden, or a saved pos came from a bigger viewport), and
+// force-end a drag if we get hidden mid-drag so nothing stays stuck.
+watch(visible, (v) => {
+  if (v) clamp()
+  else if (dragging) onDragEnd()
+}, { immediate: true })
+
 function fullscreen() { videoEl.value?.requestFullscreen?.() }
 </script>
 
