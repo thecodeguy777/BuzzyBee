@@ -1057,6 +1057,33 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     else void startScreenShare()
   }
 
+  // Re-pick the shared source without leaving the huddle ("Switch"). Reuses the
+  // same senders via replaceTrack, so no renegotiation — same as start.
+  async function switchScreenShare() {
+    if (!sharingScreen.value) return
+    let next: MediaStream
+    try {
+      next = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: { ideal: 15, max: 30 } },
+        audio: false,
+      })
+    } catch {
+      return // user cancelled the picker — keep the current share
+    }
+    const track = next.getVideoTracks()[0]
+    if (!track) { next.getTracks().forEach((t) => t.stop()); return }
+    if ('contentHint' in track) (track as any).contentHint = 'detail'
+    screenStream?.getTracks().forEach((t) => t.stop()) // stop the old capture
+    screenStream = next
+    localScreen.value = next
+    for (const entry of peers.values()) {
+      if (!entry.screenSender) continue
+      void entry.screenSender.replaceTrack(track)
+      void tuneScreenSender(entry.screenSender)
+    }
+    track.addEventListener('ended', () => stopScreenShare())
+  }
+
   function closePeer(userId: string) {
     const e = peers.get(userId)
     if (!e) return
@@ -1192,6 +1219,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     remoteScreens,
     localScreen,
     toggleScreenShare,
+    switchScreenShare,
     soundMuted,
     toggleSounds,
     viewers,

@@ -2,7 +2,7 @@
 import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount, inject } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
-  Hash, Search, Users, Headphones, Mic, MicOff, MonitorUp, PhoneOff,
+  Hash, Search, Users, Headphones, Mic, MicOff, MonitorUp, MonitorOff, PhoneOff,
   Paperclip, Image as ImageIcon, Link2, Smile, AtSign, Send, X, CheckSquare,
   Settings2, Crown, Maximize2, Bell, BellOff, Wand2, Video, Menu, ArrowDown, Loader2, AlertCircle,
   Slash, BarChart3, MessageSquare
@@ -909,16 +909,24 @@ const activeScreen = computed(() => {
   const p = stream.online.value.find((o) => o.userId === userId)
   return { userId, name: p?.name ?? 'Someone', stream: ms }
 })
-// Show a remote share if there is one, otherwise our OWN screen while we're the
-// one sharing (self-preview) — same pattern as the meeting room.
-const stageStream = computed<MediaStream | null>(
-  () => activeScreen.value?.stream ?? (stream.sharingScreen.value ? stream.localScreen.value : null),
-)
-watch(stageStream, (s) => {
-  nextTick(() => {
-    if (screenVideo.value) screenVideo.value.srcObject = s ?? null
-  })
+// The big viewer shows a REMOTE peer's screen; the sharer sees a compact
+// "You're presenting" banner with a thumbnail instead (see template).
+watch(() => activeScreen.value?.stream ?? null, (s) => {
+  nextTick(() => { if (screenVideo.value) screenVideo.value.srcObject = s ?? null })
 }, { immediate: true })
+
+// Self-preview thumbnail shown in the "You're presenting" banner.
+const selfVideo = ref<HTMLVideoElement | null>(null)
+watch(() => stream.localScreen.value, (s) => {
+  nextTick(() => { if (selfVideo.value) selfVideo.value.srcObject = s ?? null })
+}, { immediate: true })
+
+// What we're sharing (entire screen / window / tab), from the captured track.
+const shareSurface = computed(() => {
+  const t = stream.localScreen.value?.getVideoTracks?.()[0]
+  const ds = (t?.getSettings?.() as { displaySurface?: string } | undefined)?.displaySurface
+  return ds === 'monitor' ? 'Entire screen' : ds === 'window' ? 'Window' : ds === 'browser' ? 'Browser tab' : 'Your screen'
+})
 function fullscreenScreen() {
   screenVideo.value?.requestFullscreen?.()
 }
@@ -1017,22 +1025,45 @@ function fullscreenScreen() {
         <button class="underline" @click="commsError = null; stream.huddleError.value = null">dismiss</button>
       </p>
 
-      <!-- screen share viewer -->
-      <div v-if="activeScreen || stream.sharingScreen.value" class="mx-4 mt-2 rounded-xl border border-base-300 overflow-hidden">
+      <!-- remote peer's screen (big viewer) -->
+      <div v-if="activeScreen" class="mx-4 mt-2 rounded-xl border border-base-300 overflow-hidden">
         <div class="flex items-center gap-2 px-3 py-1.5 bg-base-200/60 text-xs">
           <MonitorUp class="w-3.5 h-3.5 text-primary" :stroke-width="1.75" />
-          <span class="font-medium">
-            <template v-if="activeScreen">{{ firstName(activeScreen.name) }} is sharing their screen</template>
-            <template v-else>You're sharing your screen</template>
-          </span>
+          <span class="font-medium">{{ firstName(activeScreen.name) }} is sharing their screen</span>
           <div class="flex-1" />
-          <button v-if="activeScreen" class="inline-flex items-center gap-1 text-base-content/60 hover:text-primary font-medium" title="Fullscreen" @click="fullscreenScreen">
+          <button class="inline-flex items-center gap-1 text-base-content/60 hover:text-primary font-medium" title="Fullscreen" @click="fullscreenScreen">
             <Maximize2 class="w-3.5 h-3.5" :stroke-width="1.75" /> Fullscreen
           </button>
-          <button v-if="stream.sharingScreen.value" class="text-error font-medium" @click="stream.toggleScreenShare()">Stop sharing</button>
         </div>
-        <video v-if="stageStream" ref="screenVideo" autoplay playsinline muted class="w-full max-h-[65vh] bg-black object-contain" />
-        <div v-else class="px-3 py-5 text-center text-xs text-base-content/50">Starting your screen share…</div>
+        <video ref="screenVideo" autoplay playsinline muted class="w-full max-h-[65vh] bg-black object-contain" />
+      </div>
+
+      <!-- you're presenting (compact banner with live self-preview) -->
+      <div
+        v-else-if="stream.sharingScreen.value"
+        class="mx-4 mt-2 rounded-xl border border-success/30 bg-success/10 px-3 py-2 flex items-center gap-3"
+      >
+        <div class="w-[52px] h-9 rounded-md overflow-hidden bg-base-300 ring-1 ring-success/30 shrink-0">
+          <video ref="selfVideo" autoplay playsinline muted class="w-full h-full object-cover" />
+        </div>
+        <div class="min-w-0 leading-tight">
+          <div class="flex items-center gap-1.5 text-sm font-semibold">
+            <span class="w-1.5 h-1.5 rounded-full bg-success shrink-0" /> You're presenting
+          </div>
+          <div class="text-[0.7rem] text-base-content/55 truncate">{{ shareSurface }}</div>
+        </div>
+        <div class="flex-1" />
+        <button
+          class="text-primary text-xs font-semibold hover:underline shrink-0"
+          title="Switch what you're sharing"
+          @click="stream.switchScreenShare()"
+        >Switch</button>
+        <button
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-error/10 text-error text-xs font-semibold hover:bg-error/15 shrink-0"
+          @click="stream.toggleScreenShare()"
+        >
+          <MonitorOff class="w-3.5 h-3.5" :stroke-width="1.75" /> Stop
+        </button>
       </div>
 
       <!-- stream -->
