@@ -909,11 +909,16 @@ const activeScreen = computed(() => {
   const p = stream.online.value.find((o) => o.userId === userId)
   return { userId, name: p?.name ?? 'Someone', stream: ms }
 })
-watch(activeScreen, (a) => {
+// Show a remote share if there is one, otherwise our OWN screen while we're the
+// one sharing (self-preview) — same pattern as the meeting room.
+const stageStream = computed<MediaStream | null>(
+  () => activeScreen.value?.stream ?? (stream.sharingScreen.value ? stream.localScreen.value : null),
+)
+watch(stageStream, (s) => {
   nextTick(() => {
-    if (screenVideo.value) screenVideo.value.srcObject = a?.stream ?? null
+    if (screenVideo.value) screenVideo.value.srcObject = s ?? null
   })
-})
+}, { immediate: true })
 function fullscreenScreen() {
   screenVideo.value?.requestFullscreen?.()
 }
@@ -1026,8 +1031,8 @@ function fullscreenScreen() {
           </button>
           <button v-if="stream.sharingScreen.value" class="text-error font-medium" @click="stream.toggleScreenShare()">Stop sharing</button>
         </div>
-        <video v-if="activeScreen" ref="screenVideo" autoplay playsinline muted class="w-full max-h-[65vh] bg-black object-contain" />
-        <div v-else class="px-3 py-5 text-center text-xs text-base-content/50">Your screen is visible to everyone in the huddle.</div>
+        <video v-if="stageStream" ref="screenVideo" autoplay playsinline muted class="w-full max-h-[65vh] bg-black object-contain" />
+        <div v-else class="px-3 py-5 text-center text-xs text-base-content/50">Starting your screen share…</div>
       </div>
 
       <!-- stream -->

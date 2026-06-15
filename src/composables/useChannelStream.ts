@@ -135,6 +135,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
   const sharingScreen = ref(false)
   const remoteScreens = ref<Record<string, MediaStream>>({}) // userId -> their shared screen
   let screenStream: MediaStream | null = null
+  const localScreen = ref<MediaStream | null>(null) // the sharer's own stream, for self-preview
 
   // Sound cues: remember the last seen huddle membership / sharers so each
   // presence sync can tell who just joined, left, or started sharing.
@@ -888,7 +889,10 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
         // The video m-line always exists (fixed layout) but only carries frames
         // while the peer is actually sharing. Their replaceTrack(track|null)
         // mutes/unmutes the remote track — use that to show/hide their screen.
-        const stream = e.streams[0]
+        // The screen goes out over a streamless transceiver (replaceTrack, no
+        // msid), so e.streams is empty — wrap the bare track in a MediaStream
+        // ourselves, else <video>.srcObject is null and the tile is black.
+        const stream = e.streams[0] ?? new MediaStream([e.track])
         entry.remoteVideo = stream
         const show = () => { remoteScreens.value = { ...remoteScreens.value, [userId]: stream } }
         const hide = () => removeRemoteScreen(userId)
@@ -1022,6 +1026,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     // "detail" = prioritize sharp text/UI over smooth motion (vs. the default).
     if ('contentHint' in track) (track as any).contentHint = 'detail'
     sharingScreen.value = true
+    localScreen.value = screenStream // self-preview for the sharer
     // Push the track onto each peer's pre-created video sender — starts media on
     // the existing m-line. No addTrack, so no renegotiation and no m-line churn.
     for (const entry of peers.values()) {
@@ -1042,6 +1047,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     }
     screenStream?.getTracks().forEach((t) => t.stop())
     screenStream = null
+    localScreen.value = null
     sharingScreen.value = false
     trackPresence()
   }
@@ -1184,6 +1190,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     huddleError,
     sharingScreen,
     remoteScreens,
+    localScreen,
     toggleScreenShare,
     soundMuted,
     toggleSounds,
