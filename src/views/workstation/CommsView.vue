@@ -2,7 +2,7 @@
 import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount, inject } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
-  Hash, Search, Users, Headphones, Mic, MicOff, MonitorUp, MonitorOff, PhoneOff,
+  Hash, Search, Users, Headphones, Mic, MicOff, MonitorUp, MonitorOff, PictureInPicture2, Monitor, PhoneOff,
   Paperclip, Image as ImageIcon, Link2, Smile, AtSign, Send, X, CheckSquare,
   Settings2, Crown, Maximize2, Bell, BellOff, Wand2, Video, Menu, ArrowDown, Loader2, AlertCircle,
   Slash, BarChart3, MessageSquare
@@ -19,6 +19,7 @@ import { type Gif } from '@/lib/giphy'
 import { createMeetingRoom } from '@/lib/meetingRoom'
 import { useChannelsStore } from '@/stores/channels'
 import { COMMS_STREAM, HUDDLE_PRESENCE } from '@/composables/commsStream'
+import { screenPoppedOut } from '@/composables/useScreenDock'
 import { useClientsStore } from '@/stores/clients'
 import { useTasksStore } from '@/stores/tasks'
 import { useAuthStore } from '@/stores/auth'
@@ -1025,17 +1026,35 @@ function fullscreenScreen() {
         <button class="underline" @click="commsError = null; stream.huddleError.value = null">dismiss</button>
       </p>
 
-      <!-- remote peer's screen (big viewer) -->
-      <div v-if="activeScreen" class="mx-4 mt-2 rounded-xl border border-base-300 overflow-hidden">
+      <!-- remote peer's screen (big inline viewer) -->
+      <div v-if="activeScreen && !screenPoppedOut" class="mx-4 mt-2 rounded-xl border border-base-300 overflow-hidden">
         <div class="flex items-center gap-2 px-3 py-1.5 bg-base-200/60 text-xs">
           <MonitorUp class="w-3.5 h-3.5 text-primary" :stroke-width="1.75" />
           <span class="font-medium">{{ firstName(activeScreen.name) }} is sharing their screen</span>
           <div class="flex-1" />
+          <button
+            class="inline-flex items-center gap-1 text-base-content/60 hover:text-primary font-medium"
+            title="Pop out to a floating window so you can keep chatting"
+            @click="screenPoppedOut = true"
+          >
+            <PictureInPicture2 class="w-3.5 h-3.5" :stroke-width="1.75" /> Pop out
+          </button>
           <button class="inline-flex items-center gap-1 text-base-content/60 hover:text-primary font-medium" title="Fullscreen" @click="fullscreenScreen">
             <Maximize2 class="w-3.5 h-3.5" :stroke-width="1.75" /> Fullscreen
           </button>
         </div>
         <video ref="screenVideo" autoplay playsinline muted class="w-full max-h-[65vh] bg-black object-contain" />
+      </div>
+
+      <!-- remote screen popped out to the floating dock (chat stays roomy) -->
+      <div
+        v-else-if="activeScreen && screenPoppedOut"
+        class="mx-4 mt-2 rounded-lg border border-base-300 bg-base-200/40 px-3 py-2 flex items-center gap-2 text-xs"
+      >
+        <Monitor class="w-3.5 h-3.5 text-primary shrink-0" :stroke-width="1.75" />
+        <span class="font-medium truncate">{{ firstName(activeScreen.name) }}'s screen is in a floating window</span>
+        <div class="flex-1" />
+        <button class="text-primary font-semibold hover:underline shrink-0" @click="screenPoppedOut = false">Bring back</button>
       </div>
 
       <!-- you're presenting (compact banner with live self-preview) -->

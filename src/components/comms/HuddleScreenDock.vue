@@ -8,6 +8,7 @@ import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } fr
 import { useRoute } from 'vue-router'
 import { Maximize2, Minus, Monitor, X } from 'lucide-vue-next'
 import { COMMS_STREAM } from '@/composables/commsStream'
+import { screenPoppedOut } from '@/composables/useScreenDock'
 
 const stream = inject(COMMS_STREAM)!
 const route = useRoute()
@@ -16,6 +17,11 @@ const firstName = (n: string | null | undefined) => (n || 'Someone').split(' ')[
 
 // What to show: a remote peer's screen if any, else our own while we're
 // presenting (so you can keep an eye on your share from any page).
+// The full Comms page shows the screen inline → the dock yields there, UNLESS
+// the user "popped it out" so they can keep chatting while watching. Otherwise
+// same "yield on comms" pattern as CommsDock.
+const onCommsPage = computed(() => route.name === 'workstation-comms')
+
 const stage = computed(() => {
   const entries = Object.entries(stream.remoteScreens.value)
   if (entries.length) {
@@ -25,18 +31,17 @@ const stage = computed(() => {
       stream.huddlePeople.value.find((o) => o.userId === userId)
     return { key: userId, label: `${firstName(p?.name)} is presenting`, stream: ms as MediaStream }
   }
-  if (stream.sharingScreen.value && stream.localScreen.value) {
+  // your own preview floats only OFF the Comms page (on Comms the inline
+  // "You're presenting" banner already shows it).
+  if (stream.sharingScreen.value && stream.localScreen.value && !onCommsPage.value) {
     return { key: 'self', label: "You're presenting", stream: stream.localScreen.value }
   }
   return null
 })
 
-// The full Comms page shows the screen inline → the dock yields there (it's for
-// every OTHER page). Same pattern as CommsDock.
-const onCommsPage = computed(() => route.name === 'workstation-comms')
 const hiddenByUser = ref(false)
 watch(() => stage.value?.key ?? null, () => { hiddenByUser.value = false }) // a new share re-shows
-const visible = computed(() => !onCommsPage.value && !!stage.value && !hiddenByUser.value)
+const visible = computed(() => (!onCommsPage.value || screenPoppedOut.value) && !!stage.value && !hiddenByUser.value)
 
 const minimized = ref(false)
 
