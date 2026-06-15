@@ -165,13 +165,50 @@ const cursorStyle = computed(() => {
   return { transform: `scale(${1 - pinch * 0.2})` }
 })
 
-// Time (tab 3): the running session ticks up as you scroll.
-const runClock = computed(() => {
-  const total = 39 * 60 + 18
-  const s = reduced.value ? total : Math.round((active.value === 3 ? lp.value : 0) * total)
+// Generic helpers used by the CRM / Time / Command panels.
+// staggered reveal of the k-th item within a panel's scroll window:
+function stagger(panel: number, k: number, gap = 0.1, dur = 0.16) {
+  if (reduced.value || active.value !== panel) return {}
+  const e = ease(clamp((lp.value - k * gap) / dur))
+  return { opacity: String(e), transform: `translateY(${(1 - e) * 10}px)` }
+}
+// a number that counts up to `target` as you scroll the panel:
+function countTo(panel: number, target: number) {
+  return reduced.value ? target : Math.round(clamp(active.value === panel ? lp.value : 0) * target)
+}
+const fmtHMS = (s: number) => {
   const p2 = (n: number) => String(n).padStart(2, '0')
   return `${p2(Math.floor(s / 3600))}:${p2(Math.floor((s % 3600) / 60))}:${p2(s % 60)}`
+}
+
+// Time (tab 3): the day total + running session tick up as you scroll.
+const todayTotal = computed(() => fmtHMS(reduced.value ? 6 * 3600 + 42 * 60 + 18 : Math.round((active.value === 3 ? lp.value : 0) * (6 * 3600 + 42 * 60 + 18))))
+const runClock = computed(() => fmtHMS(reduced.value ? 39 * 60 + 18 : Math.round((active.value === 3 ? lp.value : 0) * (39 * 60 + 18))))
+
+// CRM (tab 2): the hero deal's stage chip walks Proposal -> Negotiation -> Won.
+const CRM_STAGES = [
+  { label: 'Proposal', c: '#e3a24a' },
+  { label: 'Negotiation', c: '#a24fae' },
+  { label: 'Won', c: '#22a35a' },
+]
+const crmStage = computed(() => {
+  if (reduced.value) return 2
+  if (active.value !== 2) return 0
+  return lp.value < 0.35 ? 0 : lp.value < 0.65 ? 1 : 2
 })
+const crmStageChip = computed(() => {
+  const s = CRM_STAGES[crmStage.value]
+  return { background: s.c + '26', color: s.c }
+})
+const crmWon = computed(() => crmStage.value === 2)
+const pipelineVal = computed(() => '$' + countTo(2, 58500).toLocaleString())
+const heroVal = computed(() => '$' + countTo(2, 18400).toLocaleString())
+
+// Command center (tab 4): the "Hours" sparkline grows in as you scroll.
+const sparkStyle = computed(() => ({
+  transform: `scaleY(${reduced.value ? 1 : ease(active.value === 4 ? lp.value : 0)})`,
+  transformOrigin: 'bottom',
+}))
 </script>
 
 <template>
@@ -254,7 +291,7 @@ const runClock = computed(() => {
               <div class="ps-top-search"><Search :size="13" :stroke-width="2" /> Search</div>
               <div class="ps-top-grow" />
               <!-- running timer chip (Time story) -->
-              <span v-if="activeKey === 'time'" class="ps-timer"><span class="ps-ping" /> Northstar · 04:11:47</span>
+              <span v-if="activeKey === 'time'" class="ps-timer"><span class="ps-ping ps-ping-g" /> Northstar · {{ runClock }}</span>
               <span class="ps-online"><span class="ps-online-dot" /> 8 online</span>
               <button class="ps-top-i"><Bell :size="15" :stroke-width="1.9" /></button>
               <span class="ps-hx ps-hx--sm" style="background:#8E4EC6">JR</span>
@@ -340,7 +377,7 @@ const runClock = computed(() => {
 
               <!-- ─────────── CRM (HiveDeals) ─────────── -->
               <div class="ps-panel ps-pad" :style="panelStyle(2)">
-                <div class="ps-panel-head"><div><div class="ps-panel-title">Pipeline</div><div class="ps-panel-sub">$58,500 open · 14 deals</div></div><span class="ps-ghost">Board · Table</span></div>
+                <div class="ps-panel-head"><div><div class="ps-panel-title">Pipeline</div><div class="ps-panel-sub">{{ pipelineVal }} open · 14 deals</div></div><span class="ps-ghost">Board · Table</span></div>
                 <div class="ps-board">
                   <div class="ps-col">
                     <div class="ps-colh" style="background:rgba(143,176,247,0.13)"><span class="ps-d" style="background:#2f6fed" /> Contacted <b>3</b></div>
@@ -348,7 +385,12 @@ const runClock = computed(() => {
                   </div>
                   <div class="ps-col">
                     <div class="ps-colh" style="background:rgba(227,162,74,0.13)"><span class="ps-d" style="background:#c2700c" /> Proposal <b>4</b></div>
-                    <div class="ps-dcard ps-hot"><div class="ps-dtop"><span class="ps-sq" style="background:#46A758">SM</span><span class="ps-co">Summit Lending</span></div><div class="ps-dt">Refi package — 12 units</div><div class="ps-dfoot"><b class="ps-val">$18,400</b><span class="ps-date"><CalendarDays :size="11" :stroke-width="2" /> Jun 27</span></div></div>
+                    <div class="ps-dcard ps-hot ps-crm-hero">
+                      <span v-if="crmWon" class="ps-burst" />
+                      <div class="ps-dtop"><span class="ps-sq" style="background:#46A758">SM</span><span class="ps-co">Summit Lending</span><span class="ps-stagechip" :style="crmStageChip"><span class="ps-d" style="background:currentColor" />{{ CRM_STAGES[crmStage].label }}</span></div>
+                      <div class="ps-dt">Refi package — 12 units</div>
+                      <div class="ps-dfoot"><b class="ps-val" :class="{ 'ps-val-won': crmWon }">{{ heroVal }}</b><span class="ps-date"><CalendarDays :size="11" :stroke-width="2" /> Jun 27</span></div>
+                    </div>
                   </div>
                   <div class="ps-col">
                     <div class="ps-colh" style="background:rgba(178,102,187,0.15)"><span class="ps-d" style="background:#a24fae" /> Negotiation <b>2</b></div>
@@ -366,7 +408,7 @@ const runClock = computed(() => {
                 <div class="ps-panel-head"><div><div class="ps-panel-title">Time</div><div class="ps-panel-sub">Honest activity log. Timestamps only — no screenshots, no keystrokes.</div></div><span class="ps-ghost"><Download :size="13" :stroke-width="2" /> CSV</span></div>
                 <div class="ps-range"><span class="is-on">Today</span><span>This week</span><span>Last week</span><span>This month</span></div>
                 <div class="ps-stats2">
-                  <div class="ps-stat"><div class="ps-stat-l">Today total</div><div class="ps-stat-v">06:42:18</div><div class="ps-stat-s">4 sessions</div></div>
+                  <div class="ps-stat"><div class="ps-stat-l">Today total</div><div class="ps-stat-v">{{ todayTotal }}</div><div class="ps-stat-s">4 sessions</div></div>
                   <div class="ps-stat"><div class="ps-stat-l">By client</div>
                     <div class="ps-byc"><span>Coastal Realty</span><b>3h 12m</b></div>
                     <div class="ps-byc"><span>Bridgepoint Mortgage</span><b>1h 48m</b></div>
@@ -374,15 +416,15 @@ const runClock = computed(() => {
                   </div>
                 </div>
                 <div class="ps-sess-h">Sessions</div>
-                <div class="ps-sess">
+                <div class="ps-sess" :style="stagger(3, 0)">
                   <div class="ps-sess-l"><div class="ps-sess-c">HiveMind · Daily wrap-up + tomorrow prep</div><div class="ps-sess-t">Jun 15, 4:40 PM → running</div></div>
                   <div class="ps-sess-r"><span class="ps-dur">{{ runClock }}</span><span class="ps-badge-run">Running</span></div>
                 </div>
-                <div class="ps-sess">
+                <div class="ps-sess" :style="stagger(3, 1)">
                   <div class="ps-sess-l"><div class="ps-sess-c">Coastal Realty <StickyNote :size="11" :stroke-width="2" class="ps-mut" /> Skip-traced 60 leads, updated dispositions</div><div class="ps-sess-t">Jun 15, 9:02 AM → 1:14 PM</div></div>
                   <div class="ps-sess-r"><span class="ps-dur">04:12:03</span></div>
                 </div>
-                <div class="ps-sess">
+                <div class="ps-sess" :style="stagger(3, 2)">
                   <div class="ps-sess-l"><div class="ps-sess-c">Bridgepoint Mortgage <StickyNote :size="11" :stroke-width="2" class="ps-mut" /> Follow-up sequence + booked 2 callbacks</div><div class="ps-sess-t">Jun 15, 1:30 PM → 3:18 PM</div></div>
                   <div class="ps-sess-r"><span class="ps-dur">01:48:11</span></div>
                 </div>
@@ -398,22 +440,22 @@ const runClock = computed(() => {
                 <div class="ps-hive">
                   <div class="ps-hive-h"><Hexagon :size="14" :stroke-width="2" class="ps-acc" /> The Hive <span class="ps-ping ps-ping-g" /> <span class="ps-hive-c"><b>6</b> in the hive · <i class="ps-blue">2 on calls</i> · <i class="ps-green">1 free</i></span></div>
                   <div class="ps-hive-row">
-                    <div class="ps-person"><span class="ps-hx" style="background:#0090FF">MC</span><span class="ps-pstat-dot ps-blue-dot" /><div class="ps-pn">Marwin</div><div class="ps-ps ps-blue"><Headphones :size="10" :stroke-width="2" /> on a call</div></div>
-                    <div class="ps-person"><span class="ps-hx" style="background:#8E4EC6">JR</span><span class="ps-pstat-dot ps-violet-dot" /><div class="ps-pn">Jana</div><div class="ps-ps ps-violet"><Clock :size="10" :stroke-width="2" /> 1h 24m</div></div>
-                    <div class="ps-person"><span class="ps-hx" style="background:#46A758">RS</span><span class="ps-pstat-dot ps-green-dot" /><div class="ps-pn">Rhea</div><div class="ps-ps ps-green">free to grab</div></div>
-                    <div class="ps-person"><span class="ps-hx" style="background:#F76B15">CM</span><span class="ps-pstat-dot ps-violet-dot" /><div class="ps-pn">Carlo</div><div class="ps-ps ps-violet"><Clock :size="10" :stroke-width="2" /> 47m</div></div>
-                    <div class="ps-person ps-off"><span class="ps-hx" style="background:#6E56CF">ME</span><span class="ps-pstat-dot ps-off-dot" /><div class="ps-pn">Mei</div><div class="ps-ps ps-mut2">clocked out</div></div>
+                    <div class="ps-person" :style="stagger(4, 0, 0.06)"><span class="ps-hx" style="background:#0090FF">MC</span><span class="ps-pstat-dot ps-blue-dot" /><div class="ps-pn">Marwin</div><div class="ps-ps ps-blue"><Headphones :size="10" :stroke-width="2" /> on a call</div></div>
+                    <div class="ps-person" :style="stagger(4, 1, 0.06)"><span class="ps-hx" style="background:#8E4EC6">JR</span><span class="ps-pstat-dot ps-violet-dot" /><div class="ps-pn">Jana</div><div class="ps-ps ps-violet"><Clock :size="10" :stroke-width="2" /> 1h 24m</div></div>
+                    <div class="ps-person" :style="stagger(4, 2, 0.06)"><span class="ps-hx" style="background:#46A758">RS</span><span class="ps-pstat-dot ps-green-dot" /><div class="ps-pn">Rhea</div><div class="ps-ps ps-green">free to grab</div></div>
+                    <div class="ps-person" :style="stagger(4, 3, 0.06)"><span class="ps-hx" style="background:#F76B15">CM</span><span class="ps-pstat-dot ps-violet-dot" /><div class="ps-pn">Carlo</div><div class="ps-ps ps-violet"><Clock :size="10" :stroke-width="2" /> 47m</div></div>
+                    <div class="ps-person ps-off" :style="stagger(4, 4, 0.06)"><span class="ps-hx" style="background:#6E56CF">ME</span><span class="ps-pstat-dot ps-off-dot" /><div class="ps-pn">Mei</div><div class="ps-ps ps-mut2">clocked out</div></div>
                   </div>
                 </div>
                 <div class="ps-pulse">
-                  <div class="ps-stat ps-pc"><div class="ps-pc-l"><Briefcase :size="12" :stroke-width="1.9" /> Active clients</div><div class="ps-pc-v">5</div><div class="ps-pc-s">across 7 total</div></div>
-                  <div class="ps-stat ps-pc"><div class="ps-pc-l"><Clock :size="12" :stroke-width="1.9" /> Hours this week</div><div class="ps-pc-v">142h</div><div class="ps-spark"><i style="height:40%" /><i style="height:65%" /><i style="height:50%" /><i style="height:80%" /><i style="height:60%" /><i style="height:90%" /><i style="height:72%" /></div></div>
-                  <div class="ps-stat ps-pc ps-pc-err"><div class="ps-pc-l"><AlertTriangle :size="12" :stroke-width="1.9" /> Overdue</div><div class="ps-pc-v">3</div><div class="ps-pc-s">needs attention</div></div>
+                  <div class="ps-stat ps-pc" :style="stagger(4, 5, 0.06)"><div class="ps-pc-l"><Briefcase :size="12" :stroke-width="1.9" /> Active clients</div><div class="ps-pc-v">{{ countTo(4, 5) }}</div><div class="ps-pc-s">across 7 total</div></div>
+                  <div class="ps-stat ps-pc" :style="stagger(4, 6, 0.06)"><div class="ps-pc-l"><Clock :size="12" :stroke-width="1.9" /> Hours this week</div><div class="ps-pc-v">{{ countTo(4, 142) }}h</div><div class="ps-spark" :style="sparkStyle"><i style="height:40%" /><i style="height:65%" /><i style="height:50%" /><i style="height:80%" /><i style="height:60%" /><i style="height:90%" /><i style="height:72%" /></div></div>
+                  <div class="ps-stat ps-pc ps-pc-err" :style="stagger(4, 7, 0.06)"><div class="ps-pc-l"><AlertTriangle :size="12" :stroke-width="1.9" /> Overdue</div><div class="ps-pc-v">{{ countTo(4, 3) }}</div><div class="ps-pc-s">needs attention</div></div>
                 </div>
                 <div class="ps-attn">
                   <div class="ps-attn-h"><AlertTriangle :size="13" :stroke-width="2" class="ps-mut" /> Needs attention <span class="ps-grow" /><span class="ps-attn-n">4 items</span></div>
-                  <div class="ps-attn-row"><span class="ps-attn-i ps-attn-err"><AlertTriangle :size="13" :stroke-width="2" /></span><div><div class="ps-attn-t">Update buyer comps deck</div><div class="ps-attn-s">Overdue · Marwin · Coastal Realty</div></div><ArrowRight :size="14" :stroke-width="2" class="ps-mut3" /></div>
-                  <div class="ps-attn-row"><span class="ps-attn-i ps-attn-warn"><ListChecks :size="13" :stroke-width="2" /></span><div><div class="ps-attn-t">Draft listing description</div><div class="ps-attn-s">Unassigned · Summit Lending</div></div><ArrowRight :size="14" :stroke-width="2" class="ps-mut3" /></div>
+                  <div class="ps-attn-row" :style="stagger(4, 8, 0.06)"><span class="ps-attn-i ps-attn-err"><AlertTriangle :size="13" :stroke-width="2" /></span><div><div class="ps-attn-t">Update buyer comps deck</div><div class="ps-attn-s">Overdue · Marwin · Coastal Realty</div></div><ArrowRight :size="14" :stroke-width="2" class="ps-mut3" /></div>
+                  <div class="ps-attn-row" :style="stagger(4, 9, 0.06)"><span class="ps-attn-i ps-attn-warn"><ListChecks :size="13" :stroke-width="2" /></span><div><div class="ps-attn-t">Draft listing description</div><div class="ps-attn-s">Unassigned · Summit Lending</div></div><ArrowRight :size="14" :stroke-width="2" class="ps-mut3" /></div>
                 </div>
               </div>
             </main>
@@ -686,6 +728,13 @@ const runClock = computed(() => {
 .ps-drag-card { background: var(--b100); border: 1px solid rgba(178,102,187,0.55); border-radius: 8px; padding: 0.5rem 0.55rem; box-shadow: 0 16px 32px -10px rgba(0,0,0,0.75); transform-origin: center; }
 .ps-cursor { position: absolute; right: -2px; bottom: -6px; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.55)); transform-origin: top left; }
 
+/* crm: hero deal stage-walk chip + win burst (driven by scroll) */
+.ps-crm-hero { position: relative; }
+.ps-stagechip { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding: 0.08rem 0.42rem; border-radius: 9999px; font-size: 0.56rem; font-weight: 700; transition: background 0.3s ease, color 0.3s ease; }
+.ps-stagechip .ps-d { width: 5px; height: 5px; }
+.ps-burst { position: absolute; inset: 0; border-radius: 11px; border: 1.5px solid rgba(34,163,90,0.85); pointer-events: none; animation: ps-burst 0.7s cubic-bezier(0.2,0.7,0.3,1) both; }
+@keyframes ps-burst { 0% { opacity: 0.9; transform: scale(1); } 100% { opacity: 0; transform: scale(1.14); } }
+
 /* reduced motion: static stack */
 .ps.is-reduced { height: auto !important; }
 .ps.is-reduced .ps-drag { display: none; }
@@ -697,7 +746,7 @@ const runClock = computed(() => {
 .ps.is-reduced .ps-comb { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .ps-ping::after, .ps-dots i, .ps-caret { animation: none !important; }
-  .ps-drag { display: none; }
+  .ps-drag, .ps-burst { display: none; }
   .ps-caret { opacity: 1; }
 }
 </style>
