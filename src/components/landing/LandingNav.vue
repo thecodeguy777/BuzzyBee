@@ -45,11 +45,10 @@ onUnmounted(() => {
 })
 
 const LINKS = [
+  { href: '#professionals', label: 'The People' },
   { href: '#software-tax', label: 'Why HiveMind' },
   { href: '#platform', label: 'Platform' },
-  { href: '#how', label: 'How It Works' },
-  { href: '#pricing', label: 'Pricing' },
-  { href: '#faq', label: 'FAQ' }
+  { href: '#how', label: 'How It Works' }
 ]
 </script>
 

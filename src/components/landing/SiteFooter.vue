@@ -8,9 +8,8 @@ const columns = [
     title: 'Product',
     links: [
       { label: 'How it works', href: '#how' },
-      { label: 'Services', href: '#services' },
-      { label: 'Pricing', href: '#pricing' },
-      { label: 'FAQ', href: '#faq' }
+      { label: 'The people', href: '#professionals' },
+      { label: 'The platform', href: '#platform' }
     ]
   },
   {

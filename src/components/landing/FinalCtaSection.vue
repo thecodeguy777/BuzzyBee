@@ -22,7 +22,7 @@
                 Book a discovery call
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
               </a>
-              <a class="btn btn-clear" href="#pricing">See pricing</a>
+              <a class="btn btn-clear" href="#platform">See the platform</a>
             </div>
             <div class="cta-checks">
               <span class="chk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7L9 18l-5-5" /></svg>VA working in 7 days</span>

@@ -5,6 +5,7 @@
 // Previous composition preserved in LandingPageClassic.vue.
 import LandingNav from '@/components/landing/LandingNav.vue'
 import HeroJourneySection from '@/components/landing/HeroJourneySection.vue'
+import ProfessionalsShowcase from '@/components/landing/ProfessionalsShowcase.vue'
 import SoftwareTaxSection from '@/components/landing/SoftwareTaxSection.vue'
 import PlatformSection from '@/components/landing/PlatformSection.vue'
 import ArsenalHoneycombSection from '@/components/landing/ArsenalHoneycombSection.vue'
@@ -15,9 +16,10 @@ import TheMatchSection from '@/components/landing/TheMatchSection.vue'
 import HowItWorksSection from '@/components/landing/HowItWorksSection.vue'
 import HandsFreeSection from '@/components/landing/HandsFreeSection.vue'
 import IndustryStripSection from '@/components/landing/IndustryStripSection.vue'
-import PricingSection from '@/components/landing/PricingSection.vue'
+// Pricing + FAQ hidden for now — re-enable by uncommenting here and in <template>.
+// import PricingSection from '@/components/landing/PricingSection.vue'
 import TestimonialsSection from '@/components/landing/TestimonialsSection.vue'
-import FaqSection from '@/components/landing/FaqSection.vue'
+// import FaqSection from '@/components/landing/FaqSection.vue'
 import TransformationSection from '@/components/landing/TransformationSection.vue'
 import FinalCtaSection from '@/components/landing/FinalCtaSection.vue'
 import SiteFooter from '@/components/landing/SiteFooter.vue'
@@ -27,19 +29,21 @@ import SiteFooter from '@/components/landing/SiteFooter.vue'
   <div class="min-h-screen bg-base-100 text-base-content">
     <LandingNav flush-dark />
     <HeroJourneySection />
+    <!-- People first: lead with who you hire, then the software they work in -->
+    <ProfessionalsShowcase />
+    <MeetVASection />
+    <VettedTalentSection />
     <SoftwareTaxSection />
     <PlatformSection />
     <ArsenalHoneycombSection />
     <ThreadOfWorkSection />
-    <MeetVASection />
-    <VettedTalentSection />
     <TheMatchSection />
     <HowItWorksSection />
     <HandsFreeSection />
     <IndustryStripSection />
-    <PricingSection />
+    <!-- <PricingSection /> hidden for now -->
     <TestimonialsSection />
-    <FaqSection />
+    <!-- <FaqSection /> hidden for now -->
     <TransformationSection />
     <FinalCtaSection />
     <SiteFooter />
