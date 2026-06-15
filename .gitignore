@@ -10,6 +10,7 @@ node_modules/.tmp
 *.log
 .claude/
 .playwright-mcp/
+.vscode/
 
 # Electron build outputs
 electron/dist-main/

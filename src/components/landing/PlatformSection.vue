@@ -95,15 +95,17 @@ function goTo(i: number) {
 
 onMounted(() => {
   reduced.value = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
-  if (reduced.value) return
+  if (reduced.value) { typed.value = PHRASE; return }
   window.addEventListener('scroll', onScroll, { passive: true })
   window.addEventListener('resize', onScroll)
   onScroll()
+  tick()
 })
 onBeforeUnmount(() => {
   window.removeEventListener('scroll', onScroll)
   window.removeEventListener('resize', onScroll)
   if (raf) cancelAnimationFrame(raf)
+  if (typeTimer) clearTimeout(typeTimer)
 })
 
 const activeKey = computed<Key>(() => features[active.value].key)
@@ -118,6 +120,20 @@ const topTitle = computed(() => {
     default: return 'Home'
   }
 })
+
+// Composer typewriter (Comms tab): types a phrase, holds, deletes, loops.
+const typed = ref('')
+const PHRASE = 'Flag the 3 hot Acme deals for the US reps'
+let ti = 0
+let dir = 1
+let typeTimer: ReturnType<typeof setTimeout> | undefined
+function tick() {
+  ti += dir
+  if (ti >= PHRASE.length) { ti = PHRASE.length; dir = -1; typed.value = PHRASE; typeTimer = setTimeout(tick, 1800); return }
+  if (ti <= 0) { ti = 0; dir = 1; typed.value = ''; typeTimer = setTimeout(tick, 700); return }
+  typed.value = PHRASE.slice(0, ti)
+  typeTimer = setTimeout(tick, dir > 0 ? 65 : 30)
+}
 </script>
 
 <template>
@@ -241,6 +257,11 @@ const topTitle = computed(() => {
                     <div class="ps-tcard ps-dim"><div class="ps-tt ps-strike">Onboard Acme Co</div><div class="ps-tmeta"><span class="ps-ref">TASK-0007</span><span class="ps-mi"><ListChecks :size="11" :stroke-width="2" /> 3/3</span></div></div>
                   </div>
                 </div>
+                <!-- looping cursor-drag flourish -->
+                <div class="ps-drag" aria-hidden="true">
+                  <div class="ps-drag-card"><div class="ps-tt">Audit current landing page</div><div class="ps-tmeta"><span class="ps-ref">TASK-0009</span></div></div>
+                  <svg class="ps-cursor" viewBox="0 0 24 24" width="20" height="20"><path d="M5 3l14 7-6 2-2 6z" fill="#fff" stroke="#16181d" stroke-width="1.2" stroke-linejoin="round" /></svg>
+                </div>
               </div>
 
               <!-- ─────────── COMMS (HiveChat) ─────────── -->
@@ -274,7 +295,8 @@ const topTitle = computed(() => {
                       <div class="ps-msg-b"><div class="ps-msg-h"><span class="ps-name" style="color:#5bb0ff">Dwayne Pereda</span><span class="ps-time">9:18 AM</span></div><div class="ps-text">Reps are dialing the Riverside batch — 42 connected, 5 callbacks booked so far.</div><div class="ps-react"><span class="ps-rpill">🔥 4</span><span class="ps-rpill">🚀 2</span></div></div>
                     </div>
                   </div>
-                  <div class="ps-composer"><span class="ps-comp-ph">Message #general — type / for commands</span><span class="ps-send"><ArrowRight :size="14" :stroke-width="2.4" /></span></div>
+                  <div class="ps-typing"><span class="ps-hx ps-hx--xs" style="background:#0090FF">DP</span> Dwayne is typing<span class="ps-dots"><i /><i /><i /></span></div>
+                  <div class="ps-composer"><span class="ps-comp-typed"><span v-if="!typed" class="ps-comp-ph">Message #general — type / for commands</span>{{ typed }}<i class="ps-caret" /></span><span class="ps-send"><ArrowRight :size="14" :stroke-width="2.4" /></span></div>
                 </div>
               </div>
 
@@ -472,7 +494,8 @@ const topTitle = computed(() => {
 .ps-tt { font-size: 0.78rem; font-weight: 600; line-height: 1.3; }
 .ps-strike { text-decoration: line-through; }
 .ps-dim { opacity: 0.62; }
-.ps-tmeta { display: flex; align-items: center; gap: 6px; margin-top: 0.45rem; font-size: 0.6rem; color: rgba(238,240,242,0.45); }
+.ps-tmeta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; row-gap: 4px; margin-top: 0.45rem; font-size: 0.6rem; color: rgba(238,240,242,0.45); }
+.ps-mi { white-space: nowrap; }
 .ps-ref { font-family: 'Geist Mono','JetBrains Mono',ui-monospace,monospace; font-size: 0.56rem; }
 .ps-mi { display: inline-flex; align-items: center; gap: 3px; }
 .ps-mi-amber { color: var(--amber); }
@@ -609,13 +632,61 @@ const topTitle = computed(() => {
 .ps-comb-c.is-on { background: rgba(168,91,224,0.35); }
 .ps-comb-c.is-now { background: linear-gradient(135deg, #a85be0, #7c3fd1); transform: scale(1.12); box-shadow: 0 0 16px rgba(168,91,224,0.6); }
 
+/* ── live animations (run only on the active panel) ── */
+/* comms: composer typewriter + caret */
+.ps-comp-typed { flex: 1; min-width: 0; font-size: 0.76rem; color: rgba(238,240,242,0.92); white-space: nowrap; overflow: hidden; }
+.ps-caret { display: inline-block; width: 1.5px; height: 0.95em; margin-left: 1px; vertical-align: -1px; background: var(--pri); animation: ps-caret 1s step-end infinite; }
+@keyframes ps-caret { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+/* comms: "is typing" indicator */
+.ps-typing { display: flex; align-items: center; gap: 6px; padding: 0 0.9rem 0.25rem; font-size: 0.64rem; color: rgba(238,240,242,0.45); }
+.ps-dots { display: inline-flex; gap: 3px; margin-left: 2px; }
+.ps-dots i { width: 4px; height: 4px; border-radius: 9999px; background: rgba(238,240,242,0.5); animation: ps-dot 1.2s ease-in-out infinite; }
+.ps-dots i:nth-child(2) { animation-delay: 0.2s; }
+.ps-dots i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes ps-dot { 0%, 60%, 100% { opacity: 0.3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-2px); } }
+/* comms: messages stagger in when the tab activates */
+.ps-comms.is-on .ps-msg { opacity: 0; animation: ps-msgin 0.5s ease forwards; }
+.ps-comms.is-on .ps-msg:nth-child(2) { animation-delay: 0.15s; }
+.ps-comms.is-on .ps-msg:nth-child(3) { animation-delay: 0.55s; }
+.ps-comms.is-on .ps-msg:nth-child(4) { animation-delay: 0.95s; }
+.ps-comms.is-on .ps-msg:nth-child(5) { animation-delay: 1.4s; }
+@keyframes ps-msgin { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* board: looping cursor that grabs + drags a card to the next column */
+.ps-drag { position: absolute; top: 92px; left: 16px; width: 148px; z-index: 6; pointer-events: none; opacity: 0; }
+.ps-panel.is-on .ps-drag { animation: ps-dragmove 7s ease-in-out infinite; }
+@keyframes ps-dragmove {
+  0% { opacity: 0; transform: translate(0, 0); }
+  7% { opacity: 1; transform: translate(0, 0); }
+  17% { transform: translate(2px, -4px); }
+  52% { transform: translate(150px, 48px); }
+  64% { opacity: 1; transform: translate(150px, 48px); }
+  74%, 100% { opacity: 0; transform: translate(150px, 48px); }
+}
+.ps-drag-card { background: var(--b100); border: 1px solid rgba(178,102,187,0.55); border-radius: 8px; padding: 0.5rem 0.55rem; box-shadow: 0 16px 32px -10px rgba(0,0,0,0.75); }
+.ps-panel.is-on .ps-drag-card { animation: ps-draglift 7s ease-in-out infinite; transform-origin: center; }
+@keyframes ps-draglift {
+  0%, 7% { transform: rotate(0) scale(1); }
+  17%, 60% { transform: rotate(2.5deg) scale(1.04); }
+  66%, 100% { transform: rotate(0) scale(1); }
+}
+.ps-cursor { position: absolute; right: -2px; bottom: -6px; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.55)); }
+.ps-panel.is-on .ps-cursor { animation: ps-pinch 7s ease-in-out infinite; transform-origin: top left; }
+@keyframes ps-pinch { 0%, 11% { transform: scale(1); } 15%, 19% { transform: scale(0.8); } 25%, 100% { transform: scale(1); } }
+
 /* reduced motion: static stack */
 .ps.is-reduced { height: auto !important; }
+.ps.is-reduced .ps-drag { display: none; }
 .ps.is-reduced .ps-stage { position: static; height: auto; display: block; padding: 5rem 0; }
 .ps.is-reduced .ps-grid { align-items: start; }
 .ps.is-reduced .ps-feat-body { grid-template-rows: 1fr; opacity: 1; margin-top: 0.55rem; }
 .ps.is-reduced .ps-window { height: 560px; }
 .ps.is-reduced .ps-panel { position: absolute; }
 .ps.is-reduced .ps-comb { display: none; }
-@media (prefers-reduced-motion: reduce) { .ps-ping::after { animation: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .ps-ping::after, .ps-drag, .ps-drag-card, .ps-cursor, .ps-dots i, .ps-caret { animation: none !important; }
+  .ps-drag { display: none; }
+  .ps-comms.is-on .ps-msg { opacity: 1; animation: none; }
+  .ps-caret { opacity: 1; }
+}
 </style>
