@@ -4,7 +4,7 @@
 //        → how it works → industries → pricing → testimonials → faq → final CTA → footer
 // Previous composition preserved in LandingPageClassic.vue.
 import LandingNav from '@/components/landing/LandingNav.vue'
-import HeroPeopleSection from '@/components/landing/HeroPeopleSection.vue'
+import HeroJourneySection from '@/components/landing/HeroJourneySection.vue'
 import SoftwareTaxSection from '@/components/landing/SoftwareTaxSection.vue'
 import PlatformSection from '@/components/landing/PlatformSection.vue'
 import ArsenalHoneycombSection from '@/components/landing/ArsenalHoneycombSection.vue'
@@ -25,8 +25,8 @@ import SiteFooter from '@/components/landing/SiteFooter.vue'
 
 <template>
   <div class="min-h-screen bg-base-100 text-base-content">
-    <LandingNav />
-    <HeroPeopleSection />
+    <LandingNav flush-dark />
+    <HeroJourneySection />
     <SoftwareTaxSection />
     <PlatformSection />
     <ArsenalHoneycombSection />

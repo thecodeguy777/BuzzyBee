@@ -1,12 +1,18 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import hivemindMark from '@/assets/landing/hivemind-mark.svg'
+import hivemindMarkLight from '@/assets/landing/hivemind-mark-dark.svg'
+
+// A dark-hero page passes `flush-dark` so the transparent top state uses light
+// text + the white mark; the scrolled white pill reverts to the dark treatment.
+const props = defineProps<{ flushDark?: boolean }>()
 
 // Spline-style nav: sits flush + transparent at the top, then on scroll it
 // "lifts" into a centered floating frosted pill (narrower, blurred, bordered,
 // shadowed, fully rounded). Shared across the landing-family pages.
 const mobileOpen = ref(false)
 const scrolled = ref(false)
+const markSrc = computed(() => (props.flushDark && !scrolled.value ? hivemindMarkLight : hivemindMark))
 let raf = 0
 
 function onScroll() {
@@ -49,9 +55,9 @@ const LINKS = [
 
 <template>
   <header class="ln-root fixed inset-x-0 top-0 z-50" :class="{ 'is-scrolled': scrolled }">
-    <div class="ln-shell mx-auto flex items-center justify-between" :class="scrolled ? 'is-pill' : 'is-flush'">
+    <div class="ln-shell mx-auto flex items-center justify-between" :class="[scrolled ? 'is-pill' : 'is-flush', { 'is-flush-dark': flushDark && !scrolled }]">
       <a href="/" class="flex items-center gap-2 shrink-0">
-        <img :src="hivemindMark" alt="HiveMind" class="w-7 h-auto" />
+        <img :src="markSrc" alt="HiveMind" class="w-7 h-auto" />
         <span class="ln-brand text-base font-semibold tracking-tight">HiveMind</span>
       </a>
 
@@ -189,6 +195,14 @@ const LINKS = [
   transition: background 0.15s ease;
 }
 .ln-burger:hover { background: rgba(26, 23, 34, 0.06); }
+
+/* Dark-hero flush state: light text over the transparent bar (reverts in pill). */
+.ln-shell.is-flush-dark .ln-brand { color: #fff; }
+.ln-shell.is-flush-dark .ln-link { color: rgba(255, 255, 255, 0.78); }
+.ln-shell.is-flush-dark .ln-link:hover { color: #fff; }
+.ln-shell.is-flush-dark .ln-login { color: #fff; border-color: rgba(255, 255, 255, 0.28); }
+.ln-shell.is-flush-dark .ln-login:hover { color: #fff; border-color: rgba(255, 255, 255, 0.55); background: rgba(255, 255, 255, 0.08); }
+.ln-shell.is-flush-dark .ln-burger { color: #fff; }
 
 /* Mobile dropdown — a frosted panel under the bar/pill. */
 .ln-mobile {
