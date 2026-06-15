@@ -38,8 +38,11 @@ const healthOpts: { id: Health; label: string }[] = [{ id: 'hot', label: 'Hot' }
 const comboOpen = ref(false)
 const query = ref('')
 const filtered = computed(() => {
+  // Cap the rendered list — a workspace can hold thousands of companies and
+  // rendering them all locks the combo. Search narrows it.
   const q = query.value.toLowerCase()
-  return Object.values(crm.companies).filter((c) => c.name.toLowerCase().includes(q))
+  const list = Object.values(crm.companies)
+  return (q ? list.filter((c) => c.name.toLowerCase().includes(q)) : list).slice(0, 100)
 })
 function pickCompany(id: string) {
   companyId.value = id

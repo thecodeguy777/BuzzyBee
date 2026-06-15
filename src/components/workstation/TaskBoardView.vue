@@ -16,7 +16,8 @@ import {
   ArrowRight,
   CheckCircle2,
   CircleSlash,
-  Handshake
+  Handshake,
+  ListChecks
 } from 'lucide-vue-next'
 import { useTasksStore, type Task, type TaskStatus } from '@/stores/tasks'
 import { useClientsStore } from '@/stores/clients'
@@ -51,6 +52,28 @@ const columns = computed<TaskStatusDef[]>(() =>
 )
 
 const cardsByStatus = computed<Record<string, Task[]>>(() => tasks.tasksByStatus)
+
+// Focus mode hides non-mine cards via v-show (the list stays full so drag
+// ordering is unaffected); counts + the empty state reflect what's visible.
+function visibleCount(key: string): number {
+  const list = cardsByStatus.value[key] ?? []
+  return tasks.focusMine ? list.filter((t) => tasks.isMine(t)).length : list.length
+}
+
+// Orphan tasks: a status key with no matching board column (e.g. a status was
+// renamed/removed, or a cross-project task landed on an unknown key). Without a
+// fallback these silently vanish from the board. Collected read-only below.
+const knownKeys = computed(() => new Set(columns.value.map((c) => c.key)))
+const orphanTasks = computed<Task[]>(() => {
+  const out: Task[] = []
+  for (const k of Object.keys(cardsByStatus.value)) {
+    if (knownKeys.value.has(k)) continue
+    for (const t of cardsByStatus.value[k] ?? []) {
+      if (!tasks.focusMine || tasks.isMine(t)) out.push(t)
+    }
+  }
+  return out
+})
 
 // ── SortableJS wiring ──────────────────────────────────────────────────────
 // One Sortable instance per column body. group:'bb-tasks' lets cards move
@@ -451,7 +474,7 @@ onBeforeUnmount(() => document.removeEventListener('click', closeColMenus))
       <button type="button" class="underline hover:no-underline" @click="boardError = null">dismiss</button>
     </p>
 
-    <div class="flex-1 min-h-0 flex items-start gap-[14px] overflow-x-auto pb-1">
+    <div class="flex-1 min-h-0 flex items-start gap-[14px] overflow-x-auto pb-1" data-tour="task-board">
       <template v-for="col in columns" :key="col.key">
         <!-- Collapsed column → narrow rail -->
         <section
@@ -469,7 +492,7 @@ onBeforeUnmount(() => document.removeEventListener('click', closeColMenus))
             <ChevronDown class="w-3.5 h-3.5 -rotate-90 shrink-0 text-base-content/50" :stroke-width="2" />
             <span class="w-2 h-2 rounded-full shrink-0" :class="statusClasses(col.color).dot" />
             <span class="text-[0.7rem] font-bold tabular-nums px-1.5 rounded-full shrink-0" :class="statusClasses(col.color).badgeBg">
-              {{ (cardsByStatus[col.key] ?? []).length }}
+              {{ visibleCount(col.key) }}
             </span>
             <span class="text-xs font-bold uppercase tracking-wide [writing-mode:vertical-rl] rotate-180">
               {{ col.label }}
@@ -521,7 +544,7 @@ onBeforeUnmount(() => document.removeEventListener('click', closeColMenus))
               class="min-w-5 h-5 px-1.5 grid place-items-center rounded-full text-[11.5px] font-bold tabular-nums leading-none shrink-0 text-base-content"
               :class="statusClasses(col.color).badgeBg"
             >
-              {{ (cardsByStatus[col.key] ?? []).length }}
+              {{ visibleCount(col.key) }}
             </span>
             <div v-if="canManage" class="relative shrink-0">
               <button
@@ -581,6 +604,7 @@ onBeforeUnmount(() => document.removeEventListener('click', closeColMenus))
         >
           <article
             v-for="t in (cardsByStatus[col.key] ?? [])"
+            v-show="!tasks.focusMine || tasks.isMine(t)"
             :key="t.id"
             :data-task-id="t.id"
             class="group relative rounded-lg bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:border-base-content/20 transition-shadow cursor-grab active:cursor-grabbing select-text"
@@ -649,6 +673,15 @@ onBeforeUnmount(() => document.removeEventListener('click', closeColMenus))
                   >
                     <Handshake class="w-3 h-3" :stroke-width="1.75" />
                   </span>
+                  <span
+                    v-if="tasks.subtaskProgress(t.id).total > 0"
+                    class="flex items-center gap-0.5"
+                    :class="tasks.subtaskProgress(t.id).done === 0 && 'text-base-content/30'"
+                    :title="`${tasks.subtaskProgress(t.id).done} of ${tasks.subtaskProgress(t.id).total} subtasks done`"
+                  >
+                    <ListChecks class="w-3 h-3" :stroke-width="1.75" />
+                    {{ tasks.subtaskProgress(t.id).done }}/{{ tasks.subtaskProgress(t.id).total }}
+                  </span>
                 </div>
                 <div class="flex items-center gap-2">
                   <span
@@ -672,10 +705,10 @@ onBeforeUnmount(() => document.removeEventListener('click', closeColMenus))
           </article>
 
           <div
-            v-if="(cardsByStatus[col.key] ?? []).length === 0"
+            v-if="visibleCount(col.key) === 0"
             class="py-[18px] text-center text-base-content/40 text-[12.5px] italic border-[1.5px] border-dashed border-base-300 rounded-[10px]"
           >
-            Drop tasks here.
+            {{ tasks.focusMine && (cardsByStatus[col.key] ?? []).length > 0 ? 'No tasks of yours here.' : 'Drop tasks here.' }}
           </div>
         </div>
 
@@ -697,6 +730,42 @@ onBeforeUnmount(() => document.removeEventListener('click', closeColMenus))
         </form>
         </section>
       </template>
+
+      <!-- Unsorted: tasks whose status has no column (removed/renamed status, or
+           a cross-project task on an unknown key). Read-only + open-to-reassign;
+           deliberately no Sortable + no quick-add so a bogus status is never
+           written back. -->
+      <section
+        v-if="orphanTasks.length"
+        class="shrink-0 rounded-xl bg-base-200 border border-base-300 flex flex-col max-h-full"
+        :class="colWidthClass"
+      >
+        <header class="flex items-center gap-2 px-2.5 py-2.5 rounded-t-xl border-b border-base-300 bg-base-300/40">
+          <span class="w-2 h-2 rounded-full flex-none bg-base-content/30" />
+          <span class="text-[12.5px] font-bold uppercase tracking-wide text-base-content/70 truncate flex-1">Unsorted</span>
+          <span class="min-w-5 h-5 px-1.5 grid place-items-center rounded-full text-[11.5px] font-bold tabular-nums leading-none shrink-0 text-base-content bg-base-300">
+            {{ orphanTasks.length }}
+          </span>
+        </header>
+        <div class="flex-1 overflow-y-auto p-2.5 space-y-2 min-h-[3rem]">
+          <p class="text-[11.5px] text-base-content/50 italic px-1 pb-1">
+            Removed or unknown status — open one to move it to a column.
+          </p>
+          <button
+            v-for="t in orphanTasks"
+            :key="t.id"
+            type="button"
+            class="w-full text-left rounded-lg bg-base-100 border border-base-300 shadow-sm hover:border-primary/40 hover:shadow-md transition-all p-2.5"
+            @click="openDrawer(t, $event)"
+          >
+            <div class="text-[13px] font-medium text-base-content line-clamp-2">{{ t.title }}</div>
+            <div class="mt-1 flex items-center gap-2 text-[0.7rem] text-base-content/50">
+              <span class="font-mono">{{ t.reference_number }}</span>
+              <span class="px-1.5 py-0.5 rounded bg-base-300/60 text-base-content/60">{{ t.status }}</span>
+            </div>
+          </button>
+        </div>
+      </section>
 
       <!-- Add column -->
       <div v-if="canManage" class="shrink-0 w-60 pt-0.5">

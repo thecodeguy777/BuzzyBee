@@ -270,7 +270,7 @@ export function useTaskChat(taskId: Ref<string | null | undefined>) {
     if (error) console.warn('[task chat] markRead:', error.message)
   }
 
-  async function sendMessage(text: string) {
+  async function sendMessage(text: string, opts: { mentions?: string[] } = {}) {
     const body = text.trim()
     const id = activeId
     const uid = me()
@@ -284,6 +284,8 @@ export function useTaskChat(taskId: Ref<string | null | undefined>) {
           user_id: uid,
           user_name: auth.fullName || null,
           message: body,
+          // NULL (not []) when empty — the notify trigger guards on `is not null`.
+          mentioned_user_ids: opts.mentions?.length ? opts.mentions : null,
         })
         .select('*')
         .single()

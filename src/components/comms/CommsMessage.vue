@@ -207,7 +207,7 @@ function react(e: string) {
       <!-- seen-by honeycomb -->
       <div v-if="seen && seen.length" class="mt-1.5 flex items-center justify-end gap-1.5 pr-0.5">
         <span class="text-[0.6rem] font-medium text-base-content/40">Seen</span>
-        <SeenCluster :members="seen" :size="18" :max="4" />
+        <SeenCluster :members="seen" :size="18" :max="4" appear />
       </div>
     </div>
 

@@ -288,6 +288,12 @@ body {
 }
 .bb-pulse-success { animation: bb-pulse-success 500ms ease-out; }
 
+/* Fixed landing nav: offset in-page anchor jumps so the target heading clears
+   the floating pill instead of hiding behind it. */
+html {
+  scroll-padding-top: 84px;
+}
+
 /* Accessibility: honor the OS "reduce motion" setting everywhere. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

@@ -14,6 +14,7 @@ import {
   signedAttachmentUrl,
   isImage,
   formatBytes,
+  validateAttachment,
   type TaskAttachmentMeta
 } from '@/lib/taskAttachments'
 import ImageLightbox from '@/components/workstation/ImageLightbox.vue'
@@ -104,8 +105,9 @@ async function handleFiles(files: FileList | File[] | null) {
   const errors: string[] = []
   try {
     for (const f of Array.from(files)) {
-      if (f.size > 25 * 1024 * 1024) {
-        errors.push(`${f.name} is over 25 MB`)
+      const invalid = validateAttachment(f)
+      if (invalid) {
+        errors.push(invalid)
         continue
       }
       try {

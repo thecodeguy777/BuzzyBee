@@ -18,6 +18,23 @@ export function setSoundsMuted(v: boolean) {
   if (typeof window !== 'undefined') window.localStorage.setItem(MUTE_KEY, v ? '1' : '0')
 }
 
+// Inbox notification cues have their own mute, independent of the comms huddle
+// cues above — a person may want one without the other.
+let notifyMutedFlag = false
+const NOTIFY_MUTE_KEY = 'buzzybee.notify.sounds-muted'
+if (typeof window !== 'undefined') {
+  notifyMutedFlag = window.localStorage.getItem(NOTIFY_MUTE_KEY) === '1'
+}
+export function notifyMuted() {
+  return notifyMutedFlag
+}
+export function setNotifyMuted(v: boolean) {
+  notifyMutedFlag = v
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(NOTIFY_MUTE_KEY, v ? '1' : '0')
+  }
+}
+
 function ac(): AudioContext | null {
   if (typeof window === 'undefined') return null
   const AC = window.AudioContext || (window as any).webkitAudioContext
@@ -98,6 +115,23 @@ export function playMessage() {
     { freq: 880.0, start: 0, dur: 0.08, gain: 0.07 },
     { freq: 1174.66, start: 0.05, dur: 0.13, gain: 0.07 },
   ])
+}
+
+// A new inbox notification — bright two-note (B5 → E6), clearly distinct from
+// the softer in-channel message pop. Honors its OWN mute (notifyMuted), not the
+// comms cue toggle, so it bypasses play()'s shared `muted` gate deliberately.
+export function playNotify() {
+  if (notifyMutedFlag) return
+  const c = ac()
+  if (!c) return
+  tone(c, { freq: 987.77, start: 0, dur: 0.1, gain: 0.1 })
+  tone(c, { freq: 1318.51, start: 0.09, dur: 0.17, gain: 0.1 })
+}
+
+// Resume the AudioContext on a user gesture so a later background cue (an inbox
+// notification arriving with no preceding click) is audible. Safe to call often.
+export function primeAudio() {
+  ac()
 }
 
 // Someone started sharing their screen — distinct triangle three-note rise.

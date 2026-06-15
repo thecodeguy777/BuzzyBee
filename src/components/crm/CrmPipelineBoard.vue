@@ -24,6 +24,16 @@ const dealsByStage = computed<Record<StageId, Deal[]>>(() => {
 })
 const totalFor = (id: StageId) => dealsByStage.value[id].reduce((s, d) => s + d.value, 0)
 
+// First card that actually renders (first deal of the first non-empty stage),
+// used only to anchor the product tour's "drag to Won" spotlight to a real card.
+const firstDealId = computed(() => {
+  for (const s of STAGES) {
+    const arr = dealsByStage.value[s.id]
+    if (arr.length) return arr[0].id
+  }
+  return null
+})
+
 // ── SortableJS wiring (same pattern as TaskBoardView) ──────────────────────
 // One Sortable instance per column body; group:'crm-deals' lets cards move
 // between stages. Deals carry no manual order within a stage, so onEnd only
@@ -132,6 +142,7 @@ watch(
             :key="d.id"
             :deal="d"
             :data-deal-id="d.id"
+            :data-tour="d.id === firstDealId ? 'crm-deal' : undefined"
             @open="emit('open', $event)"
           />
           <div

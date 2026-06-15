@@ -13,13 +13,21 @@ import {
   UserPlus,
   Send,
   Handshake,
-  ArrowUpRight
+  ArrowUpRight,
+  Plus,
+  GripVertical
 } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
-import { useTasksStore, type TaskStatus, type TaskActivityEvent } from '@/stores/tasks'
+import { useTasksStore, type TaskStatus, type TaskActivityEvent, type Subtask } from '@/stores/tasks'
 import { useStatusesStore } from '@/stores/statuses'
 import { statusClasses } from '@/lib/statusColors'
 import { useTaskChat } from '@/composables/useTaskChat'
+import {
+  useMentionAutocomplete,
+  type MentionCandidate
+} from '@/composables/useMentionAutocomplete'
+import MentionPopover from '@/components/shared/MentionPopover.vue'
+import CommsRichText from '@/components/comms/CommsRichText.vue'
 import { useTeamStore, type MemberProfile } from '@/stores/team'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectMembersStore } from '@/stores/projectMembers'
@@ -30,6 +38,7 @@ import { STAGES, LOST, type StageId } from '@/lib/crmData'
 import TaskAttachments from '@/components/workstation/TaskAttachments.vue'
 import RichTextEditor from '@/components/workstation/RichTextEditor.vue'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
+import Sortable from 'sortablejs'
 
 const tasks = useTasksStore()
 const statusesStore = useStatusesStore()
@@ -64,6 +73,7 @@ async function goDeal(link: TaskDealLink) {
 const taskId = computed(() => t.value?.id ?? null)
 const chat = useTaskChat(taskId)
 const draft = ref('')
+const composerEl = ref<HTMLTextAreaElement | HTMLInputElement | null>(null)
 const bottomRef = ref<HTMLElement | null>(null)
 const scrollBodyRef = ref<HTMLElement | null>(null)
 
@@ -83,6 +93,7 @@ watch(taskId, () => {
   // The composer draft belongs to the previous task's conversation — drop it
   // so it can't be sent into the newly opened task by accident.
   draft.value = ''
+  mention.reset()
 })
 
 const typingLabel = computed(() => {
@@ -107,13 +118,60 @@ function scrollChatToBottom() {
 async function onSendComment() {
   const text = draft.value
   if (!text.trim() || chat.sending.value) return
+  const mentions = mention.resolveMentions(text)
   draft.value = ''
   try {
-    await chat.sendMessage(text)
+    await chat.sendMessage(text, { mentions })
+    mention.reset() // only after success — a failed send must keep picks for retry
     scrollChatToBottom()
   } catch {
     draft.value = text // restore so the user doesn't lose their message
   }
+}
+
+// @mention autocomplete for the task-chat composer. Candidates are the same
+// people who can be assigned (task members / client roster), minus self.
+function mentionPool(): MentionCandidate[] {
+  return candidateIds.value
+    .map((id) => team.profiles[id])
+    .filter((p): p is MemberProfile => Boolean(p))
+    .filter((p) => p.id !== auth.user?.id)
+    .map((p) => ({
+      id: p.id,
+      name: p.full_name ?? p.email ?? 'Member',
+      avatarUrl: p.avatar_url ?? null
+    }))
+}
+const mention = useMentionAutocomplete({ el: composerEl, text: draft, candidates: mentionPool })
+// Top-level bindings for the template (nested refs on an object aren't
+// auto-unwrapped in templates).
+const {
+  open: mentionOpen,
+  matches: mentionMatches,
+  activeIndex: mentionActiveIndex,
+  style: mentionStyle
+} = mention
+function ensureMentionProfiles() {
+  const missing = candidateIds.value.filter((id) => !team.profiles[id])
+  if (missing.length) void team.fetchProfiles(missing)
+}
+function onComposerInput() {
+  chat.notifyTyping()
+  mention.onInput()
+  if (mention.open.value) ensureMentionProfiles()
+}
+function onComposerKeydown(e: KeyboardEvent) {
+  if (mention.onKeydown(e)) return
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    e.preventDefault()
+    void onSendComment()
+  }
+}
+// Names for highlighting @mentions in a rendered comment (mirrors CommsMessage).
+function mentionNamesFor(m: { mentioned_user_ids?: string[] | null }): string[] {
+  return (m.mentioned_user_ids ?? [])
+    .map((id) => team.profiles[id]?.full_name)
+    .filter((n): n is string => Boolean(n))
 }
 
 // Mark read as the conversation changes while the drawer is open. Auto-scroll
@@ -147,6 +205,7 @@ const priority = ref<1 | 2 | 3 | 4>(3)
 const dueOn = ref<string>('')
 
 const saveState = ref<'idle' | 'saving' | 'saved'>('idle')
+const saveError = ref<string | null>(null)
 let savedTimer: ReturnType<typeof setTimeout> | undefined
 const confirmDelete = ref(false)
 const showHistory = ref(false)
@@ -186,6 +245,41 @@ const currentStatus = computed(() => {
   }
 })
 const currentPriority = computed(() => priorities.find((p) => p.value === priority.value)!)
+
+// Who created the task — the creator can always edit it, so surface them (a task
+// can read as "unassigned" yet still be owned by its creator).
+const creatorName = computed(() => {
+  const id = t.value?.created_by
+  if (!id) return null
+  return team.profiles[id]?.full_name ?? team.profiles[id]?.email?.split('@')[0] ?? null
+})
+watch(
+  () => t.value?.created_by,
+  (id) => { if (id && !team.profiles[id]) void team.fetchProfiles([id]) },
+  { immediate: true }
+)
+
+// Resolve the people who appear in the activity log so each entry shows who did
+// it (the log stores user_id, not a name).
+watch(
+  () => t.value?.id,
+  () => {
+    const ids = [
+      ...new Set(
+        (t.value?.activity_log ?? [])
+          .map((h) => h.user_id)
+          .filter((x): x is string => !!x && !team.profiles[x])
+      )
+    ]
+    if (ids.length) void team.fetchProfiles(ids)
+  },
+  { immediate: true }
+)
+function actorName(h: TaskActivityEvent): string {
+  if (!h.user_id) return 'Someone'
+  const p = team.profiles[h.user_id]
+  return p?.full_name || p?.email?.split('@')[0] || 'Someone'
+}
 
 // Project selector — same-client projects the task can live in. Moving projects
 // resets the status to the new project's default column (columns are per-project).
@@ -248,6 +342,7 @@ function close() {
 async function patch(patchObj: Record<string, unknown>) {
   if (!t.value) return
   if (savedTimer) clearTimeout(savedTimer)
+  saveError.value = null
   saveState.value = 'saving'
   try {
     await tasks.updateTask(t.value.id, patchObj as any)
@@ -258,6 +353,9 @@ async function patch(patchObj: Record<string, unknown>) {
   } catch (e) {
     console.warn('[task drawer] save failed:', (e as Error).message)
     saveState.value = 'idle'
+    // Surface the (translated) reason — e.g. RLS blocked it because the user
+    // isn't assigned. The store already rolled the optimistic change back.
+    saveError.value = (e as Error).message
     // The store rolls the task back on failure; the merge watch above picks
     // that up per-field without clobbering whatever else the user is typing.
   }
@@ -462,6 +560,70 @@ function assigneeColor(seed: string) {
   return AVATAR_PALETTE[h % AVATAR_PALETTE.length]
 }
 
+// ── Subtasks (checklist) ──────────────────────────────────────────────────
+const subtasks = computed<Subtask[]>(() => (t.value ? tasks.getSubtasks(t.value.id) : []))
+const subProgress = computed(() => (t.value ? tasks.subtaskProgress(t.value.id) : { total: 0, done: 0, pct: 0 }))
+const newSubtaskTitle = ref('')
+// Anyone on the task's client can own a subtask (don't exclude current task
+// assignees the way the task picker does).
+const subCandidates = computed<MemberProfile[]>(() =>
+  candidateIds.value.map((id) => team.profiles[id]).filter((p): p is MemberProfile => Boolean(p)))
+
+async function submitNewSubtask() {
+  if (!t.value || !newSubtaskTitle.value.trim()) return
+  try { await tasks.addSubtask(t.value.id, newSubtaskTitle.value); newSubtaskTitle.value = '' }
+  catch (e) { console.warn('[task drawer] addSubtask:', (e as Error).message) }
+}
+async function saveSubtaskTitle(s: Subtask, el: HTMLInputElement) {
+  const next = el.value.trim()
+  if (!next) { el.value = s.title; return }
+  if (next === s.title) return
+  try { await tasks.updateSubtask(s.id, { title: next }) } catch { el.value = s.title }
+}
+async function toggleSub(s: Subtask) {
+  try { await tasks.toggleSubtaskDone(s.id, !s.done) } catch (e) { console.warn('[task drawer] toggleSub:', (e as Error).message) }
+}
+async function removeSub(s: Subtask) {
+  try { await tasks.removeSubtask(s.id) } catch (e) { console.warn('[task drawer] removeSub:', (e as Error).message) }
+}
+async function saveSubDue(s: Subtask, el: HTMLInputElement) {
+  try { await tasks.updateSubtask(s.id, { due_on: el.value || null }) } catch (e) { console.warn('[task drawer] saveSubDue:', (e as Error).message) }
+}
+
+const subAssigneeOpen = ref<string | null>(null)
+function toggleSubAssignee(id: string) {
+  subAssigneeOpen.value = subAssigneeOpen.value === id ? null : id
+  if (subAssigneeOpen.value) {
+    const missing = candidateIds.value.filter((cid) => !team.profiles[cid])
+    if (missing.length) void team.fetchProfiles(missing)
+  }
+}
+async function setSubAssignee(s: Subtask, userId: string | null) {
+  subAssigneeOpen.value = null
+  try { await tasks.updateSubtask(s.id, { assignee_id: userId }) } catch (e) { console.warn('[task drawer] setSubAssignee:', (e as Error).message) }
+}
+
+const subListRef = ref<HTMLElement | null>(null)
+let subSortable: Sortable | null = null
+function mountSubSortable() {
+  if (!subListRef.value || subSortable) return
+  subSortable = Sortable.create(subListRef.value, {
+    handle: '.sub-grip',
+    animation: 150,
+    draggable: '[data-sub-id]',
+    onEnd: () => {
+      if (!t.value || !subListRef.value) return
+      const ids = Array.from(subListRef.value.querySelectorAll('[data-sub-id]'))
+        .map((el) => el.getAttribute('data-sub-id'))
+        .filter((x): x is string => !!x)
+      void tasks.reorderSubtasks(t.value.id, ids)
+    }
+  })
+}
+onMounted(mountSubSortable)
+watch(subListRef, mountSubSortable)
+onUnmounted(() => { subSortable?.destroy(); subSortable = null })
+
 const assigneeWrap = ref<HTMLElement | null>(null)
 function onAssigneeDocClick(e: MouseEvent) {
   if (!assigneeWrap.value) return
@@ -489,7 +651,8 @@ async function pickPriority(value: 1 | 2 | 3 | 4) {
 function onEsc(e: KeyboardEvent) {
   if (e.key === 'Escape' && open.value) {
     // Innermost layer first: open popovers, then armed confirms, then the drawer.
-    if (assigneeMenuOpen.value) assigneeMenuOpen.value = false
+    if (subAssigneeOpen.value) subAssigneeOpen.value = null
+    else if (assigneeMenuOpen.value) assigneeMenuOpen.value = false
     else if (confirmDelete.value) confirmDelete.value = false
     else close()
   }
@@ -635,6 +798,7 @@ function openDuePicker(triggerEl: HTMLElement) {
         'transition-transform duration-300 ease-out will-change-transform',
         open ? 'translate-x-0' : 'translate-x-full pointer-events-none'
       ]"
+      :data-tour="open ? 'task-drawer' : undefined"
       role="dialog"
       :aria-hidden="!open"
       aria-modal="true"
@@ -648,6 +812,10 @@ function openDuePicker(triggerEl: HTMLElement) {
             <span class="font-mono">{{ t?.reference_number }}</span>
             <span class="text-base-content/30">·</span>
             <span class="truncate max-w-[14rem]">{{ t?.client_name ?? '—' }}</span>
+            <template v-if="creatorName">
+              <span class="text-base-content/30">·</span>
+              <span class="truncate max-w-[10rem]" title="Task creator (can always edit)">by {{ creatorName }}</span>
+            </template>
           </div>
           <div class="flex items-center gap-2">
             <span
@@ -672,6 +840,12 @@ function openDuePicker(triggerEl: HTMLElement) {
             </button>
           </div>
         </header>
+
+        <!-- save / permission error (e.g. RLS blocked an edit you're not allowed to make) -->
+        <div v-if="saveError" class="flex items-center gap-2 px-5 py-2 bg-error/10 text-error text-xs border-b border-error/20 shrink-0">
+          <span class="flex-1">{{ saveError }}</span>
+          <button type="button" class="underline hover:no-underline shrink-0" @click="saveError = null">dismiss</button>
+        </div>
 
         <!-- body -->
         <div ref="scrollBodyRef" class="flex-1 overflow-y-auto">
@@ -870,7 +1044,7 @@ function openDuePicker(triggerEl: HTMLElement) {
               >
                 <div
                   v-if="assigneeMenuOpen"
-                  class="absolute left-0 top-full mt-1 z-30 w-72 rounded-xl bg-base-100 border border-base-300 shadow-hc-2 overflow-hidden"
+                  class="absolute right-0 top-full mt-1 z-30 w-72 max-w-[calc(100vw-2rem)] rounded-xl bg-base-100 border border-base-300 shadow-hc-2 overflow-hidden"
                 >
                   <div class="p-2 border-b border-base-300/60">
                     <label class="flex items-center gap-2 px-2 py-1 rounded-md bg-base-200/50">
@@ -973,6 +1147,115 @@ function openDuePicker(triggerEl: HTMLElement) {
             />
           </div>
 
+          <!-- subtasks (checklist) -->
+          <div class="px-6 py-4 border-t border-base-300/60">
+            <div class="text-xs font-medium text-base-content/60 uppercase tracking-wide mb-2">
+              Subtasks
+              <span v-if="subProgress.total" class="normal-case text-base-content/40">· {{ subProgress.done }}/{{ subProgress.total }}</span>
+            </div>
+
+            <div v-if="subProgress.total" class="h-1.5 rounded-full bg-base-300/50 overflow-hidden mb-3">
+              <div class="h-full rounded-full bg-success transition-all duration-300" :style="{ width: subProgress.pct + '%' }" />
+            </div>
+
+            <ul ref="subListRef" class="space-y-0.5">
+              <li
+                v-for="s in subtasks"
+                :key="s.id"
+                :data-sub-id="s.id"
+                class="group/sub relative flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-base-200/40"
+              >
+                <button type="button" tabindex="-1" class="sub-grip cursor-grab text-base-content/25 hover:text-base-content/50 opacity-0 group-hover/sub:opacity-100 transition-opacity">
+                  <GripVertical class="w-3.5 h-3.5" :stroke-width="1.75" />
+                </button>
+
+                <button
+                  type="button"
+                  class="shrink-0 w-4 h-4 rounded-full border flex items-center justify-center transition-colors"
+                  :class="s.done ? 'bg-success border-success text-white' : 'border-base-content/30 hover:border-base-content/60'"
+                  :aria-pressed="s.done"
+                  @click="toggleSub(s)"
+                >
+                  <Check v-if="s.done" class="w-2.5 h-2.5" :stroke-width="3" />
+                </button>
+
+                <input
+                  :value="s.title"
+                  class="flex-1 min-w-0 bg-transparent border-0 outline-none text-sm"
+                  :class="s.done && 'line-through text-base-content/40'"
+                  @blur="saveSubtaskTitle(s, $event.target as HTMLInputElement)"
+                  @keydown.enter.prevent="($event.target as HTMLInputElement).blur()"
+                />
+
+                <!-- optional due -->
+                <div class="relative shrink-0">
+                  <button
+                    type="button"
+                    class="flex items-center gap-1 text-[0.7rem] px-1 py-0.5 rounded hover:bg-base-200"
+                    :class="s.due_on ? 'text-base-content/70' : 'text-base-content/40 opacity-0 group-hover/sub:opacity-100'"
+                    @click="openDuePicker($event.currentTarget as HTMLElement)"
+                  >
+                    <CalendarDays class="w-3 h-3" :stroke-width="1.75" />
+                    <span v-if="s.due_on">{{ dueLabel(s.due_on) }}</span>
+                  </button>
+                  <input type="date" tabindex="-1" class="absolute inset-0 w-full h-full opacity-0 pointer-events-none" :value="s.due_on ?? ''" @change="saveSubDue(s, $event.target as HTMLInputElement)" />
+                </div>
+
+                <!-- optional assignee -->
+                <div class="relative shrink-0">
+                  <button
+                    type="button"
+                    :title="s.assignee_id ? (team.profiles[s.assignee_id]?.full_name ?? 'Assigned') : 'Assign'"
+                    @click="toggleSubAssignee(s.id)"
+                  >
+                    <HexAvatar
+                      v-if="s.assignee_id"
+                      :size="20" :font-size="9"
+                      :fill="assigneeColor(s.assignee_id)"
+                      :avatar-url="team.profiles[s.assignee_id]?.avatar_url"
+                      :label="assigneeInitials(team.profiles[s.assignee_id] ?? null)"
+                    />
+                    <span v-else class="w-5 h-5 rounded-full border border-dashed border-base-content/30 grid place-items-center text-base-content/30 opacity-0 group-hover/sub:opacity-100">
+                      <UserPlus class="w-3 h-3" :stroke-width="2" />
+                    </span>
+                  </button>
+                  <div
+                    v-if="subAssigneeOpen === s.id"
+                    class="absolute right-0 top-full mt-1 z-30 w-52 max-h-56 overflow-y-auto rounded-xl bg-base-100 border border-base-300 shadow-hc-2 p-1"
+                    @click.stop
+                  >
+                    <button v-if="s.assignee_id" type="button" class="w-full text-left px-2 py-1.5 rounded-md text-xs text-base-content/60 hover:bg-base-200/60" @click="setSubAssignee(s, null)">Unassign</button>
+                    <button
+                      v-for="p in subCandidates"
+                      :key="p.id"
+                      type="button"
+                      class="w-full text-left px-2 py-1.5 rounded-md hover:bg-base-200/60 flex items-center gap-2"
+                      @click="setSubAssignee(s, p.id)"
+                    >
+                      <HexAvatar :size="22" :font-size="10" :fill="assigneeColor(p.id)" :avatar-url="p.avatar_url" :label="assigneeInitials(p)" />
+                      <span class="text-sm truncate">{{ p.full_name || p.email || '—' }}</span>
+                    </button>
+                    <div v-if="!subCandidates.length" class="px-2 py-3 text-xs text-base-content/50 italic text-center">No teammates on this client</div>
+                  </div>
+                </div>
+
+                <button type="button" class="shrink-0 text-base-content/30 hover:text-error opacity-0 group-hover/sub:opacity-100 transition-opacity" @click="removeSub(s)">
+                  <X class="w-3.5 h-3.5" :stroke-width="1.75" />
+                </button>
+              </li>
+            </ul>
+
+            <div class="flex items-center gap-2 px-1.5 py-1 mt-0.5">
+              <Plus class="w-3.5 h-3.5 text-base-content/30 shrink-0" :stroke-width="1.75" />
+              <input
+                v-model="newSubtaskTitle"
+                placeholder="Add a subtask…"
+                class="flex-1 min-w-0 bg-transparent border-0 outline-none text-sm placeholder:text-base-content/30"
+                @keydown.enter.prevent="submitNewSubtask"
+              />
+            </div>
+          </div>
+
           <!-- attachments -->
           <TaskAttachments :task="t" />
 
@@ -1032,7 +1315,7 @@ function openDuePicker(triggerEl: HTMLElement) {
                     </span>
                   </div>
                   <div class="text-sm text-base-content/90 whitespace-pre-wrap break-words">
-                    {{ m.message }}
+                    <CommsRichText :text="m.message" :mention-names="mentionNamesFor(m)" />
                   </div>
                 </div>
               </li>
@@ -1050,12 +1333,13 @@ function openDuePicker(triggerEl: HTMLElement) {
             <!-- composer -->
             <form class="mt-3 flex items-end gap-2" @submit.prevent="onSendComment">
               <textarea
+                ref="composerEl"
                 v-model="draft"
                 rows="1"
-                placeholder="Write a message…  (Enter to send, Shift+Enter for a new line)"
+                placeholder="Write a message…  (@ to mention, Enter to send, Shift+Enter for a new line)"
                 class="textarea textarea-bordered textarea-sm flex-1 resize-none leading-relaxed min-h-0 py-1.5"
-                @input="chat.notifyTyping()"
-                @keydown.enter.exact.prevent="onSendComment"
+                @input="onComposerInput"
+                @keydown="onComposerKeydown"
               />
               <button
                 type="submit"
@@ -1066,6 +1350,13 @@ function openDuePicker(triggerEl: HTMLElement) {
               >
                 <Send class="w-4 h-4" :stroke-width="2" />
               </button>
+              <MentionPopover
+                :open="mentionOpen"
+                :matches="mentionMatches"
+                :active-index="mentionActiveIndex"
+                :style="mentionStyle"
+                @pick="mention.pick"
+              />
             </form>
           </div>
 
@@ -1089,7 +1380,10 @@ function openDuePicker(triggerEl: HTMLElement) {
                 <span class="text-base-content/40 tabular-nums shrink-0 w-28 truncate">
                   {{ fmtTimestamp(h.timestamp) }}
                 </span>
-                <span class="flex-1 min-w-0 text-base-content/80" v-html="describeActivity(h)" />
+                <span class="flex-1 min-w-0 text-base-content/80">
+                  <span class="font-semibold text-base-content">{{ actorName(h) }}</span>
+                  <span v-html="describeActivity(h)" />
+                </span>
               </li>
             </ul>
           </div>

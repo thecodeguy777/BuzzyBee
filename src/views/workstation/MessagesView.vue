@@ -8,6 +8,8 @@ import SeenCluster from '@/components/comms/SeenCluster.vue'
 import CommsMessage from '@/components/comms/CommsMessage.vue'
 import TypingIndicator from '@/components/comms/TypingIndicator.vue'
 import MediaPicker from '@/components/comms/MediaPicker.vue'
+import MentionPopover from '@/components/shared/MentionPopover.vue'
+import { useMentionAutocomplete, type MentionCandidate } from '@/composables/useMentionAutocomplete'
 import { COMMS_STREAM, HUDDLE_PRESENCE } from '@/composables/commsStream'
 import { useBuzz, type BuzzResult } from '@/composables/useBuzz'
 import { AVAILABILITY, availabilityOf } from '@/lib/availability'
@@ -193,7 +195,12 @@ watch(() => stream.rootMessages.value.length, () => {
   const id = currentId.value
   if (id && current.value && document.visibilityState === 'visible') void channels.markRead(id)
 })
-watch(currentId, () => scrollToBottom())
+watch(currentId, () => {
+  scrollToBottom()
+  // Picked mention ids belong to the previous thread — drop them so they can't
+  // leak into a message sent in the newly opened conversation.
+  mention.reset()
+})
 
 // Same-author grouping: hide the avatar/name header on quick follow-ups.
 function isContinuation(i: number) {
@@ -296,12 +303,46 @@ const draft = computed({
   get: () => drafts.get(currentId.value),
   set: (v) => drafts.set(currentId.value, v),
 })
+
+// @mention autocomplete — candidates are the other members of this DM thread.
+const composerEl = ref<HTMLTextAreaElement | HTMLInputElement | null>(null)
+function mentionPool(): MentionCandidate[] {
+  const ids = channels.dmMembers[currentId.value ?? ''] ?? []
+  return ids
+    .filter((id) => id !== auth.user?.id)
+    .map((id) => {
+      const p = team.profiles[id]
+      return { id, name: p?.full_name ?? 'Member', avatarUrl: p?.avatar_url ?? null }
+    })
+}
+const mention = useMentionAutocomplete({ el: composerEl, text: draft, candidates: mentionPool })
+const {
+  open: mentionOpen,
+  matches: mentionMatches,
+  activeIndex: mentionActiveIndex,
+  style: mentionStyle
+} = mention
+
 const sending = ref(false)
 const pendingAtts = ref<Attachment[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
 const showPicker = ref(false)
 function onInput() {
   if (draft.value.trim()) stream.sendTyping()
+  mention.onInput()
+  if (mention.open.value) {
+    const missing = (channels.dmMembers[currentId.value ?? ''] ?? []).filter(
+      (id) => !team.profiles[id]
+    )
+    if (missing.length) void team.fetchProfiles(missing)
+  }
+}
+function onComposerKeydown(e: KeyboardEvent) {
+  if (mention.onKeydown(e)) return
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    e.preventDefault()
+    void send()
+  }
 }
 function addEmoji(e: string) {
   draft.value += e
@@ -336,11 +377,13 @@ async function send() {
   const body = draft.value
   const atts = pendingAtts.value
   if (!body.trim() && !atts.length) return
+  const mentions = mention.resolveMentions(body)
   drafts.clear(cid)
   pendingAtts.value = []
   sending.value = true
   try {
-    await stream.send(body, { attachments: atts })
+    await stream.send(body, { attachments: atts, mentions })
+    mention.reset() // only after success — a failed send keeps picks for retry
     scrollToBottom()
   } catch {
     // Restore to the thread it was typed in — it may no longer be current.
@@ -562,11 +605,19 @@ function lastReplyAtFor(m: CommsMsg) {
             </button>
             <input ref="fileInput" type="file" multiple class="hidden" @change="onFiles" />
             <input
+              ref="composerEl"
               v-model="draft"
               :placeholder="`Message ${threadName(current)}`"
               class="flex-1 bg-transparent text-sm outline-none min-w-0"
               @input="onInput"
-              @keydown.enter.prevent="send"
+              @keydown="onComposerKeydown"
+            />
+            <MentionPopover
+              :open="mentionOpen"
+              :matches="mentionMatches"
+              :active-index="mentionActiveIndex"
+              :style="mentionStyle"
+              @pick="mention.pick"
             />
             <button type="button" class="w-8 h-8 rounded-lg bg-primary text-white flex items-center justify-center disabled:opacity-40" :disabled="sending || (!draft.trim() && !pendingAtts.length)" @click="send">
               <Send class="w-3.5 h-3.5" :stroke-width="2" />

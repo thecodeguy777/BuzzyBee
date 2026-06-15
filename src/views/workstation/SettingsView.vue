@@ -12,6 +12,7 @@ import {
   Loader2
 } from 'lucide-vue-next'
 import { COMMS_STREAM } from '@/composables/commsStream'
+import { notifyMuted, setNotifyMuted } from '@/lib/commsSounds'
 import { useAuthStore } from '@/stores/auth'
 import { AVAILABILITY, availabilityOf, type Availability } from '@/lib/availability'
 
@@ -23,6 +24,13 @@ import { AVAILABILITY, availabilityOf, type Availability } from '@/lib/availabil
 
 const auth = useAuthStore()
 const stream = inject(COMMS_STREAM, null)
+
+// Inbox notification chime — its own toggle, independent of the comms cues.
+const notifySoundOn = ref(!notifyMuted())
+function toggleNotifySound() {
+  notifySoundOn.value = !notifySoundOn.value
+  setNotifyMuted(!notifySoundOn.value)
+}
 
 // ── Availability ──────────────────────────────────────────────────────────────
 const availability = ref<Availability>(availabilityOf(auth.profile?.availability))
@@ -140,6 +148,20 @@ function saveMic() {
     <section class="card bg-base-100 border border-base-300 shadow-sm">
       <div class="card-body p-6 space-y-4">
         <h2 class="font-display text-base font-semibold">Notifications &amp; sounds</h2>
+
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            class="toggle toggle-primary toggle-sm"
+            :checked="notifySoundOn"
+            @change="toggleNotifySound()"
+          />
+          <span class="flex-1">
+            <span class="block text-sm font-medium">Notification chime</span>
+            <span class="block text-xs text-base-content/50">A sound when a new notification arrives (assignments, comments, mentions)</span>
+          </span>
+          <Volume2 class="w-4 h-4 text-base-content/35" :stroke-width="1.75" />
+        </label>
 
         <label v-if="stream" class="flex items-center gap-3 cursor-pointer">
           <input

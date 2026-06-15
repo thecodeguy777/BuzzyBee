@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HiveMind — Competitive Landscape</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --ink:#1a1722; --ink-2:#56525f; --ink-3:#8b8794;
+  --plum:#5e1b57; --plum-deep:#46123f; --plum-bright:#8a3a83;
+  --bg:#f6f4fb; --bg-2:#efeaf7; --card:#fff;
+  --border:#ebe6f2; --border-2:#e0d9ec;
+  --g1:#3a40d6; --g2:#6a4cdd; --g3:#a85be0;
+  --green:#1f8f50; --amber:#c2700c; --red:#b3263c;
+  --font:'Hanken Grotesk', system-ui, sans-serif;
+  --shadow:0 24px 60px -22px rgba(60,25,75,.30), 0 6px 18px -8px rgba(60,25,75,.16);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--font);background:var(--ink);color:var(--ink);overflow:hidden;-webkit-font-smoothing:antialiased}
+
+.deck{position:relative;height:100vh;width:100vw;overflow:hidden}
+.slide{
+  position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
+  padding:6vh 8vw;opacity:0;visibility:hidden;transform:translateY(14px);
+  transition:opacity .45s ease, transform .45s ease, visibility .45s;
+  background:
+    radial-gradient(1100px 600px at 12% -8%, rgba(106,76,221,.10), transparent 60%),
+    radial-gradient(900px 600px at 100% 110%, rgba(168,91,224,.10), transparent 60%),
+    var(--bg);
+  overflow:auto;
+}
+.slide.active{opacity:1;visibility:visible;transform:translateY(0)}
+.slide.dark{
+  background:
+    radial-gradient(1000px 600px at 80% -10%, rgba(120,90,224,.20), transparent 60%),
+    radial-gradient(800px 600px at -10% 110%, rgba(168,91,224,.14), transparent 60%),
+    #160f1d;
+  color:#fff;
+}
+.inner{width:100%;max-width:1080px;margin:0 auto}
+
+.eyebrow{display:inline-flex;align-items:center;gap:9px;font-size:12px;font-weight:750;letter-spacing:1.6px;text-transform:uppercase;color:var(--plum-bright)}
+.eyebrow::before{content:"";width:22px;height:2px;border-radius:2px;background:linear-gradient(90deg,var(--g2),var(--g3))}
+.dark .eyebrow{color:#d4b3f2}
+
+h1{font-size:clamp(34px,5vw,64px);line-height:1.02;letter-spacing:-1.8px;font-weight:800;margin-top:18px}
+h2{font-size:clamp(26px,3.4vw,42px);line-height:1.06;letter-spacing:-1.2px;font-weight:800;margin-top:16px}
+.accent{background:linear-gradient(110deg,var(--g3),var(--g2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.dark .accent{background:linear-gradient(110deg,#c79bef,#8a4ddb);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(16px,1.7vw,20px);line-height:1.55;color:var(--ink-2);margin-top:18px;max-width:760px}
+.dark .lede{color:rgba(255,255,255,.78)}
+.lede b{color:var(--ink);font-weight:750}
+.dark .lede b{color:#fff}
+
+.grid{display:grid;gap:16px;margin-top:26px}
+.cols-2{grid-template-columns:1fr 1fr}
+.cols-3{grid-template-columns:repeat(3,1fr)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px 22px;box-shadow:0 2px 10px -6px rgba(60,25,75,.14)}
+.dark .card{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.12)}
+.card h3{font-size:16px;font-weight:800;letter-spacing:-.3px}
+.card p{font-size:14px;line-height:1.5;color:var(--ink-2);margin-top:7px}
+.dark .card p{color:rgba(255,255,255,.72)}
+.card .tag{display:inline-block;margin-top:10px;font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:7px;background:var(--bg-2);color:var(--plum)}
+.dark .card .tag{background:rgba(168,91,224,.16);color:#d4b3f2}
+
+ul.clean{margin-top:18px;list-style:none;display:flex;flex-direction:column;gap:11px}
+ul.clean li{display:flex;gap:11px;font-size:15.5px;line-height:1.45;color:var(--ink-2)}
+.dark ul.clean li{color:rgba(255,255,255,.8)}
+ul.clean li b{color:var(--ink);font-weight:750}
+.dark ul.clean li b{color:#fff}
+ul.clean .ic{flex:none;width:22px;height:22px;border-radius:7px;display:grid;place-items:center;font-size:12px;font-weight:800;color:#fff;margin-top:1px}
+.ic.g{background:linear-gradient(135deg,var(--g2),var(--g3))}
+.ic.r{background:linear-gradient(135deg,#c2253c,#e0556b)}
+.ic.a{background:linear-gradient(135deg,#c2700c,#e0a23a)}
+
+table{width:100%;border-collapse:collapse;margin-top:22px;font-size:13px;background:var(--card);border-radius:14px;overflow:hidden;box-shadow:var(--shadow)}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border)}
+th{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-3);font-weight:800;background:var(--bg-2)}
+td{color:var(--ink-2)}
+td b{color:var(--ink);font-weight:700}
+tr:last-child td{border-bottom:none}
+tr.hm td{background:linear-gradient(90deg,rgba(94,27,87,.08),rgba(168,91,224,.06));color:var(--plum-deep)}
+tr.hm td b{color:var(--plum)}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:750;padding:3px 8px;border-radius:20px;white-space:nowrap}
+.pill.none{background:rgba(179,38,60,.10);color:var(--red)}
+.pill.part{background:rgba(194,112,12,.12);color:var(--amber)}
+.pill.full{background:rgba(31,143,80,.12);color:var(--green)}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+
+/* matrix */
+.matrix{position:relative;margin-top:26px;height:420px;border:1.5px solid var(--border-2);border-radius:18px;background:var(--card);box-shadow:var(--shadow)}
+.matrix .qline{position:absolute;background:repeating-linear-gradient(90deg,var(--border-2),var(--border-2) 4px,transparent 4px,transparent 9px)}
+.matrix .vh{left:50%;top:0;bottom:0;width:1.5px}
+.matrix .hh{top:50%;left:0;right:0;height:1.5px;background:repeating-linear-gradient(0deg,var(--border-2),var(--border-2) 4px,transparent 4px,transparent 9px)}
+.ax{position:absolute;font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.7px;color:var(--ink-3)}
+.ax.top{top:10px;left:50%;transform:translateX(-50%)}
+.ax.bot{bottom:10px;left:50%;transform:translateX(-50%)}
+.ax.left{left:12px;top:50%;transform:translateY(-50%) rotate(180deg);writing-mode:vertical-rl}
+.ax.right{right:12px;top:50%;transform:translateY(-50%);writing-mode:vertical-rl}
+.node{position:absolute;transform:translate(-50%,-50%);font-size:12px;font-weight:700;color:var(--ink-2);background:rgba(255,255,255,.92);border:1px solid var(--border);border-radius:20px;padding:4px 10px;white-space:nowrap;box-shadow:0 2px 6px -3px rgba(60,25,75,.2)}
+.node.hm{color:#fff;background:linear-gradient(120deg,var(--plum),var(--plum-bright));border:none;font-weight:800;box-shadow:0 10px 24px -8px rgba(94,27,87,.6);font-size:13px;padding:7px 14px;z-index:3}
+.node.muted{color:var(--ink-3);font-size:11px;padding:3px 9px}
+
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:24px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px 20px;box-shadow:0 2px 10px -6px rgba(60,25,75,.14)}
+.dark .kpi{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.12)}
+.kpi .v{font-size:34px;font-weight:800;letter-spacing:-1.4px;line-height:1;color:var(--plum)}
+.dark .kpi .v{color:#c79bef}
+.kpi .k{font-size:12px;font-weight:650;color:var(--ink-2);margin-top:8px;line-height:1.4}
+.dark .kpi .k{color:rgba(255,255,255,.7)}
+
+.note{margin-top:22px;font-size:12.5px;color:var(--ink-3);line-height:1.5}
+.srcs{margin-top:18px;columns:2;column-gap:40px;font-size:12px;line-height:1.7;color:var(--ink-2)}
+.srcs a{color:var(--plum);text-decoration:none;word-break:break-all}
+
+/* chrome */
+.progress{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,var(--g1),var(--g2),var(--g3));z-index:50;transition:width .35s ease}
+.counter{position:fixed;bottom:18px;right:22px;z-index:50;font-size:12px;font-weight:700;color:var(--ink-3);background:rgba(255,255,255,.7);backdrop-filter:blur(8px);padding:5px 11px;border-radius:20px;border:1px solid var(--border)}
+.dark ~ .counter{}
+.hint{position:fixed;bottom:18px;left:22px;z-index:50;font-size:11.5px;color:var(--ink-3);font-weight:600}
+.nav{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:50;display:flex;gap:7px}
+.nav button{width:9px;height:9px;border-radius:50%;border:none;background:rgba(140,135,148,.4);cursor:pointer;padding:0;transition:all .2s}
+.nav button.on{background:var(--plum-bright);width:24px;border-radius:6px}
+.foot{position:absolute;bottom:5vh;left:8vw;font-size:11px;font-weight:700;letter-spacing:.4px;color:var(--ink-3);text-transform:uppercase}
+.dark .foot{color:rgba(255,255,255,.4)}
+.logo{display:inline-flex;align-items:center;gap:10px;font-weight:800;font-size:18px;letter-spacing:-.4px}
+.logo svg{width:30px;height:30px}
+</style>
+</head>
+<body>
+<div class="progress" id="progress"></div>
+<div class="deck" id="deck">
+
+  <!-- 1 · TITLE -->
+  <section class="slide dark active">
+    <div class="inner">
+      <div class="logo">
+        <svg viewBox="0 50 324 343" fill="none" aria-hidden="true">
+          <defs><linearGradient id="hm-head-dark" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#2563eb"/><stop offset="100%" stop-color="#a855f7"/></linearGradient></defs>
+          <path fill="#ffffff" d="M323.98,136.55c-.02-1.47-2.04-1.83-2.59-.46-2.8,7.03-7.85,13.08-14.55,17.09l-123.27,73.69-4.35,2.42c-4.73,2.63-9.91,4.08-15.13,4.37-.13,0-.25.01-.38.02-.47.02-.93.02-1.4.02-.47,0-.93,0-1.4-.02-.13,0-.25-.01-.38-.02-5.23-.28-10.41-1.73-15.13-4.37l-4.35-2.42L17.78,153.18c-6.7-4.01-11.75-10.06-14.55-17.09-.55-1.37-2.57-1.01-2.59.46l-.64,42.1c.7,11.48,7.01,21.96,16.98,27.92l96.77,57.85v.18l4.53,2.52,25.12,15.02c5.81,3.48,12.37,5.11,18.91,4.94,6.54.17,13.1-1.46,18.91-4.94l25.12-15.02,4.53-2.52v-.18l96.77-57.85c9.97-5.96,16.28-16.44,16.98-27.92l-.64-42.1Z"/>
+          <path fill="#ffffff" d="M323.98,227.14c0-.17-.04-.31-.08-.45-.01-.03-.02-.06-.03-.08-.05-.13-.12-.24-.21-.34-.01-.02-.03-.03-.05-.04-.08-.08-.18-.16-.28-.21-.02-.01-.03-.02-.05-.03-.11-.06-.23-.1-.36-.12-.03,0-.05,0-.08-.01-.13-.02-.26-.03-.39,0-.13.02-.26.06-.38.12-.04.02-.07.04-.1.06-.09.05-.17.11-.24.19-.03.03-.06.06-.09.09-.1.11-.18.24-.24.39-2.8,7.03-7.85,13.08-14.55,17.09l-123.27,73.69s0,0,0,0l-4.35,2.42c-4.73,2.63-9.91,4.08-15.13,4.37-.13,0-.25.01-.38.02-.47.02-.93.02-1.4.02-.47,0-.93,0-1.4-.02-.13,0-.25-.01-.38-.02-5.23-.28-10.41-1.73-15.13-4.37l-4.35-2.42L17.78,243.77c-.84-.5-1.65-1.03-2.43-1.6-.71-.51-1.38-1.05-2.05-1.6-.2-.16-.39-.33-.58-.5-.48-.42-.95-.85-1.4-1.3-.18-.18-.36-.35-.54-.53-.6-.61-1.18-1.24-1.73-1.89-2.45-2.89-4.41-6.16-5.81-9.68-.14-.34-.37-.58-.63-.71-.13-.07-.28-.11-.42-.13h0c-.29-.04-.59.01-.85.15-.13.07-.25.16-.35.27-.2.22-.33.52-.34.88l-.32,21.05L0,269.24c.05.82.14,1.63.24,2.44.03.25.08.5.12.76.09.56.18,1.12.3,1.68.06.28.12.56.18.83.13.55.27,1.1.42,1.64.07.24.13.49.2.73.24.77.49,1.53.78,2.29.25.66.52,1.31.81,1.95.26.58.54,1.14.83,1.7.09.17.18.33.27.5.22.41.45.82.69,1.22.1.16.19.32.29.48.33.54.67,1.07,1.03,1.59.38.54.77,1.08,1.18,1.6.13.17.27.33.41.5.28.35.57.69.86,1.03.17.19.34.38.52.57.28.3.56.61.85.9.19.19.38.38.57.57.29.28.59.56.89.84.2.18.4.36.6.54.32.27.64.54.96.8.2.16.4.33.61.48.36.28.73.55,1.11.81.18.13.36.26.54.38.56.38,1.13.75,1.72,1.1l96.77,57.85v.18l4.53,2.52,1.35.8c14.07,8.41,26.15,19.75,35.44,33.25l3.65,5.31c1.73,2.52,5.45,2.52,7.18,0l3.65-5.3c9.29-13.5,21.38-24.84,35.44-33.25l1.35-.81,4.53-2.52v-.18l96.77-57.85c9.97-5.96,16.28-16.44,16.98-27.92l-.64-42.1Z"/>
+          <path fill="url(#hm-head-dark)" d="M300.35,104.93l-81.66-47.45c-34.96-20.31-78.12-20.33-113.08-.04L24.27,104.63c-5.18,3-5.23,10.46-.09,13.54l76.11,45.54c38.29,22.91,86.06,22.92,124.36.04l75.79-45.28c5.14-3.07,5.09-10.53-.08-13.54Z"/>
+        </svg>
+        HiveMind
+      </div>
+      <div class="eyebrow" style="margin-top:34px">Competitive landscape</div>
+      <h1>Everyone rents <span class="accent">people</span>.<br/>Nobody includes the <span class="accent">tools</span>.</h1>
+      <p class="lede">A scan of the managed virtual-assistant market — who's out there, what they charge, and the one thing none of them bundle. <b>The gap is the whole pitch.</b></p>
+    </div>
+    <div class="foot">Market scan · ~2026 · pricing as found (sources at end)</div>
+  </section>
+
+  <!-- 2 · TL;DR -->
+  <section class="slide">
+    <div class="inner">
+      <div class="eyebrow">The one-slide verdict</div>
+      <h2>Yes, "managed VA" exists everywhere.<br/>The <span class="accent">tools-included</span> version basically doesn't.</h2>
+      <div class="kpis">
+        <div class="kpi"><div class="v">15+</div><div class="k">managed-VA players scanned, from premium US agencies to offshore + DIY job boards</div></div>
+        <div class="kpi"><div class="v">0</div><div class="k">that include a full work suite — CRM + dialer + meetings + tasks + chat + time</div></div>
+        <div class="kpi"><div class="v">1</div><div class="k">close analog (Wing) — and it's only a coordination portal, not the work tools</div></div>
+      </div>
+      <p class="note">Translation: the real alternative to HiveMind isn't one rival — it's <b>a VA company <i>plus</i> a stack of separate per-seat SaaS</b> the customer assembles, pays for, and maintains.</p>
+    </div>
+  </section>
+
+  <!-- 3 · TWO HALVES -->
+  <section class="slide">
+    <div class="inner">
+      <div class="eyebrow">How the market actually works</div>
+      <h2>Buyers pay for <span class="accent">two halves</span> — and stitch them together themselves.</h2>
+      <div class="grid cols-2">
+        <div class="card">
+          <h3>Half 1 — the person</h3>
+          <p>What every competitor sells: a vetted, managed assistant. ~$1,000–$3,000/mo offshore; $2,500–$6,500/mo for premium US talent.</p>
+          <span class="tag">Crowded · commodity</span>
+        </div>
+        <div class="card">
+          <h3>Half 2 — the software (on you)</h3>
+          <p>The VA logs into <b>your</b> tools. You still buy CRM, dialer, chat, project mgmt, meetings, time-tracking, scheduling — per seat — and wire them together.</p>
+          <span class="tag" style="background:rgba(179,38,60,.10);color:var(--red)">The "software tax"</span>
+        </div>
+      </div>
+      <p class="lede" style="margin-top:22px"><b>HiveMind collapses both halves into one product.</b> That's the move nobody else makes.</p>
+    </div>
+  </section>
+
+  <!-- 4 · THREE TYPES -->
+  <section class="slide">
+    <div class="inner">
+      <div class="eyebrow">Who you're up against</div>
+      <h2>Three kinds of players</h2>
+      <div class="grid cols-3">
+        <div class="card">
+          <h3>Premium US/UK agencies</h3>
+          <p>Belay, Boldly, Time etc, Prialto, Athena, Double. Native-English, white-glove, expensive. VA works in your tools.</p>
+          <span class="tag">$2.6k–$6.5k/mo · no tools</span>
+        </div>
+        <div class="card">
+          <h3>Offshore managed VAs</h3>
+          <p>MyOutDesk, Cyberbacker, Virtudesk, Wishup, Magic, Pearl, Wing. PH/global talent, far cheaper, often a thin portal.</p>
+          <span class="tag">$700–$3k/mo · portal at most</span>
+        </div>
+        <div class="card">
+          <h3>Recruiting / DIY</h3>
+          <p>Somewhere, OnlineJobs.ph. They find you a hire (or a job board); you manage, pay, and tool everything yourself.</p>
+          <span class="tag">placement fee · zero tools</span>
+        </div>
+      </div>
+      <p class="note">Across all three, the work software is the customer's problem. The differentiation isn't "we have VAs" — it's <b>what the VA works inside.</b></p>
+    </div>
+  </section>
+
+  <!-- 5 · TABLE -->
+  <section class="slide">
+    <div class="inner">
+      <div class="eyebrow">The field</div>
+      <h2>Who's out there &amp; what they bundle</h2>
+      <table>
+        <thead><tr><th>Company</th><th>Talent</th><th>Typical price (USD)</th><th>Work tools included?</th></tr></thead>
+        <tbody>
+          <tr><td><b>Belay</b></td><td>US</td><td>~$42–46/hr · quote-only</td><td><span class="pill none"><span class="dot"></span>None</span></td></tr>
+          <tr><td><b>Boldly</b></td><td>US/UK (W-2)</td><td>$2,600–$6,500/mo</td><td><span class="pill none"><span class="dot"></span>None</span></td></tr>
+          <tr><td><b>Athena</b></td><td>PH</td><td>$3,000/mo full-time</td><td><span class="pill none"><span class="dot"></span>None</span></td></tr>
+          <tr><td><b>Time etc</b></td><td>US/UK</td><td>$360–$1,800/mo (10–60h)</td><td><span class="pill part"><span class="dot"></span>Task tracker</span></td></tr>
+          <tr><td><b>Prialto</b></td><td>PH/Kenya</td><td>$1,500–$1,600/mo/unit</td><td><span class="pill none"><span class="dot"></span>None</span></td></tr>
+          <tr><td><b>Double</b></td><td>US/FR</td><td>from ~$549/mo (10h)</td><td><span class="pill part"><span class="dot"></span>Delegation app</span></td></tr>
+          <tr><td><b>MyOutDesk</b></td><td>PH</td><td>$1,788–$1,988/mo</td><td><span class="pill none"><span class="dot"></span>None</span></td></tr>
+          <tr><td><b>Wishup</b></td><td>India/PH</td><td>$1,999–$2,999/mo</td><td><span class="pill part"><span class="dot"></span>App + time-track</span></td></tr>
+          <tr><td><b>Magic</b></td><td>PH/global</td><td>$10–35/hr · ~$2k/mo</td><td><span class="pill none"><span class="dot"></span>None</span></td></tr>
+          <tr><td><b>Wing</b> <span style="color:var(--plum-bright);font-weight:700">(closest)</span></td><td>PH/global</td><td>$699–$2,400/mo</td><td><span class="pill part"><span class="dot"></span>Workspace portal</span></td></tr>
+          <tr><td><b>OnlineJobs.ph</b></td><td>PH (DIY)</td><td>$69–$99/mo job board</td><td><span class="pill none"><span class="dot"></span>None</span></td></tr>
+          <tr class="hm"><td><b>HiveMind</b></td><td>PH (managed)</td><td>people-priced · tools $0</td><td><span class="pill full"><span class="dot"></span>Full work suite</span></td></tr>
+        </tbody>
+      </table>
+      <p class="note">Pricing as found (~2026); Belay, Cyberbacker &amp; MyOutDesk are quote-driven so some figures are credible third-party estimates.</p>
+    </div>
+  </section>
+
+  <!-- 6 · PRICING MODELS -->
+  <section class="slide">
+    <div class="inner">
+      <div class="eyebrow">How the market charges</div>
+      <h2>Four pricing models</h2>
+      <div class="grid cols-2">
+        <div class="card"><h3>1 · Hourly / hour-bundles</h3><p>Pre-buy hours (often rollover). Time etc ~$30–38/hr, Double ~$55/hr, Magic $10–35/hr.</p></div>
+        <div class="card"><h3>2 · Dedicated FTE, flat monthly</h3><p>The dominant offshore model. Wing $999, MyOutDesk $1,988, Athena $3,000, Wishup $2,849 — full-time.</p></div>
+        <div class="card"><h3>3 · Premium US, quote-only</h3><p>Talk-to-sales, opaque. Belay ~$42–46/hr; Boldly $2,600+/mo. Quality &amp; compliance as the price story.</p></div>
+        <div class="card"><h3>4 · Placement / DIY</h3><p>Somewhere ~35% of annual salary one-time; OnlineJobs.ph $69–99/mo to self-recruit, then pay the VA direct.</p></div>
+      </div>
+      <p class="lede" style="margin-top:20px">Rough center of gravity: <b>~$1,500–$2,500/mo</b> basic offshore full-time, <b>~$2,500–$4,000/mo</b> specialized — <b>before</b> any software.</p>
+    </div>
+  </section>
+
+  <!-- 7 · SOFTWARE TAX -->
+  <section class="slide dark">
+    <div class="inner">
+      <div class="eyebrow">The hidden bill</div>
+      <h2>The "software tax" is <span class="accent">real &amp; documented</span></h2>
+      <p class="lede">Industry VA guides say a VA needs "3–4 tools that work well together." In practice it's 6–8 per-seat subscriptions the buyer pays on top of the person:</p>
+      <div class="grid cols-3" style="margin-top:18px">
+        <div class="card"><h3>Comms + meetings</h3><p>Slack / Teams + Zoom</p></div>
+        <div class="card"><h3>Project mgmt</h3><p>Asana / Trello / ClickUp / Monday</p></div>
+        <div class="card"><h3>CRM + support</h3><p>HubSpot / Freshdesk (~$15/agent/mo)</p></div>
+        <div class="card"><h3>Dialer / calling</h3><p>Aircall / PhoneBurner / Mojo</p></div>
+        <div class="card"><h3>Time + scheduling</h3><p>Toggl/Clockify + Calendly (~$8–12/seat)</p></div>
+        <div class="card"><h3>Automation + design</h3><p>Zapier (~$20+) + Canva (~$15)</p></div>
+      </div>
+      <p class="note" style="color:rgba(255,255,255,.6)">MyOutDesk says it plainly: its VAs "work within <b style="color:#fff">YOUR</b> dialer and CRM." The customer owns, pays, and stitches all of it — that's the tax HiveMind removes.</p>
+    </div>
+  </section>
+
+  <!-- 8 · MATRIX -->
+  <section class="slide">
+    <div class="inner">
+      <div class="eyebrow">The white space</div>
+      <h2>Affordable talent <span class="accent">×</span> tools included = empty corner</h2>
+      <div class="matrix">
+        <div class="qline vh"></div><div class="qline hh"></div>
+        <div class="ax top">Full work suite included</div>
+        <div class="ax bot">VA uses your tools</div>
+        <div class="ax left">Premium US $$$</div>
+        <div class="ax right">Offshore / affordable</div>
+        <!-- bottom-left: premium, no tools -->
+        <div class="node" style="left:24%;top:74%">Boldly</div>
+        <div class="node" style="left:33%;top:84%">Belay</div>
+        <div class="node" style="left:60%;top:80%">Athena</div>
+        <!-- bottom-right: offshore, no tools -->
+        <div class="node" style="left:74%;top:72%">MyOutDesk</div>
+        <div class="node" style="left:86%;top:82%">Magic</div>
+        <div class="node" style="left:70%;top:88%">Pearl</div>
+        <div class="node muted" style="left:88%;top:66%">OnlineJobs.ph</div>
+        <!-- mid: offshore, portal -->
+        <div class="node" style="left:78%;top:42%">Wing</div>
+        <div class="node" style="left:64%;top:48%">Wishup</div>
+        <div class="node muted" style="left:40%;top:46%">Double</div>
+        <!-- top-right: HiveMind alone -->
+        <div class="node hm" style="left:82%;top:16%">HiveMind</div>
+      </div>
+      <p class="note">Wing and Wishup climb halfway (a coordination portal) — but the revenue tools (CRM, dialer, meetings) stay the customer's. The top-right is open.</p>
+    </div>
+  </section>
+
+  <!-- 9 · WHERE HIVEMIND WINS -->
+  <section class="slide dark">
+    <div class="inner">
+      <div class="eyebrow">The wedge</div>
+      <h2>Where HiveMind <span class="accent">wins</span></h2>
+      <ul class="clean">
+        <li><span class="ic g">✓</span><span><b>Depth of the included suite.</b> Not a task portal — the actual work tools (chat, CRM, tasks, dialer, meetings, time) as one connected hive. This is the part nobody bundles.</span></li>
+        <li><span class="ic g">✓</span><span><b>"People, not per-seat SaaS."</b> 100% of spend buys work; tools cost $0 on top. The competitor's customer is still paying a separate software bill.</span></li>
+        <li><span class="ic g">✓</span><span><b>General-purpose, many verticals.</b> Coaches, agencies, e-commerce, wellness, hospitality, pro services, real estate, construction — generalists have no "sacred" tool to defend, so "tools included" is an easy yes.</span></li>
+        <li><span class="ic g">✓</span><span><b>One bill, one login, no stitching.</b> You also kill the integration/setup burden — the silent cost of running 6–8 disconnected apps.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 10 · RISKS -->
+  <section class="slide">
+    <div class="inner">
+      <div class="eyebrow">Eyes open</div>
+      <h2>The honest risks</h2>
+      <ul class="clean">
+        <li><span class="ic a">!</span><span><b>"Tools included" isn't unheard-of.</b> Wing leans on its workspace app. Win on <b>depth</b> (real revenue tools), not the phrase.</span></li>
+        <li><span class="ic a">!</span><span><b>Tool-loyal verticals resist.</b> Real estate (Follow Up Boss/kvCORE) and construction (Buildertrend/Procore) won't drop their stack. Don't lead with them.</span></li>
+        <li><span class="ic a">!</span><span><b>You're a staffing co <i>and</i> a 6-app SaaS co.</b> Keeping all six modern is real, ongoing cost — that's the burden behind the moat.</span></li>
+        <li><span class="ic r">×</span><span><b>"More modern UI" is copyable.</b> Looks are the easiest thing to clone. The defensible part is integration + switching cost once a team runs inside the hive.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 11 · RECOMMENDATION -->
+  <section class="slide dark">
+    <div class="inner">
+      <div class="eyebrow">The play</div>
+      <h2>Horizontal product. <span class="accent">Vertical go-to-market.</span></h2>
+      <div class="grid cols-2">
+        <div class="card"><h3>Build for everyone (you do)</h3><p>The hive is vertical-agnostic. Keep the identity constant: <b>people, not software tax — one connected hive.</b></p></div>
+        <div class="card"><h3>Market to the easy-yes few first</h3><p>Lead ads with <b>coaches, agencies, e-commerce, wellness, hospitality</b> — no sacred tools, heavy admin. Verticals = proof, not identity.</p></div>
+      </div>
+      <ul class="clean" style="margin-top:20px">
+        <li><span class="ic g">→</span><span>Compete on <b>suite depth + transparent pricing</b> vs. the quote-only incumbents.</span></li>
+        <li><span class="ic g">→</span><span>Frame the rival as "a VA <b>+</b> a pile of subscriptions," not any single company.</span></li>
+        <li><span class="ic g">→</span><span>Save real estate &amp; construction for later — they're the hardest "drop your tools" sell.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 12 · SOURCES -->
+  <section class="slide">
+    <div class="inner">
+      <div class="eyebrow">Receipts</div>
+      <h2>Sources</h2>
+      <p class="note">Pricing &amp; positioning gathered ~2026 from vendor pages and credible third-party reviews; quote-only vendors flagged. Verify exact figures on vendor pages before quoting externally.</p>
+      <div class="srcs">
+        <a href="https://boldly.com/pricing-plans/">boldly.com/pricing-plans</a>
+        <a href="https://www.prialto.com/pricing">prialto.com/pricing</a>
+        <a href="https://www.athena.com/pricing">athena.com/pricing</a>
+        <a href="https://www.timeetc.com/plans-and-pricing">timeetc.com/plans-and-pricing</a>
+        <a href="https://withdouble.com/pricing">withdouble.com/pricing</a>
+        <a href="https://wingassistant.com/">wingassistant.com</a>
+        <a href="https://www.wishup.co/pricing">wishup.co/pricing</a>
+        <a href="https://getmagic.com/pricing/">getmagic.com/pricing</a>
+        <a href="https://www.myoutdesk.com/pricing/">myoutdesk.com/pricing</a>
+        <a href="https://www.pearltalent.com/hire-talent/virtual-assistants">pearltalent.com</a>
+        <a href="https://www.onlinejobs.ph/pricing">onlinejobs.ph/pricing</a>
+        <a href="https://www.myvirtudesk.com/prices">myvirtudesk.com/prices</a>
+        <a href="https://resources.belaysolutions.com/belay-faq-how-much-does-it-cost-to-hire-a-virtual-assistant-in-the-us">belaysolutions.com (FAQ)</a>
+        <a href="https://www.deel.com/blog/deel-vs-remote-honest-employer-of-record-service-comparison/">deel.com (EOR comparison)</a>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<div class="counter" id="counter">1 / 12</div>
+<div class="hint">← → / space to navigate</div>
+<div class="nav" id="nav"></div>
+
+<script>
+(function(){
+  var slides=[].slice.call(document.querySelectorAll('.slide'));
+  var i=0;
+  var progress=document.getElementById('progress');
+  var counter=document.getElementById('counter');
+  var nav=document.getElementById('nav');
+  slides.forEach(function(_,n){
+    var b=document.createElement('button');
+    b.addEventListener('click',function(){go(n)});
+    nav.appendChild(b);
+  });
+  var dots=[].slice.call(nav.children);
+  function render(){
+    slides.forEach(function(s,n){s.classList.toggle('active',n===i)});
+    dots.forEach(function(d,n){d.classList.toggle('on',n===i)});
+    progress.style.width=((i+1)/slides.length*100)+'%';
+    counter.textContent=(i+1)+' / '+slides.length;
+    // dark counter contrast
+    var dark=slides[i].classList.contains('dark');
+    counter.style.color=dark?'rgba(255,255,255,.7)':'';
+    counter.style.background=dark?'rgba(255,255,255,.08)':'';
+    counter.style.borderColor=dark?'rgba(255,255,255,.15)':'';
+    document.querySelector('.hint').style.color=dark?'rgba(255,255,255,.4)':'';
+  }
+  function go(n){i=Math.max(0,Math.min(slides.length-1,n));render()}
+  function next(){go(i+1)} function prev(){go(i-1)}
+  window.addEventListener('keydown',function(e){
+    if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){e.preventDefault();next()}
+    else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();prev()}
+    else if(e.key==='Home'){go(0)} else if(e.key==='End'){go(slides.length-1)}
+  });
+  // touch swipe
+  var x0=null;
+  window.addEventListener('touchstart',function(e){x0=e.touches[0].clientX},{passive:true});
+  window.addEventListener('touchend',function(e){
+    if(x0===null)return;var dx=e.changedTouches[0].clientX-x0;
+    if(Math.abs(dx)>50){dx<0?next():prev()} x0=null;
+  });
+  render();
+})();
+</script>
+</body>
+</html>

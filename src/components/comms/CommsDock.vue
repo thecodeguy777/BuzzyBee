@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { ref, computed, inject, nextTick, watch, onBeforeUnmount } from 'vue'
+import { ref, computed, inject, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   MessagesSquare, Headphones, Mic, MicOff, MonitorUp, PhoneOff, Wand2,
-  Send, ChevronDown, Maximize2, Crown, Hash, Bell, BellOff,
+  Send, ChevronDown, Maximize2, Crown, Hash, Bell, BellOff, Users,
 } from 'lucide-vue-next'
+import { supabase } from '@/lib/supabase'
+import { HEX_CLIP_ID } from '@/lib/hexPath'
+import HexClipDef from '@/components/shared/HexClipDef.vue'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
 import SeenCluster from '@/components/comms/SeenCluster.vue'
 import CommsAttachments from '@/components/comms/CommsAttachments.vue'
@@ -226,6 +229,193 @@ function jumpToComms() {
   router.push({ name: 'workstation-comms' })
 }
 
+// ── Hive launcher ────────────────────────────────────────────────────────────
+// The collapsed dock blooms its UNREAD threads (DM faces + channel hexes) around
+// a center message hexagon. Hover (tap on touch) reveals them; click opens one.
+type HiveKind = 'channel' | 'dm' | 'group'
+interface HiveSource {
+  id: string; kind: HiveKind; name: string
+  avatarUrl: string | null; colorKey: string | null
+  unread: number; at: string
+}
+const unreadSources = computed<HiveSource[]>(() => {
+  const all = [...channels.channels, ...channels.dms]
+  return all
+    .filter((c) => channels.isUnread(c.id))
+    .map((c): HiveSource => {
+      const kind: HiveKind = !c.is_dm ? 'channel' : c.is_group ? 'group' : 'dm'
+      const partnerId = kind === 'dm' ? (channels.dmMembers[c.id]?.[0] ?? null) : null
+      const prof = partnerId ? team.profiles[partnerId] : undefined
+      return {
+        id: c.id,
+        kind,
+        name: threadName(c),
+        avatarUrl: kind === 'dm' ? (prof?.avatar_url ?? null) : null,
+        colorKey: kind === 'dm' ? partnerId : null,
+        unread: channels.unread[c.id] ?? 0,
+        at: channels.lastMessageAt[c.id] ?? '',
+      }
+    })
+    .sort((a, b) => b.at.localeCompare(a.at)) // newest first (ISO comparable)
+})
+const HIVE_CAP = 4
+const hiveSources = computed(() => unreadSources.value.slice(0, HIVE_CAP))
+const hiveOverflow = computed(() => Math.max(0, unreadSources.value.length - HIVE_CAP))
+const hiveEmpty = computed(() => unreadSources.value.length === 0)
+
+// Fan geometry — tiles fan up-and-left from the bottom-right anchor; index 0
+// (newest) sits nearest the center. Down-right stays empty (it's the corner).
+const HEX = 56
+const TILE = 44
+const FAN = [
+  { x: -52, y: -30 }, { x: -34, y: -72 }, { x: -78, y: -68 }, { x: -62, y: -112 },
+]
+const FAN_OVERFLOW = { x: -102, y: -108 }
+function tileStyle(i: number) {
+  const f = FAN[i] ?? FAN[FAN.length - 1]
+  return { left: f.x + 'px', top: f.y + 'px', zIndex: String(10 - i) }
+}
+function overflowStyle() {
+  return { left: FAN_OVERFLOW.x + 'px', top: FAN_OVERFLOW.y + 'px', zIndex: '5' }
+}
+const hexClip = `url(#${HEX_CLIP_ID})`
+
+// ── Last-message snippet (lazy fetch for the ≤4 shown, on bloom) ──────────────
+function stripHtmlLocal(s: string) {
+  return s.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim()
+}
+interface Snippet { text: string; sender: string; at: string }
+const snippetCache = ref<Record<string, Snippet>>({})
+async function loadSnippets() {
+  const need = hiveSources.value.filter((s) => {
+    const c = snippetCache.value[s.id]
+    return !c || c.at !== s.at // missing or stale (timestamp advanced)
+  })
+  if (!need.length) return
+  // One latest-root-message query per needed thread (≤4) so a single busy
+  // channel can't starve the others' snippets.
+  const rows = await Promise.all(
+    need.map((s) =>
+      supabase
+        .from('messages')
+        .select('channel_id, body, user_name, created_at')
+        .eq('channel_id', s.id)
+        .is('parent_id', null) // root messages only
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ),
+  )
+  const next = { ...snippetCache.value }
+  for (const r of rows) {
+    const row = r.data as any
+    if (!row) continue
+    next[row.channel_id] = { text: stripHtmlLocal(row.body ?? ''), sender: row.user_name ?? '', at: row.created_at }
+  }
+  snippetCache.value = next
+}
+function snippetFor(id: string): string {
+  const s = snippetCache.value[id]
+  if (!s || !s.text) return 'New message'
+  return s.sender ? `${firstName(s.sender)}: ${s.text}` : s.text
+}
+function snippetTime(id: string): string {
+  const at = snippetCache.value[id]?.at ?? channels.lastMessageAt[id]
+  return at ? timeFor(at) : ''
+}
+
+// ── Bloom open/close (hover bridge + grace), touch, and the preview pill ──────
+const hiveOpen = ref(false)
+const hiveRoot = ref<HTMLElement | null>(null)
+const isTouch = ref(false)
+let hiveCloseTimer: ReturnType<typeof setTimeout> | null = null
+const previewId = ref<string | null>(null)
+const previewStyle = ref<Record<string, string>>({})
+const previewName = computed(() => hiveSources.value.find((s) => s.id === previewId.value)?.name ?? '')
+// Render tiles only while open, but keep the TransitionGroup itself mounted so
+// the children actually enter/leave-animate — a v-if'd group skips its
+// children's transitions (and never plays the leave at all).
+const bloomTiles = computed(() => (hiveOpen.value ? hiveSources.value : []))
+
+function openHive() {
+  if (hiveCloseTimer) { clearTimeout(hiveCloseTimer); hiveCloseTimer = null }
+  if (hiveEmpty.value) return // 0 unread → plain center hex, no bloom
+  hiveOpen.value = true
+  void loadSnippets()
+}
+function closeHiveSoon() {
+  if (hiveCloseTimer) clearTimeout(hiveCloseTimer)
+  hiveCloseTimer = setTimeout(() => { hiveOpen.value = false; previewId.value = null }, 180)
+}
+function closeHiveNow() {
+  if (hiveCloseTimer) { clearTimeout(hiveCloseTimer); hiveCloseTimer = null }
+  hiveOpen.value = false
+  previewId.value = null
+}
+function onHiveEnter() { if (!isTouch.value) openHive() }
+function onHiveLeave() { if (!isTouch.value) closeHiveSoon() }
+function markTouch() { isTouch.value = true }
+function onTileEnter(id: string, ev: MouseEvent) {
+  if (isTouch.value) return
+  const r = (ev.currentTarget as HTMLElement).getBoundingClientRect()
+  const W = 240
+  // Prefer left of the tile; if there's no room (narrow viewport) flip right so
+  // the pill never covers the tile it's previewing.
+  const leftSlot = r.left - W - 8
+  const left = leftSlot >= 8 ? leftSlot : Math.min(r.right + 8, window.innerWidth - W - 8)
+  previewStyle.value = {
+    left: left + 'px',
+    top: Math.max(8, r.top + r.height / 2 - 18) + 'px',
+    width: W + 'px',
+  }
+  previewId.value = id
+}
+function onTileLeave() { previewId.value = null }
+
+function mostRecentUnreadId(): string | null {
+  return unreadSources.value[0]?.id ?? null
+}
+// Center click: jump to the most-recent unread thread (the fix for "always lands
+// on #general"), then open the panel. On touch, the first tap blooms instead.
+function openLatestUnread() {
+  const target = mostRecentUnreadId()
+  if (target && target !== channels.currentChannelId) channels.select(target)
+  open()
+}
+function onCenterClick() {
+  if (isTouch.value) {
+    if (hiveOpen.value) { closeHiveNow(); return }  // second tap dismisses the bloom
+    if (!hiveEmpty.value) { openHive(); return }     // first tap blooms
+  }
+  openLatestUnread()
+}
+// Click a bloom tile → straight into that thread (its own expand, so it can't be
+// re-routed by the latest-unread jump after markRead clears it).
+function openThread(id: string) {
+  channels.select(id)
+  expanded.value = true
+  channelMenuOpen.value = false
+  void channels.markRead(id)
+  scrollToBottom()
+  closeHiveNow()
+}
+function openOverflow() {
+  // Just reveal the full thread switcher — don't consume/mark-read the newest
+  // unread (the "+N" button is "show me the list", not "open one").
+  expanded.value = true
+  channelMenuOpen.value = true
+  closeHiveNow()
+}
+function onDocPointerDown(e: PointerEvent) {
+  if (!hiveOpen.value) return
+  if (hiveRoot.value && !hiveRoot.value.contains(e.target as Node)) closeHiveNow()
+}
+onMounted(() => document.addEventListener('pointerdown', onDocPointerDown))
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onDocPointerDown)
+  if (hiveCloseTimer) clearTimeout(hiveCloseTimer)
+})
+
 watch(() => messages.value.length, () => { if (expanded.value) { scrollToBottom(); markReadSoon() } })
 
 // While expanded, the dock counts as actively viewing the channel — suppress
@@ -369,7 +559,7 @@ onBeforeUnmount(() => { if (viewing) stream.unregisterViewer() })
           <!-- seen-by honeycomb -->
           <div v-if="seenMembers.length" class="flex items-center justify-end gap-1.5 px-3 pt-1 pb-0.5">
             <span class="text-[0.55rem] font-medium text-base-content/40">Seen</span>
-            <SeenCluster :members="seenMembers" :size="14" :max="4" />
+            <SeenCluster :members="seenMembers" :size="14" :max="4" appear />
           </div>
         </div>
 
@@ -438,18 +628,111 @@ onBeforeUnmount(() => { if (viewing) stream.unregisterViewer() })
         </button>
       </div>
 
-      <!-- ── Collapsed: idle launcher ── -->
-      <button
+      <!-- ── Collapsed: hive launcher ── -->
+      <div
         v-else-if="!expanded"
-        class="relative w-14 h-14 rounded-full bg-primary text-white shadow-xl flex items-center justify-center hover:scale-105 transition-transform"
-        title="Open chat"
-        @click="open"
+        ref="hiveRoot"
+        class="relative"
+        :style="{ width: HEX + 'px', height: HEX + 'px' }"
+        @mouseenter="onHiveEnter"
+        @mouseleave="onHiveLeave"
+        @focusin="onHiveEnter"
+        @focusout="onHiveLeave"
+        @keydown.esc="closeHiveNow"
+        @touchstart.passive="markTouch"
       >
-        <MessagesSquare class="w-6 h-6" :stroke-width="1.75" />
-        <span v-if="dockUnread > 0" class="absolute -top-0.5 -right-0.5 min-w-[1.25rem] h-5 px-1 rounded-full bg-error text-white text-[0.65rem] font-bold flex items-center justify-center ring-2 ring-base-100">
-          {{ dockUnread > 99 ? '99+' : dockUnread }}
-        </span>
-      </button>
+        <!-- clip def so the center hexagon is shaped even with no bloom tiles -->
+        <HexClipDef />
+
+        <!-- bloom: unread threads fan up-and-left, newest nearest the center -->
+        <TransitionGroup name="bloom" tag="div">
+          <button
+            v-for="(s, i) in bloomTiles"
+            :key="s.id"
+            type="button"
+            class="absolute transition-transform hover:scale-110"
+            :style="{ ...tileStyle(i), transitionDelay: (i * 40) + 'ms' }"
+            :title="s.name"
+            :aria-label="`Open ${s.name}${s.unread > 1 ? `, ${s.unread} unread` : ''}`"
+            @mouseenter="onTileEnter(s.id, $event)"
+            @mouseleave="onTileLeave"
+            @click.stop="openThread(s.id)"
+          >
+            <HexAvatar
+              v-if="s.kind === 'dm'"
+              :name="s.name" :avatar-url="s.avatarUrl" :color-key="s.colorKey"
+              :size="TILE" ring class="dock-glow"
+            />
+            <HexAvatar
+              v-else-if="s.kind === 'group'"
+              :name="s.name" label=" " :fill="userColor(s.id)"
+              :size="TILE" ring class="dock-glow"
+            >
+              <template #badge>
+                <span class="absolute inset-0 flex items-center justify-center text-white">
+                  <Users class="w-4 h-4" :stroke-width="2" />
+                </span>
+              </template>
+            </HexAvatar>
+            <HexAvatar
+              v-else
+              label="#" :fill="userColor(s.id)" :size="TILE" :font-size="20" ring class="dock-glow"
+            />
+            <span
+              v-if="s.unread > 1"
+              class="absolute -top-1 -right-1 min-w-[1.05rem] h-[1.05rem] px-1 rounded-full bg-error text-white text-[0.6rem] font-bold flex items-center justify-center ring-2 ring-base-100"
+            >{{ s.unread > 9 ? '9+' : s.unread }}</span>
+          </button>
+
+          <!-- "+N" overflow → opens the full thread switcher -->
+          <button
+            v-if="hiveOpen && hiveOverflow > 0"
+            key="__overflow"
+            type="button"
+            class="absolute transition-transform hover:scale-110"
+            :style="{ ...overflowStyle(), transitionDelay: (HIVE_CAP * 40) + 'ms' }"
+            title="More conversations"
+            :aria-label="`${hiveOverflow} more conversations`"
+            @click.stop="openOverflow"
+          >
+            <HexAvatar :label="`+${hiveOverflow}`" placeholder :size="TILE" :font-size="15" ring />
+          </button>
+        </TransitionGroup>
+
+        <!-- center hexagon: the launcher -->
+        <button
+          type="button"
+          class="absolute inset-0 transition-transform hover:scale-105"
+          title="Open chat"
+          :aria-label="dockUnread > 0 ? `Open chat, ${dockUnread} unread` : 'Open chat'"
+          @click="onCenterClick"
+        >
+          <span
+            class="absolute inset-0 flex items-center justify-center bg-primary text-white shadow-xl"
+            :class="dockUnread > 0 ? 'hive-breathe' : ''"
+            :style="{ clipPath: hexClip, WebkitClipPath: hexClip }"
+          >
+            <MessagesSquare class="w-6 h-6" :stroke-width="1.75" />
+          </span>
+          <span
+            v-if="dockUnread > 0"
+            class="absolute -top-0.5 -right-0.5 min-w-[1.25rem] h-5 px-1 rounded-full bg-error text-white text-[0.65rem] font-bold flex items-center justify-center ring-2 ring-base-100"
+          >{{ dockUnread > 99 ? '99+' : dockUnread }}</span>
+        </button>
+
+        <!-- hover preview pill (name + last-message snippet), slides left of the tile -->
+        <Teleport to="body">
+          <div v-if="previewId" class="fixed z-[60] pointer-events-none" :style="previewStyle">
+            <div class="bloom-pill rounded-xl bg-base-100 shadow-xl border border-base-300/60 px-3 py-2">
+              <div class="flex items-baseline gap-2">
+                <span class="text-xs font-semibold truncate">{{ previewName }}</span>
+                <span class="text-[0.6rem] text-base-content/50 shrink-0">{{ snippetTime(previewId) }}</span>
+              </div>
+              <span class="block text-[0.7rem] text-base-content/70 truncate">{{ snippetFor(previewId) }}</span>
+            </div>
+          </div>
+        </Teleport>
+      </div>
 
       <!-- Hover profile card (shared with the full Comms stream) -->
       <CommsProfilePopover
@@ -486,5 +769,26 @@ onBeforeUnmount(() => { if (viewing) stream.unregisterViewer() })
 @media (prefers-reduced-motion: reduce) {
   .dock-unseen { animation: none; background-color: color-mix(in oklab, var(--accent) 10%, transparent); }
   .dock-unseen::before { opacity: 0.8; }
+}
+
+/* ── Hive launcher — breathing center, tile glow, bloom stagger, preview pill.
+   drop-shadow (not box-shadow) so the glow follows the hexagon's clip-path. ── */
+@keyframes hive-pulse {
+  0%, 100% { filter: drop-shadow(0 0 0 transparent); transform: scale(1); }
+  50% { filter: drop-shadow(0 0 7px color-mix(in oklab, var(--accent) 70%, transparent)); transform: scale(1.04); }
+}
+.hive-breathe { animation: hive-pulse 2.4s ease-in-out infinite; }
+.dock-glow { filter: drop-shadow(0 0 5px color-mix(in oklab, var(--accent) 45%, transparent)); }
+.bloom-enter-active, .bloom-leave-active { transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.3, 1.2), opacity 0.18s ease; }
+.bloom-enter-from, .bloom-leave-to { opacity: 0; transform: translate(26px, 26px) scale(0.5); }
+.bloom-move { transition: transform 0.22s ease; }
+.bloom-pill { animation: pill-in 0.14s ease both; }
+@keyframes pill-in { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: translateX(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .hive-breathe { animation: none; }
+  .dock-glow { filter: none; }
+  .bloom-enter-active, .bloom-leave-active, .bloom-move { transition: opacity 0.12s ease; }
+  .bloom-enter-from, .bloom-leave-to { transform: none; opacity: 0; }
+  .bloom-pill { animation: none; }
 }
 </style>

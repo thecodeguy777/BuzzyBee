@@ -27,7 +27,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 </script>
 
 <template>
-  <div ref="rootEl" class="relative">
+  <div ref="rootEl" class="relative" data-tour="notif-bell">
     <button
       type="button"
       class="relative w-9 h-9 rounded-full flex items-center justify-center hover:bg-base-200 transition-colors"

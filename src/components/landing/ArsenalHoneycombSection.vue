@@ -82,12 +82,21 @@ const lit = (i: number) => hovered.value === i || (hovered.value === -1 && spotl
 
 <template>
   <section ref="root" class="arsenal relative overflow-hidden border-t border-base-300">
+    <!-- Rounded-hexagon clip (objectBoundingBox → scales to any hex size) -->
+    <svg width="0" height="0" class="absolute" aria-hidden="true">
+      <defs>
+        <clipPath id="ars-hex-clip" clipPathUnits="objectBoundingBox">
+          <path d="M 0.325 0.067 L 0.675 0.067 Q 0.75 0.067 0.788 0.132 L 0.963 0.435 Q 1 0.5 0.963 0.565 L 0.788 0.868 Q 0.75 0.933 0.675 0.933 L 0.325 0.933 Q 0.25 0.933 0.213 0.868 L 0.038 0.565 Q 0 0.5 0.038 0.435 L 0.213 0.132 Q 0.25 0.067 0.325 0.067 Z" />
+        </clipPath>
+      </defs>
+    </svg>
+
     <!-- atmosphere: hex grid + glows -->
     <div class="absolute inset-0 pointer-events-none">
       <svg class="absolute inset-0 w-full h-full opacity-[0.06]" aria-hidden="true">
         <defs>
           <pattern id="ars-hexgrid" width="56" height="48.5" patternUnits="userSpaceOnUse">
-            <polygon points="14,0 42,0 56,24.25 42,48.5 14,48.5 0,24.25" fill="none" stroke="#f5b50a" stroke-width="1" />
+            <polygon points="14,0 42,0 56,24.25 42,48.5 14,48.5 0,24.25" fill="none" stroke="#a85be0" stroke-width="1" />
           </pattern>
         </defs>
         <rect width="100%" height="100%" fill="url(#ars-hexgrid)" />
@@ -100,13 +109,13 @@ const lit = (i: number) => hovered.value === i || (hovered.value === -1 && spotl
       <!-- header -->
       <div v-reveal class="text-center max-w-2xl mx-auto mb-4">
         <div class="flex items-center gap-3 mb-4 justify-center">
-          <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-amber-400/0 to-amber-400" />
-          <span class="font-mono text-[11px] font-medium uppercase tracking-[0.25em] text-amber-400">The Arsenal</span>
-          <div class="w-8 h-0.5 rounded-full bg-gradient-to-l from-amber-400/0 to-amber-400" />
+          <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-[#a85be0]/0 to-[#a85be0]" />
+          <span class="font-mono text-[11px] font-medium uppercase tracking-[0.25em] text-[#a85be0]">The Arsenal</span>
+          <div class="w-8 h-0.5 rounded-full bg-gradient-to-l from-[#a85be0]/0 to-[#a85be0]" />
         </div>
         <h2 class="font-display text-3xl md:text-5xl tracking-tight leading-[1.08] text-white">
           Your VA just upgraded
-          <span class="block bg-gradient-to-r from-amber-300 via-amber-400 to-orange-400 bg-clip-text text-transparent pb-1">their arsenal.</span>
+          <span class="block bg-gradient-to-r from-[#c79bef] via-[#a85be0] to-[#6a4cdd] bg-clip-text text-transparent pb-1">their arsenal.</span>
         </h2>
         <p class="mt-5 text-base text-white/55 leading-relaxed">
           One hire arrives carrying the whole stack — chat, CRM, tasks, meetings, calls, and time —
@@ -145,8 +154,8 @@ const lit = (i: number) => hovered.value === i || (hovered.value === -1 && spotl
           :style="{ ...px({ x: 0, y: 0 }), width: HEX + 'px', height: HEX + 'px', transitionDelay: '120ms' }"
         >
           <div class="ars-hex-face ars-hex-face-va">
-            <span class="font-display text-2xl font-extrabold text-[#1a1304]">M</span>
-            <span class="font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-[#1a1304]/70 mt-0.5">Your VA</span>
+            <span class="font-display text-2xl font-extrabold text-white">M</span>
+            <span class="font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-white/70 mt-0.5">Your VA</span>
           </div>
           <span class="ars-ring" />
           <span class="ars-ring ars-ring-2" />
@@ -163,8 +172,8 @@ const lit = (i: number) => hovered.value === i || (hovered.value === -1 && spotl
           @mouseleave="hovered = -1"
         >
           <div class="ars-hex-face">
-            <component :is="c.icon" class="w-6 h-6 transition-colors duration-300" :class="lit(i) ? 'text-amber-300' : 'text-white/70'" />
-            <span class="mt-1.5 text-[11px] font-bold tracking-tight" :class="lit(i) ? 'text-amber-200' : 'text-white/85'">{{ c.name }}</span>
+            <component :is="c.icon" class="w-6 h-6 transition-colors duration-300" :class="lit(i) ? 'text-[#c79bef]' : 'text-white/70'" />
+            <span class="mt-1.5 text-[11px] font-bold tracking-tight" :class="lit(i) ? 'text-[#d4b3f2]' : 'text-white/85'">{{ c.name }}</span>
             <span class="text-[8px] font-medium uppercase tracking-wider text-white/35 leading-tight text-center px-2">{{ c.type }}</span>
           </div>
 
@@ -172,7 +181,7 @@ const lit = (i: number) => hovered.value === i || (hovered.value === -1 && spotl
           <div class="ars-tag" :class="{ 'ars-tag-on': lit(i) }">
             <span class="text-white/45">replaces</span>
             <span class="font-semibold text-white/90">{{ c.replaces }}</span>
-            <span class="ars-strike font-mono text-amber-300/90">{{ c.price }}</span>
+            <span class="ars-strike font-mono text-[#c79bef]/90">{{ c.price }}</span>
           </div>
         </div>
       </div>
@@ -180,8 +189,8 @@ const lit = (i: number) => hovered.value === i || (hovered.value === -1 && spotl
       <!-- receipt line -->
       <div v-reveal="150" class="mt-2 text-center">
         <p class="inline-flex flex-wrap items-baseline justify-center gap-x-2 font-mono text-[13px] text-white/45">
-          <span class="line-through decoration-amber-400/70">≈ $160/seat/month in subscriptions</span>
-          <span class="text-amber-300 font-semibold text-base">→ $0. Included with your VA.</span>
+          <span class="line-through decoration-[#a85be0]/70">≈ $160/seat/month in subscriptions</span>
+          <span class="text-[#c79bef] font-semibold text-base">→ $0. Included with your VA.</span>
         </p>
       </div>
     </div>
@@ -192,7 +201,7 @@ const lit = (i: number) => hovered.value === i || (hovered.value === -1 && spotl
 .arsenal {
   background:
     radial-gradient(1100px 540px at 50% -10%, rgba(96, 76, 255, 0.10), transparent 60%),
-    #0b0e15;
+    #160f1d;
 }
 
 .ars-glow {
@@ -204,7 +213,7 @@ const lit = (i: number) => hovered.value === i || (hovered.value === -1 && spotl
   width: 520px; height: 520px;
   left: 50%; top: 52%;
   transform: translate(-50%, -50%);
-  background: radial-gradient(circle, rgba(245, 181, 10, 0.13), transparent 65%);
+  background: radial-gradient(circle, rgba(168, 91, 224, 0.13), transparent 65%);
   animation: ars-breathe 7s ease-in-out infinite;
 }
 .ars-glow-indigo {
@@ -220,18 +229,18 @@ const lit = (i: number) => hovered.value === i || (hovered.value === -1 && spotl
 /* connectors */
 /* pathLength="1" on the element normalizes so dashoffset 1→0 draws fully */
 .ars-line {
-  stroke: rgba(245, 181, 10, 0.22);
+  stroke: rgba(168, 91, 224, 0.22);
   stroke-width: 1;
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
   transition: stroke-dashoffset 0.9s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.4s ease;
 }
 .ars-line-on { stroke-dashoffset: 0; }
-.ars-line-lit { stroke: rgba(245, 181, 10, 0.6); }
+.ars-line-lit { stroke: rgba(168, 91, 224, 0.6); }
 
 .ars-pulse {
-  fill: #f5c93c;
-  filter: drop-shadow(0 0 6px rgba(245, 181, 10, 0.9));
+  fill: #b673e8;
+  filter: drop-shadow(0 0 6px rgba(168, 91, 224, 0.9));
 }
 
 /* hex cells */
@@ -247,7 +256,7 @@ const lit = (i: number) => hovered.value === i || (hovered.value === -1 && spotl
 }
 .ars-hex-face {
   width: 100%; height: 100%;
-  clip-path: polygon(25% 1%, 75% 1%, 100% 50%, 75% 99%, 25% 99%, 0% 50%);
+  clip-path: url(#ars-hex-clip);
   background: linear-gradient(160deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.028));
   border: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
@@ -258,21 +267,21 @@ const lit = (i: number) => hovered.value === i || (hovered.value === -1 && spotl
   transition: background 0.35s ease, transform 0.35s cubic-bezier(0.34, 1.4, 0.64, 1), filter 0.35s ease;
 }
 .ars-lit .ars-hex-face {
-  background: linear-gradient(160deg, rgba(245, 181, 10, 0.16), rgba(245, 181, 10, 0.05));
+  background: linear-gradient(160deg, rgba(168, 91, 224, 0.16), rgba(168, 91, 224, 0.05));
   transform: scale(1.07);
-  filter: drop-shadow(0 0 18px rgba(245, 181, 10, 0.28));
+  filter: drop-shadow(0 0 18px rgba(168, 91, 224, 0.28));
 }
 .ars-hex-face-va {
-  background: linear-gradient(160deg, #f7c948, #f0a90a);
-  filter: drop-shadow(0 6px 24px rgba(245, 181, 10, 0.35));
+  background: linear-gradient(160deg, #a85be0, #6a4cdd);
+  filter: drop-shadow(0 6px 24px rgba(168, 91, 224, 0.35));
 }
 
 /* breathing rings on the VA */
 .ars-ring {
   position: absolute;
   inset: -7%;
-  clip-path: polygon(25% 1%, 75% 1%, 100% 50%, 75% 99%, 25% 99%, 0% 50%);
-  border: 1.5px solid rgba(245, 181, 10, 0.5);
+  clip-path: url(#ars-hex-clip);
+  border: 1.5px solid rgba(168, 91, 224, 0.5);
   animation: ars-ring 3.2s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
   pointer-events: none;
 }
@@ -295,8 +304,8 @@ const lit = (i: number) => hovered.value === i || (hovered.value === -1 && spotl
   font-size: 10.5px;
   padding: 4px 9px;
   border-radius: 7px;
-  background: rgba(12, 14, 22, 0.92);
-  border: 1px solid rgba(245, 181, 10, 0.25);
+  background: rgba(22, 15, 29, 0.92);
+  border: 1px solid rgba(168, 91, 224, 0.25);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.34, 1.4, 0.64, 1);
@@ -315,7 +324,7 @@ const lit = (i: number) => hovered.value === i || (hovered.value === -1 && spotl
   left: -2%; right: -2%;
   top: 52%;
   height: 1.5px;
-  background: #f5b50a;
+  background: #a85be0;
   transform: scaleX(0);
   transform-origin: left;
   animation: ars-strike 0.5s 0.45s cubic-bezier(0.6, 0, 0.2, 1) forwards;

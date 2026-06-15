@@ -1,30 +1,20 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import {
-  Bell,
-  AtSign,
-  MessageCircle,
-  AlertCircle,
-  CheckCheck,
-  CheckCircle2,
-  UserPlus,
-  Inbox as InboxIcon
-} from 'lucide-vue-next'
-import { useNotifications, type Notification } from '@/composables/useNotifications'
+import { CheckCheck, Inbox as InboxIcon } from 'lucide-vue-next'
+import { useNotifications, typeIcon, typeColor } from '@/composables/useNotifications'
 import { useAuthStore } from '@/stores/auth'
-import { useTasksStore } from '@/stores/tasks'
-import { useClientsStore } from '@/stores/clients'
-import { useProjectsStore } from '@/stores/projects'
 
-const router = useRouter()
 const auth = useAuthStore()
-const tasks = useTasksStore()
-const clients = useClientsStore()
-const projects = useProjectsStore()
 
-const { notifications, unreadCount, loading, hasMore, fetchPage, markRead, markAllRead } =
-  useNotifications()
+const {
+  notifications,
+  unreadCount,
+  loading,
+  hasMore,
+  fetchPage,
+  markAllRead,
+  openNotification
+} = useNotifications()
 
 type FilterId = 'all' | 'unread' | 'mentions'
 const activeFilter = ref<FilterId>('all')
@@ -50,41 +40,6 @@ const filterMeta = computed(() => [
   }
 ])
 
-function typeIcon(t: Notification['type']) {
-  switch (t) {
-    case 'task_assigned':
-    case 'project_added':
-      return UserPlus
-    case 'task_completed':
-      return CheckCircle2
-    case 'task_status_changed':
-      return AlertCircle
-    case 'comment':
-      return MessageCircle
-    case 'mention':
-      return AtSign
-    default:
-      return Bell
-  }
-}
-function typeColor(t: Notification['type']) {
-  switch (t) {
-    case 'task_assigned':
-    case 'project_added':
-      return 'text-info'
-    case 'task_completed':
-      return 'text-success'
-    case 'task_status_changed':
-      return 'text-warning'
-    case 'comment':
-      return 'text-info'
-    case 'mention':
-      return 'text-accent'
-    default:
-      return 'text-base-content/50'
-  }
-}
-
 function timeAgo(date: string) {
   const diff = Date.now() - new Date(date).getTime()
   const mins = Math.floor(diff / 60_000)
@@ -99,30 +54,6 @@ function timeAgo(date: string) {
     month: 'short',
     day: 'numeric'
   })
-}
-
-async function activate(n: Notification) {
-  await markRead(n.id)
-  if (n.source_type === 'task' && n.source_id) {
-    const task = tasks.tasks.find((t) => t.id === n.source_id)
-    if (task) {
-      if (task.client_id !== clients.currentClientId) clients.setCurrentClient(task.client_id)
-      if (task.project_id && task.project_id !== projects.currentProjectId) {
-        projects.setCurrentProject(task.project_id)
-      }
-    }
-    await router.push({ name: 'workstation-tasks' })
-    if (n.source_id) tasks.selectTask(n.source_id)
-  } else if (n.source_type === 'project' && n.source_id) {
-    const project = projects.projects.find((p) => p.id === n.source_id)
-    if (project) {
-      if (project.client_id !== clients.currentClientId) clients.setCurrentClient(project.client_id)
-      projects.setCurrentProject(project.id)
-    }
-    await router.push({ name: 'workstation-tasks' })
-  } else if (n.link) {
-    await router.push(n.link)
-  }
 }
 
 async function loadMore() {
@@ -204,7 +135,7 @@ async function onMarkAllRead() {
           type="button"
           class="w-full flex items-center gap-2.5 px-3.5 py-1.5 text-left hover:bg-base-200/40 transition-colors"
           :class="!n.is_read && 'bg-primary/5'"
-          @click="activate(n)"
+          @click="openNotification(n)"
         >
           <div
             class="w-6 h-6 rounded-full bg-base-200/60 flex items-center justify-center shrink-0"

@@ -7,9 +7,10 @@ import {
   CalendarDays,
   Pencil,
   Plus,
-  AlertCircle
+  AlertCircle,
+  ListChecks
 } from 'lucide-vue-next'
-import { useTasksStore, type Task } from '@/stores/tasks'
+import { useTasksStore, type Task, type Subtask } from '@/stores/tasks'
 import { useClientsStore } from '@/stores/clients'
 import { useStatusesStore } from '@/stores/statuses'
 import { statusClasses } from '@/lib/statusColors'
@@ -66,10 +67,19 @@ const cells = computed(() => {
 
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
+// Focus mode: drop tasks not related to me. Safe to filter the source here
+// (unlike the board/table) because the calendar's drop only sets due_on — there
+// is no fractional priority_order reorder that could scramble hidden neighbors.
+const focusedClientTasks = computed(() =>
+  tasks.focusMine
+    ? tasks.tasksForCurrentClient.filter((t) => tasks.isMine(t))
+    : tasks.tasksForCurrentClient
+)
+
 // ── Tasks bucketed by due date ─────────────────────────────────────────────
 const tasksByDate = computed(() => {
   const map: Record<string, Task[]> = {}
-  for (const t of tasks.tasksForCurrentClient) {
+  for (const t of focusedClientTasks.value) {
     if (!t.due_on) continue
     if (!map[t.due_on]) map[t.due_on] = []
     map[t.due_on].push(t)
@@ -81,10 +91,31 @@ const tasksByDate = computed(() => {
 })
 
 const undatedTasks = computed(() =>
-  tasks.tasksForCurrentClient
+  focusedClientTasks.value
     .filter((t) => !t.due_on && statusesStore.isOpen(t.project_id, t.status))
     .sort((a, b) => a.priority_order - b.priority_order || a.created_at.localeCompare(b.created_at))
 )
+
+// Subtasks that have a due date, bucketed by day — shown subordinate to task
+// chips so everything scheduled is visible in one place. Only subtasks of a
+// currently-visible (focus + client scoped) parent task; read-only here
+// (click opens the parent task drawer to edit).
+const subtasksByDate = computed(() => {
+  const map: Record<string, { sub: Subtask; task: Task }[]> = {}
+  const taskById = new Map(focusedClientTasks.value.map((t) => [t.id, t]))
+  for (const taskId of Object.keys(tasks.subtasksByTask)) {
+    const parent = taskById.get(taskId)
+    if (!parent) continue
+    for (const s of tasks.subtasksByTask[taskId]) {
+      if (!s.due_on) continue
+      ;(map[s.due_on] ??= []).push({ sub: s, task: parent })
+    }
+  }
+  for (const k of Object.keys(map)) {
+    map[k].sort((a, b) => a.sub.title.localeCompare(b.sub.title))
+  }
+  return map
+})
 
 // ── SortableJS: drop on a day → set due_on ────────────────────────────────
 const dayRefs = ref<Map<string, HTMLElement>>(new Map())
@@ -291,7 +322,7 @@ const todayKey = computed(() => ymd(new Date()))
 
 const overdueCount = computed(() => {
   const t = todayKey.value
-  return tasks.tasksForCurrentClient.filter(
+  return focusedClientTasks.value.filter(
     (x) => x.due_on && x.due_on < t && statusesStore.isOpen(x.project_id, x.status)
   ).length
 })
@@ -443,12 +474,21 @@ function statusLabel(t: Task) {
                     :title="statusLabel(t)"
                   />
                   <div
-                    class="text-[0.7rem] leading-tight font-medium truncate"
+                    class="flex-1 min-w-0 text-[0.7rem] leading-tight font-medium truncate"
                     :class="statusesStore.isDone(t.project_id, t.status) && 'line-through text-base-content/50'"
                     :title="t.title"
                   >
                     {{ t.title }}
                   </div>
+                  <span
+                    v-if="tasks.subtaskProgress(t.id).total > 0"
+                    class="flex items-center gap-0.5 shrink-0 text-[0.6rem] tabular-nums"
+                    :class="tasks.subtaskProgress(t.id).done === 0 ? 'text-base-content/30' : 'text-base-content/55'"
+                    :title="`${tasks.subtaskProgress(t.id).done} of ${tasks.subtaskProgress(t.id).total} subtasks done`"
+                  >
+                    <ListChecks class="w-2.5 h-2.5" :stroke-width="1.75" />
+                    {{ tasks.subtaskProgress(t.id).done }}/{{ tasks.subtaskProgress(t.id).total }}
+                  </span>
                 </div>
                 <button
                   type="button"
@@ -485,6 +525,25 @@ function statusLabel(t: Task) {
               @click="toggleExpand(cell.key, $event)"
             >
               Show less
+            </button>
+
+            <!-- Subtasks scheduled on this day (read-only; opens parent task) -->
+            <button
+              v-for="item in (subtasksByDate[cell.key] ?? [])"
+              :key="item.sub.id"
+              type="button"
+              data-no-cell-click
+              class="w-full flex items-center gap-1 rounded-md px-1.5 py-0.5 text-left hover:bg-base-200/60 transition-colors"
+              :title="`Subtask · ${item.task.title}`"
+              @click="openDrawer(item.task, $event)"
+            >
+              <ListChecks class="w-2.5 h-2.5 shrink-0 text-base-content/40" :stroke-width="1.75" />
+              <span
+                class="flex-1 min-w-0 text-[0.65rem] leading-tight truncate text-base-content/65"
+                :class="item.sub.done && 'line-through text-base-content/40'"
+              >
+                {{ item.sub.title }}
+              </span>
             </button>
 
             <!-- inline quick-add input -->
@@ -551,7 +610,7 @@ function statusLabel(t: Task) {
           </div>
         </article>
         <div v-if="undatedTasks.length === 0" class="text-xs text-base-content/40 italic px-2 py-3 text-center">
-          Nothing without a due date.
+          {{ tasks.focusMine ? 'None of your tasks without a due date.' : 'Nothing without a due date.' }}
         </div>
       </div>
     </aside>

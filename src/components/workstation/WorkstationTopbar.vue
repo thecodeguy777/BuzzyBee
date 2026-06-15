@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { Hash, ChevronRight } from 'lucide-vue-next'
+import { Hash, ChevronRight, HelpCircle } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useChannelsStore } from '@/stores/channels'
 import { useTeamStore } from '@/stores/team'
@@ -15,12 +15,14 @@ import RefreshButton from '@/components/workstation/RefreshButton.vue'
 import NotificationBell from '@/components/workstation/NotificationBell.vue'
 import TimerChip from '@/components/workstation/TimerChip.vue'
 import OnlineNowChip from '@/components/workstation/OnlineNowChip.vue'
+import { useTour } from '@/composables/useTour'
 
 const auth = useAuthStore()
 const route = useRoute()
 const channels = useChannelsStore()
 const team = useTeamStore()
 const time = useTimeStore()
+const { startTour } = useTour()
 
 // Join the global presence channel (everyone tracks; admins see the list) and
 // keep our payload's current-page fresh as we navigate.
@@ -74,6 +76,15 @@ const channelLabel = computed(() => {
         <OnlineNowChip />
         <ThemeToggle />
         <RefreshButton />
+        <button
+          type="button"
+          class="w-9 h-9 rounded-full flex items-center justify-center hover:bg-base-200 transition-colors text-base-content/70"
+          title="Take the tour"
+          aria-label="Take the product tour"
+          @click="startTour"
+        >
+          <HelpCircle class="w-4 h-4" :stroke-width="1.75" />
+        </button>
       </div>
       <NotificationBell />
       <!-- Always show a RUNNING timer (any role) — otherwise a non-VA with a

@@ -11,7 +11,8 @@ import {
   Table,
   LayoutGrid,
   Paperclip,
-  LayoutDashboard
+  LayoutDashboard,
+  Filter
 } from 'lucide-vue-next'
 import TaskTableView from '@/components/workstation/TaskTableView.vue'
 import TaskBoardView from '@/components/workstation/TaskBoardView.vue'
@@ -66,6 +67,13 @@ const groups = computed(() =>
 )
 
 const hasClient = computed(() => !!clients.currentClient)
+
+// How many of this project's tasks the focus filter is hiding (for the toggle).
+const focusHidden = computed(() =>
+  tasks.focusMine
+    ? tasks.tasksForCurrentProject.filter((t) => !tasks.isMine(t)).length
+    : 0
+)
 
 async function quickAdd() {
   if (!newTitle.value.trim() || !hasClient.value) return
@@ -165,6 +173,25 @@ function dueClass(due: string | null) {
           class="absolute left-0 right-0 -bottom-px h-0.5 bg-primary rounded-t"
         />
       </button>
+
+      <!-- Focus mode: show only tasks related to me (assignee/creator/co-assignee) -->
+      <button
+        v-if="hasClient"
+        type="button"
+        class="ml-auto px-3 py-2 text-sm font-medium transition-colors flex items-center gap-1.5"
+        :class="tasks.focusMine ? 'text-primary' : 'text-base-content/60 hover:text-base-content'"
+        :title="tasks.focusMine ? 'Showing only tasks related to you' : 'Show only tasks related to you'"
+        @click="tasks.focusMine = !tasks.focusMine"
+      >
+        <Filter class="w-4 h-4" :stroke-width="1.75" />
+        Focus
+        <span
+          v-if="tasks.focusMine && focusHidden > 0"
+          class="text-[0.65rem] tabular-nums px-1 py-0.5 rounded bg-base-200 text-base-content/70 font-mono"
+        >
+          {{ focusHidden }} hidden
+        </span>
+      </button>
     </nav>
 
     <!-- Quick add -->
@@ -237,6 +264,7 @@ function dueClass(due: string | null) {
         <ul v-if="tasks.tasksByStatus[g.key].length" class="space-y-1.5">
           <li
             v-for="t in tasks.tasksByStatus[g.key]"
+            v-show="!tasks.focusMine || tasks.isMine(t)"
             :key="t.id"
             class="card bg-base-100 border border-base-300 shadow-sm hover:border-base-content/20 transition-colors"
           >

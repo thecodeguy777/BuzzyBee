@@ -5,24 +5,44 @@ import {
   Calendar as CalendarIcon,
   Flag,
   CircleDashed,
-  Loader2,
-  CircleAlert,
   CheckCircle2,
+  Circle,
   Folder
 } from 'lucide-vue-next'
 import { useTasksStore, type Task } from '@/stores/tasks'
 import { useAuthStore } from '@/stores/auth'
 import { useClientsStore } from '@/stores/clients'
 import { useProjectsStore } from '@/stores/projects'
+import { useStatusesStore } from '@/stores/statuses'
 
 const tasks = useTasksStore()
 const auth = useAuthStore()
 const clients = useClientsStore()
 const projects = useProjectsStore()
+const statuses = useStatusesStore()
 
-const myTasks = computed(() =>
-  tasks.tasks.filter((t) => t.assignee_id === auth.user?.id)
-)
+// Mine = I'm the legacy primary assignee OR a row in the multi-assignee join.
+const myTasks = computed(() => {
+  const uid = auth.user?.id
+  if (!uid) return []
+  return tasks.tasks.filter(
+    (t) =>
+      t.assignee_id === uid ||
+      (tasks.assigneesByTask[t.id] ?? []).some((a) => a.user_id === uid)
+  )
+})
+
+// Status semantics come from the task's project columns (custom per project).
+// Fall back to the legacy literals for project-less or unknown-key tasks so
+// nothing in a cross-project list renders blank.
+function tIsDone(t: Task) {
+  const def = statuses.get(t.project_id, t.status)
+  return def ? def.is_done : t.status === 'done'
+}
+function tIsCancelled(t: Task) {
+  const def = statuses.get(t.project_id, t.status)
+  return def ? def.is_cancelled : t.status === 'cancelled'
+}
 
 const buckets = computed(() => {
   const today = new Date()
@@ -39,11 +59,11 @@ const buckets = computed(() => {
   const done: Task[] = []
 
   for (const t of myTasks.value) {
-    if (t.status === 'done') {
+    if (tIsDone(t)) {
       done.push(t)
       continue
     }
-    if (t.status === 'cancelled') continue
+    if (tIsCancelled(t)) continue
     if (!t.due_on) {
       someday.push(t)
       continue
@@ -69,23 +89,35 @@ const buckets = computed(() => {
   return { overdue, today: todayTasks, upcoming, someday, done }
 })
 
-function statusIcon(s: Task['status']) {
-  return {
-    todo: CircleDashed,
-    in_progress: Loader2,
-    blocked: CircleAlert,
-    done: CheckCircle2,
-    cancelled: CircleDashed
-  }[s]
+// The toggle is a done/not-done checkbox; icon + color derive from semantics,
+// not the (now arbitrary, per-project) status key.
+function statusIcon(t: Task) {
+  if (tIsDone(t)) return CheckCircle2
+  if (tIsCancelled(t)) return CircleDashed
+  return Circle
 }
-function statusColor(s: Task['status']) {
-  return {
-    todo: 'text-base-content/40',
-    in_progress: 'text-info',
-    blocked: 'text-error',
-    done: 'text-success',
-    cancelled: 'text-base-content/30'
-  }[s]
+function statusColor(t: Task) {
+  if (tIsDone(t)) return 'text-success'
+  if (tIsCancelled(t)) return 'text-base-content/30'
+  return 'text-base-content/40'
+}
+
+// A small colored label so non-binary states (In progress, In review, Blocked)
+// stay visible. Skipped for the first column ("To do") to keep the list calm.
+const COLOR_TEXT: Record<string, string> = {
+  neutral: 'text-base-content/60',
+  primary: 'text-primary',
+  success: 'text-success',
+  error: 'text-error',
+  warning: 'text-warning',
+  info: 'text-info',
+  muted: 'text-base-content/40'
+}
+function statusLabel(t: Task): { label: string; cls: string } | null {
+  const def = statuses.get(t.project_id, t.status)
+  if (!def || def.is_done || def.is_cancelled) return null
+  if (def.key === statuses.defaultKey(t.project_id)) return null
+  return { label: def.label, cls: COLOR_TEXT[def.color] ?? COLOR_TEXT.neutral }
 }
 
 function priorityColor(p: number) {
@@ -135,7 +167,13 @@ async function activate(t: Task) {
 }
 
 async function toggleDone(t: Task) {
-  await tasks.setStatus(t.id, t.status === 'done' ? 'todo' : 'done')
+  // Move to this project's first done column, or back to its first (default)
+  // column. No usable column → nothing to toggle to.
+  const target = tIsDone(t)
+    ? statuses.defaultKey(t.project_id)
+    : statuses.firstDoneKey(t.project_id)
+  if (!target || target === t.status) return
+  await tasks.setStatus(t.id, target)
 }
 
 const sections = computed(() => [
@@ -187,14 +225,14 @@ const sections = computed(() => [
               <button
                 type="button"
                 class="shrink-0"
-                :class="statusColor(t.status)"
-                :title="`Toggle ${t.status === 'done' ? 'todo' : 'done'}`"
+                :class="statusColor(t)"
+                :title="`Mark ${tIsDone(t) ? 'open' : 'done'}`"
                 @click.stop="toggleDone(t)"
               >
                 <component
-                  :is="statusIcon(t.status)"
+                  :is="statusIcon(t)"
                   class="w-4 h-4"
-                  :stroke-width="t.status === 'done' ? 2 : 1.75"
+                  :stroke-width="tIsDone(t) ? 2 : 1.75"
                 />
               </button>
               <button
@@ -204,11 +242,18 @@ const sections = computed(() => [
               >
                 <span
                   class="text-[13px] truncate"
-                  :class="t.status === 'done' && 'line-through text-base-content/50'"
+                  :class="tIsDone(t) && 'line-through text-base-content/50'"
                 >
                   {{ t.title }}
                 </span>
                 <span class="font-mono text-[0.65rem] text-base-content/50 shrink-0">{{ t.reference_number }}</span>
+                <span
+                  v-if="statusLabel(t)"
+                  class="text-[0.65rem] font-medium uppercase tracking-wide shrink-0"
+                  :class="statusLabel(t)!.cls"
+                >
+                  {{ statusLabel(t)!.label }}
+                </span>
                 <span class="flex items-center gap-1 text-xs text-base-content/55 truncate min-w-0">
                   <Folder class="w-3 h-3 shrink-0" :stroke-width="1.75" />
                   {{ t.client_name ?? '—' }}<span v-if="projectName(t)"> / {{ projectName(t) }}</span>

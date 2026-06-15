@@ -12,8 +12,11 @@ const props = withDefaults(
     members: { id: string; name: string; avatarUrl: string | null }[]
     size?: number
     max?: number
+    /** Also play the drop-in animation on first mount (not just on later
+     *  arrivals). Off by default so list usages don't animate-storm on scroll. */
+    appear?: boolean
   }>(),
-  { size: 16, max: 4 }
+  { size: 16, max: 4, appear: false }
 )
 
 // Flat-top hexagon tessellation (× size): columns step 3/4 across, rows step
@@ -57,6 +60,7 @@ const seam = computed(() => Math.max(0.5, props.size * 0.03))
   <TransitionGroup
     tag="div"
     name="seen-pop"
+    :appear="appear"
     class="seen-cluster relative inline-block align-middle"
     :style="{ width: box.w + 'px', height: box.h + 'px' }"
   >
@@ -116,9 +120,17 @@ const seam = computed(() => Math.max(0.5, props.size * 0.03))
   transition: transform 0.35s cubic-bezier(0.34, 1.3, 0.64, 1);
 }
 
+/* First-mount entrance (opt-in via `appear`) — reuse the same fall. Explicit so
+   it fires for CSS animations regardless of Vue's enter-class fallback. */
+.seen-pop-appear-from { opacity: 0; }
+.seen-pop-appear-active {
+  animation: seen-fall 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .seen-cluster,
   .seen-pop-enter-active,
+  .seen-pop-appear-active,
   .seen-pop-leave-active,
   .seen-pop-move {
     animation: none;

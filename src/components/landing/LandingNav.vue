@@ -1,38 +1,80 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import hivemindMark from '@/assets/landing/hivemind-mark.svg'
 
+// Spline-style nav: sits flush + transparent at the top, then on scroll it
+// "lifts" into a centered floating frosted pill (narrower, blurred, bordered,
+// shadowed, fully rounded). Shared across the landing-family pages.
 const mobileOpen = ref(false)
+const scrolled = ref(false)
+let raf = 0
+
+function onScroll() {
+  if (raf) return
+  raf = requestAnimationFrame(() => {
+    raf = 0
+    const y = window.scrollY
+    // Hysteresis: enter the pill past 24px, only leave below 8px — avoids
+    // flicker when momentum/rubber-band scrolling hovers around the threshold.
+    scrolled.value = scrolled.value ? y > 8 : y > 24
+  })
+}
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') mobileOpen.value = false
+}
+function onResize() {
+  if (window.innerWidth >= 768) mobileOpen.value = false
+}
+onMounted(() => {
+  onScroll()
+  window.addEventListener('scroll', onScroll, { passive: true })
+  window.addEventListener('keydown', onKeydown)
+  window.addEventListener('resize', onResize, { passive: true })
+})
+onUnmounted(() => {
+  window.removeEventListener('scroll', onScroll)
+  window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('resize', onResize)
+  if (raf) cancelAnimationFrame(raf)
+})
+
+const LINKS = [
+  { href: '#software-tax', label: 'Why HiveMind' },
+  { href: '#platform', label: 'Platform' },
+  { href: '#how', label: 'How It Works' },
+  { href: '#pricing', label: 'Pricing' },
+  { href: '#faq', label: 'FAQ' }
+]
 </script>
 
 <template>
-  <header class="fixed top-0 left-0 right-0 z-50 bg-base-100/90 backdrop-blur-md border-b border-base-300">
-    <div class="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-2">
+  <header class="ln-root fixed inset-x-0 top-0 z-50" :class="{ 'is-scrolled': scrolled }">
+    <div class="ln-shell mx-auto flex items-center justify-between" :class="scrolled ? 'is-pill' : 'is-flush'">
+      <a href="/" class="flex items-center gap-2 shrink-0">
         <img :src="hivemindMark" alt="HiveMind" class="w-7 h-auto" />
-        <span class="text-base font-semibold tracking-tight">HiveMind</span>
+        <span class="ln-brand text-base font-semibold tracking-tight">HiveMind</span>
       </a>
 
-      <nav class="hidden md:flex items-center gap-7 text-[13px]">
-        <a href="#software-tax" class="text-base-content/60 hover:text-base-content transition-colors">Why HiveMind</a>
-        <a href="#platform" class="text-base-content/60 hover:text-base-content transition-colors">Platform</a>
-        <a href="#how" class="text-base-content/60 hover:text-base-content transition-colors">How It Works</a>
-        <a href="#pricing" class="text-base-content/60 hover:text-base-content transition-colors">Pricing</a>
-        <a href="#faq" class="text-base-content/60 hover:text-base-content transition-colors">FAQ</a>
+      <nav class="hidden md:flex items-center gap-7 text-[13px]" aria-label="Primary">
+        <a v-for="l in LINKS" :key="l.href" :href="l.href" class="ln-link">{{ l.label }}</a>
       </nav>
 
-      <div class="flex items-center gap-3">
-        <a href="#contact" class="hidden sm:inline-flex items-center gap-1.5 bg-primary text-primary-content text-[13px] font-medium px-4 py-1.5 rounded-md hover:opacity-90 transition-opacity">
+      <div class="flex items-center gap-2">
+        <a href="/login" class="ln-login hidden sm:inline-flex items-center text-[13px] font-medium px-3.5 py-1.5 rounded-full">
+          Log In
+        </a>
+        <a href="#contact" class="ln-cta inline-flex items-center gap-1.5 text-[13px] font-semibold px-4 py-1.5 rounded-full">
           Get Started
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M5 12h14M13 5l7 7-7 7" />
           </svg>
         </a>
         <button
-          class="md:hidden w-8 h-8 flex items-center justify-center rounded-md hover:bg-base-200 transition-colors"
-          @click="mobileOpen = !mobileOpen"
+          class="ln-burger md:hidden w-8 h-8 flex items-center justify-center rounded-full"
           :aria-expanded="mobileOpen"
+          aria-controls="ln-mobile-menu"
           aria-label="Toggle menu"
+          @click="mobileOpen = !mobileOpen"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <path v-if="!mobileOpen" d="M4 6h16M4 12h16M4 18h16" />
@@ -43,13 +85,132 @@ const mobileOpen = ref(false)
     </div>
 
     <!-- Mobile menu -->
-    <div v-if="mobileOpen" class="md:hidden border-t border-base-300 bg-base-100 px-6 py-4 space-y-1">
-      <a href="#software-tax" class="block py-2 text-sm text-base-content/70" @click="mobileOpen = false">Why HiveMind</a>
-      <a href="#platform" class="block py-2 text-sm text-base-content/70" @click="mobileOpen = false">Platform</a>
-      <a href="#how" class="block py-2 text-sm text-base-content/70" @click="mobileOpen = false">How It Works</a>
-      <a href="#pricing" class="block py-2 text-sm text-base-content/70" @click="mobileOpen = false">Pricing</a>
-      <a href="#faq" class="block py-2 text-sm text-base-content/70" @click="mobileOpen = false">FAQ</a>
-      <a href="#contact" class="block mt-2 text-center bg-primary text-primary-content text-sm font-medium px-4 py-2 rounded-md" @click="mobileOpen = false">Get Started</a>
-    </div>
+    <Transition name="ln-menu">
+      <div v-if="mobileOpen" id="ln-mobile-menu" class="ln-mobile md:hidden mx-auto">
+        <a
+          v-for="l in LINKS"
+          :key="l.href"
+          :href="l.href"
+          class="ln-link block py-2 text-sm"
+          @click="mobileOpen = false"
+        >
+          {{ l.label }}
+        </a>
+        <a href="/login" class="ln-brand block py-2 text-sm font-medium" @click="mobileOpen = false">Log In</a>
+        <a
+          href="#contact"
+          class="ln-cta mt-2 inline-flex w-full items-center justify-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-full"
+          @click="mobileOpen = false"
+        >
+          Get Started
+        </a>
+      </div>
+    </Transition>
   </header>
 </template>
+
+<style scoped>
+.ln-root {
+  --ln-plum: #5e1b57;
+  --ln-plum-deep: #46123f;
+  --ln-ink: #1a1722;
+  --ln-ink-2: #56525f;
+  /* The outer gap grows on scroll so the pill detaches from the screen edges. */
+  padding: 0;
+  transition: padding 0.3s ease;
+}
+.ln-root.is-scrolled {
+  padding: 12px 16px 0;
+}
+
+.ln-shell {
+  max-width: 72rem;
+  height: 64px;
+  padding: 0 24px;
+  border-radius: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  box-shadow: none;
+  transition:
+    max-width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    height 0.3s ease,
+    padding 0.3s ease,
+    background 0.3s ease,
+    border-color 0.3s ease,
+    box-shadow 0.3s ease,
+    border-radius 0.4s ease;
+}
+.ln-shell.is-pill {
+  max-width: 58rem;
+  height: 54px;
+  padding: 0 12px 0 18px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.72);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+  border-color: rgba(94, 27, 87, 0.1);
+  box-shadow: 0 14px 34px -14px rgba(60, 25, 75, 0.28), 0 2px 8px -3px rgba(60, 25, 75, 0.12);
+}
+
+.ln-brand { color: var(--ln-ink); }
+.ln-link {
+  color: var(--ln-ink-2);
+  transition: color 0.15s ease;
+}
+.ln-link:hover { color: var(--ln-plum); }
+
+.ln-login {
+  color: var(--ln-ink);
+  border: 1px solid rgba(26, 23, 34, 0.14);
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.ln-login:hover {
+  color: var(--ln-plum);
+  border-color: rgba(94, 27, 87, 0.4);
+  background: rgba(94, 27, 87, 0.04);
+}
+
+.ln-cta {
+  background: var(--ln-plum);
+  color: #fff;
+  box-shadow: 0 6px 16px -8px rgba(94, 27, 87, 0.6);
+  transition: background 0.18s ease, transform 0.14s ease, box-shadow 0.18s ease;
+}
+.ln-cta svg { transition: transform 0.18s ease; }
+.ln-cta:hover {
+  background: var(--ln-plum-deep);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px -8px rgba(94, 27, 87, 0.7);
+}
+.ln-cta:hover svg { transform: translateX(3px); }
+
+.ln-burger {
+  color: var(--ln-ink);
+  transition: background 0.15s ease;
+}
+.ln-burger:hover { background: rgba(26, 23, 34, 0.06); }
+
+/* Mobile dropdown — a frosted panel under the bar/pill. */
+.ln-mobile {
+  max-width: 72rem;
+  margin-top: 8px;
+  padding: 12px 18px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.92);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(94, 27, 87, 0.1);
+  box-shadow: 0 14px 34px -14px rgba(60, 25, 75, 0.28);
+}
+.is-scrolled .ln-mobile { max-width: 58rem; }
+
+.ln-menu-enter-active,
+.ln-menu-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.ln-menu-enter-from,
+.ln-menu-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+</style>

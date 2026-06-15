@@ -8,10 +8,23 @@
  * Mirrors the MikeSteelv2 pattern.
  */
 
-import { computed, ref } from 'vue'
+import { computed, ref, type Component } from 'vue'
+import { useRouter } from 'vue-router'
 import type { RealtimeChannel } from '@supabase/supabase-js'
+import {
+  Bell,
+  AtSign,
+  MessageCircle,
+  AlertCircle,
+  CheckCircle2,
+  UserPlus,
+  ListChecks
+} from 'lucide-vue-next'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth'
+import { useTasksStore } from '@/stores/tasks'
+import { useClientsStore } from '@/stores/clients'
+import { useProjectsStore } from '@/stores/projects'
 
 export interface Notification {
   id: string
@@ -22,10 +35,16 @@ export interface Notification {
     | 'task_status_changed'
     | 'task_completed'
     | 'task_due_soon'
+    | 'task_handoff'
     | 'project_added'
     | 'comment'
     | 'mention'
-  source_type: 'task' | 'project' | 'comment'
+    | 'subtask_assigned'
+    | 'ticket_created'
+    | 'ticket_status'
+    | 'ticket_assigned'
+    | 'ticket_comment'
+  source_type: 'task' | 'project' | 'comment' | 'ticket'
   source_id: string | null
   source_ref: string | null
   actor_id: string | null
@@ -50,6 +69,61 @@ const unreadCount = computed(
   () => notifications.value.filter((n) => !n.is_read).length
 )
 
+// Listeners fired once per genuinely-new incoming notification — realtime
+// INSERT only, never on initial load / pagination / mark-read. The toast host
+// registers here; see applyRealtime's INSERT branch for the fire point.
+const newListeners = new Set<(n: Notification) => void>()
+export function onNewNotification(cb: (n: Notification) => void): () => void {
+  newListeners.add(cb)
+  return () => newListeners.delete(cb)
+}
+
+/** Icon for a notification type — shared by the inbox row and the toast. */
+export function typeIcon(t: Notification['type']): Component {
+  switch (t) {
+    case 'task_assigned':
+    case 'task_handoff':
+    case 'project_added':
+      return UserPlus
+    case 'subtask_assigned':
+      return ListChecks
+    case 'task_completed':
+      return CheckCircle2
+    case 'task_status_changed':
+    case 'ticket_status':
+      return AlertCircle
+    case 'comment':
+    case 'ticket_comment':
+      return MessageCircle
+    case 'mention':
+      return AtSign
+    default:
+      return Bell
+  }
+}
+/** Accent color (text-*) for a notification type. */
+export function typeColor(t: Notification['type']): string {
+  switch (t) {
+    case 'task_assigned':
+    case 'task_handoff':
+    case 'project_added':
+    case 'subtask_assigned':
+      return 'text-info'
+    case 'task_completed':
+      return 'text-success'
+    case 'task_status_changed':
+    case 'ticket_status':
+      return 'text-warning'
+    case 'comment':
+    case 'ticket_comment':
+      return 'text-info'
+    case 'mention':
+      return 'text-accent'
+    default:
+      return 'text-base-content/50'
+  }
+}
+
 async function fetchPage(userId: string, reset = false) {
   if (!userId) return
   if (reset) {
@@ -66,7 +140,12 @@ async function fetchPage(userId: string, reset = false) {
     .order('created_at', { ascending: false })
     .range(currentOffset, currentOffset + PAGE_SIZE - 1)
   if (!error && data) {
-    notifications.value.push(...(data as Notification[]))
+    // Dedup against rows that may have arrived via realtime INSERT while this
+    // page request was in flight (otherwise the same id lands twice → dup Vue
+    // keys + double unread count).
+    const present = new Set(notifications.value.map((n) => n.id))
+    const fresh = (data as Notification[]).filter((r) => !present.has(r.id))
+    notifications.value.push(...fresh)
     currentOffset += data.length
     hasMore.value = data.length === PAGE_SIZE
   } else if (error) {
@@ -105,6 +184,7 @@ function applyRealtime(payload: any) {
     const row = payload.new as Notification
     if (!notifications.value.some((n) => n.id === row.id)) {
       notifications.value.unshift(row)
+      for (const cb of newListeners) cb(row)
     }
   } else if (ev === 'UPDATE') {
     const row = payload.new as Notification
@@ -169,10 +249,40 @@ async function reset() {
 
 export function useNotifications() {
   const auth = useAuthStore()
+  const router = useRouter()
+  const tasks = useTasksStore()
+  const clients = useClientsStore()
+  const projects = useProjectsStore()
 
   // Auto-initialize on first call when authenticated.
   if (auth.user?.id && initializedFor !== auth.user.id) {
     void init(auth.user.id)
+  }
+
+  // Mark read + navigate to the notification's subject. Shared by the inbox
+  // row and the toast so the open behavior never drifts between them.
+  async function openNotification(n: Notification) {
+    await markRead(n.id)
+    if (n.source_type === 'task' && n.source_id) {
+      const task = tasks.tasks.find((t) => t.id === n.source_id)
+      if (task) {
+        if (task.client_id !== clients.currentClientId) clients.setCurrentClient(task.client_id)
+        if (task.project_id && task.project_id !== projects.currentProjectId) {
+          projects.setCurrentProject(task.project_id)
+        }
+      }
+      await router.push({ name: 'workstation-tasks' })
+      tasks.selectTask(n.source_id)
+    } else if (n.source_type === 'project' && n.source_id) {
+      const project = projects.projects.find((p) => p.id === n.source_id)
+      if (project) {
+        if (project.client_id !== clients.currentClientId) clients.setCurrentClient(project.client_id)
+        projects.setCurrentProject(project.id)
+      }
+      await router.push({ name: 'workstation-tasks' })
+    } else if (n.link) {
+      await router.push(n.link)
+    }
   }
 
   return {
@@ -184,6 +294,8 @@ export function useNotifications() {
     markRead,
     markAllRead,
     init,
-    reset
+    reset,
+    onNewNotification,
+    openNotification
   }
 }

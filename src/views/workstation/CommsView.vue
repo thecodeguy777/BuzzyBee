@@ -1061,6 +1061,7 @@ function fullscreenScreen() {
               <CommsMessage
                 :message="m"
                 :data-mid="m.id"
+                :data-tour="i === 0 ? 'comms-message' : undefined"
                 :continuation="isContinuation(i)"
                 :seen="seenFor(m.id)"
                 :unseen="freshIds.has(m.id)"

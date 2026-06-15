@@ -12,6 +12,33 @@ export interface TaskAttachmentMeta {
 
 const BUCKET = 'task-attachments'
 
+// Client-side allowlist mirrors the storage bucket's server-side allowed_mime_types
+// (defense in depth — the bucket rejects anything not on the list regardless).
+// Deliberately excludes image/svg+xml (stored-XSS via signed URL) and octet-stream.
+export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
+export const ALLOWED_ATTACHMENT_MIME = new Set<string>([
+  'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/heic', 'image/avif',
+  'application/pdf',
+  'text/plain', 'text/csv',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/zip', 'application/x-zip-compressed'
+])
+
+/** Returns an error message if the file is too big or a disallowed type, else null. */
+export function validateAttachment(file: File): string | null {
+  if (file.size > MAX_ATTACHMENT_BYTES) return `${file.name} is over 25 MB`
+  const mime = file.type || ''
+  if (!ALLOWED_ATTACHMENT_MIME.has(mime)) {
+    return `${file.name}: ${mime || 'unknown type'} isn't an allowed file type`
+  }
+  return null
+}
+
 function uuid() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
   return Math.random().toString(36).slice(2) + Date.now().toString(36)
@@ -27,6 +54,9 @@ export async function uploadTaskAttachment(opts: {
   file: File
   uploadedBy: string | null
 }): Promise<TaskAttachmentMeta> {
+  const invalid = validateAttachment(opts.file)
+  if (invalid) throw new Error(invalid)
+
   const id = uuid()
   const path = `${opts.clientId}/${opts.taskId}/${id}-${safeName(opts.file.name)}`
 

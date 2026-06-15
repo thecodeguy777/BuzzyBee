@@ -199,7 +199,7 @@ function composeFromTemplate(template: EmailTemplate) {
 <template>
   <div class="flex flex-col h-full bg-base-100 text-base-content">
     <!-- header: identity + tabs + new deal -->
-    <div class="flex items-center gap-1 px-5 pt-3">
+    <div class="flex items-center gap-1 px-5 pt-3" data-tour="crm-pipeline">
       <div class="flex items-center gap-2.5 pr-3 mr-1">
         <span class="w-[30px] h-[30px] rounded-[9px] grid place-items-center" :style="{ background: 'var(--accent-soft)', color: 'var(--accent-fg)' }">
           <Handshake :size="17" />

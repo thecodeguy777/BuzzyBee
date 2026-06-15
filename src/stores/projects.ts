@@ -17,6 +17,8 @@ export interface Project {
   created_by: string | null
   created_at: string
   updated_at: string
+  /** Shared per-project task-table column layout. null = built-in defaults. */
+  task_column_layout: { order?: string[]; hidden?: string[] } | null
 }
 
 const CURRENT_KEY = 'buzzybee.workstation.current-project-id'

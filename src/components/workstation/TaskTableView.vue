@@ -18,9 +18,10 @@ import {
   Link2,
   Pencil,
   GripVertical,
-  Handshake
+  Handshake,
+  ListChecks
 } from 'lucide-vue-next'
-import { useTasksStore, type Task, type TaskStatus } from '@/stores/tasks'
+import { useTasksStore, type Task, type TaskStatus, type Subtask } from '@/stores/tasks'
 import { useTaskFieldsStore, type TaskFieldDef } from '@/stores/taskFields'
 import { useClientsStore } from '@/stores/clients'
 import { useTeamStore } from '@/stores/team'
@@ -168,6 +169,32 @@ const groups = computed(() => {
     // Empty groups stay visible unless the status is a cancelled-type bucket.
     .filter((g) => g.tasks.length > 0 || !statusesStore.isCancelled(projects.currentProjectId, g.value))
 })
+
+// Focus mode hides non-mine rows via v-show (the list stays full so reorder
+// math is unaffected); group counts + the empty state reflect what's visible.
+function visibleTaskCount(list: Task[]): number {
+  return tasks.focusMine ? list.filter((t) => tasks.isMine(t)).length : list.length
+}
+
+// Inline subtasks: expand a row to reveal its checklist as indented sub-rows.
+const expanded = ref<Set<string>>(new Set())
+// While a row is dragged, hide ITS sub-rows so the checklist doesn't strand at
+// the old position (SortableJS only moves the parent <tr>). display:none keeps
+// them in the DOM, so the reorder math is untouched.
+const draggingId = ref<string | null>(null)
+function toggleExpand(id: string) {
+  const next = new Set(expanded.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  expanded.value = next
+}
+async function toggleSub(s: Subtask) {
+  try {
+    await tasks.toggleSubtaskDone(s.id, !s.done)
+  } catch (e) {
+    console.warn('[table] toggle subtask:', (e as Error).message)
+  }
+}
 
 const customCols = computed(() => taskFields.defsForCurrentClient)
 
@@ -506,10 +533,13 @@ function readNewPriorityOrder(toEl: HTMLElement, taskId: string, status: TaskSta
 // re-render is the single source of truth — otherwise a failed drop leaves the
 // row stuck in the wrong group, and successful moves can ghost/duplicate.
 function revertSortableMove(evt: Sortable.SortableEvent) {
-  const { item, from, oldIndex } = evt
+  // oldDraggableIndex counts only draggable rows (tr[data-task-id]) — it matches
+  // `siblings` below. evt.oldIndex counts ALL element siblings (incl. expanded
+  // subtask sub-rows), which would overshoot and revert the row to the wrong spot.
+  const { item, from, oldDraggableIndex } = evt
   item.remove()
   const siblings = Array.from(from.querySelectorAll(':scope > tr[data-task-id]'))
-  const ref = siblings[oldIndex ?? siblings.length] ?? null
+  const ref = siblings[oldDraggableIndex ?? siblings.length] ?? null
   if (ref) {
     from.insertBefore(item, ref)
   } else if (siblings.length) {
@@ -521,6 +551,7 @@ function revertSortableMove(evt: Sortable.SortableEvent) {
 }
 
 async function onRowSortEnd(evt: Sortable.SortableEvent) {
+  draggingId.value = null
   const taskId = evt.item.getAttribute('data-task-id') ?? ''
   const toStatus = evt.to.getAttribute('data-status') as TaskStatus | null
 
@@ -566,6 +597,9 @@ function buildSortables() {
         delay: 50,
         delayOnTouchOnly: false,
         handle: '.bb-row-grab',
+        onStart: (evt) => {
+          draggingId.value = evt.item.getAttribute('data-task-id')
+        },
         onEnd: onRowSortEnd
       })
     )
@@ -904,7 +938,7 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
                     />
                     <span class="w-2 h-2 rounded-sm" :class="g.dotBg" />
                     <span class="text-xs font-semibold uppercase tracking-wider">{{ g.label }}</span>
-                    <span class="text-xs text-base-content/45 tabular-nums">{{ g.tasks.length }}</span>
+                    <span class="text-xs text-base-content/45 tabular-nums">{{ visibleTaskCount(g.tasks) }}</span>
                     <div class="flex-1" />
                     <button
                       type="button"
@@ -946,9 +980,9 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
               :ref="(el) => setTbodyRef(g.value, el)"
               :data-status="g.value"
             >
+                <template v-for="t in g.tasks" :key="t.id">
                 <tr
-                  v-for="t in g.tasks"
-                  :key="t.id"
+                  v-show="!tasks.focusMine || tasks.isMine(t)"
                   :data-task-id="t.id"
                   class="group border-b border-base-300/40 hover:bg-base-100/50"
                 >
@@ -982,6 +1016,18 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
                   <!-- name (frozen column 2) -->
                   <td :class="[cellBase, editableCell, 'px-0 py-0 relative bb-frozen-col bb-frozen-col-2']">
                     <div class="flex items-center pr-1">
+                      <button
+                        v-if="tasks.subtaskProgress(t.id).total > 0"
+                        type="button"
+                        data-no-drag
+                        class="shrink-0 ml-1 -mr-1 text-base-content/40 hover:text-base-content"
+                        :title="expanded.has(t.id) ? 'Hide subtasks' : 'Show subtasks'"
+                        @click="toggleExpand(t.id)"
+                      >
+                        <ChevronDown v-if="expanded.has(t.id)" class="w-3.5 h-3.5" :stroke-width="2" />
+                        <ChevronRight v-else class="w-3.5 h-3.5" :stroke-width="2" />
+                      </button>
+                      <span v-else class="shrink-0 w-3.5 ml-1 -mr-1" />
                       <input
                         :value="t.title"
                         type="text"
@@ -990,6 +1036,16 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
                         @blur="setTitle(t, ($event.target as HTMLInputElement).value)"
                         @keydown.enter="($event.target as HTMLInputElement).blur()"
                       />
+                      <span
+                        v-if="tasks.subtaskProgress(t.id).total > 0"
+                        class="shrink-0 mr-1 flex items-center gap-0.5 text-[0.7rem] tabular-nums cursor-pointer"
+                        :class="tasks.subtaskProgress(t.id).done === tasks.subtaskProgress(t.id).total ? 'text-success' : 'text-base-content/45'"
+                        :title="`${tasks.subtaskProgress(t.id).done} of ${tasks.subtaskProgress(t.id).total} subtasks done`"
+                        @click="toggleExpand(t.id)"
+                      >
+                        <ListChecks class="w-3 h-3" :stroke-width="1.75" />
+                        {{ tasks.subtaskProgress(t.id).done }}/{{ tasks.subtaskProgress(t.id).total }}
+                      </span>
                       <span
                         v-if="dealLinks.forTask(t.id).length"
                         class="shrink-0 mr-1"
@@ -1311,6 +1367,66 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
 
                   <!-- trailing spacer -->
                   <td class="px-2 py-1.5"></td>
+                </tr>
+
+                <!-- Subtask checklist sub-rows. No data-task-id, so SortableJS
+                     (draggable: 'tr[data-task-id]') + readNewPriorityOrder ignore
+                     them and task reorder is unaffected. Same focus v-show as the
+                     parent so a hidden parent's subtasks hide too. -->
+                <template v-if="expanded.has(t.id)">
+                  <tr
+                    v-for="s in tasks.getSubtasks(t.id)"
+                    v-show="draggingId !== t.id && (!tasks.focusMine || tasks.isMine(t))"
+                    :key="s.id"
+                    class="bb-subrow border-b border-base-300/30"
+                  >
+                    <td :class="[cellBase, 'px-1 py-1 bb-frozen-col bb-frozen-col-1']"></td>
+                    <td :class="[cellBase, 'px-0 py-0 bb-frozen-col bb-frozen-col-2']">
+                      <div class="flex items-center gap-2 pl-8 pr-2 py-1">
+                        <button
+                          type="button"
+                          data-no-drag
+                          class="shrink-0 transition-transform hover:scale-110"
+                          :class="s.done ? 'text-success' : 'text-base-content/35'"
+                          :aria-pressed="s.done"
+                          :title="s.done ? 'Mark not done' : 'Mark done'"
+                          @click="toggleSub(s)"
+                        >
+                          <CheckCircle2
+                            v-if="s.done"
+                            class="w-3.5 h-3.5"
+                            :stroke-width="2"
+                            fill="currentColor"
+                            fill-opacity="0.18"
+                          />
+                          <Circle v-else class="w-3.5 h-3.5" :stroke-width="1.75" />
+                        </button>
+                        <button
+                          type="button"
+                          class="text-left text-[13px] truncate hover:text-primary transition-colors"
+                          :class="s.done && 'line-through text-base-content/40'"
+                          title="Open task to edit"
+                          @click="openDrawer(t)"
+                        >
+                          {{ s.title }}
+                        </button>
+                      </div>
+                    </td>
+                    <td :colspan="totalCols - 2" class="px-3 py-1 text-xs text-base-content/45">
+                      <span v-if="s.due_on">{{ dueLabel(s.due_on) }}</span>
+                    </td>
+                  </tr>
+                </template>
+                </template>
+
+                <!-- Focus mode: this status has tasks, but none are yours -->
+                <tr v-if="tasks.focusMine && g.tasks.length > 0 && visibleTaskCount(g.tasks) === 0">
+                  <td
+                    :colspan="totalCols"
+                    class="px-3 py-3 text-center text-xs italic text-base-content/40"
+                  >
+                    None of your tasks here.
+                  </td>
                 </tr>
             </tbody>
           </template>

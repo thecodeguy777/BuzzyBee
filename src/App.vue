@@ -9,6 +9,12 @@ import WorkstationLayout from '@/components/shared/WorkstationLayout.vue'
 // nothing until someone buzzes. Being always-mounted also keeps the buzz
 // handler registered + the presence channel subscribed everywhere.
 import BuzzOverlay from '@/components/comms/BuzzOverlay.vue'
+// Also root-mounted (and self-gating): a slide-in toast + chime for any new
+// notification, so it reaches you on any page. Inert until one arrives.
+import NotificationToastHost from '@/components/workstation/NotificationToastHost.vue'
+// Also root-mounted (and self-gating): the cinematic first-run product tour.
+// Inert until it starts (first login in the workstation, or the help button).
+import TourHost from '@/components/workstation/TourHost.vue'
 
 const route = useRoute()
 
@@ -45,4 +51,8 @@ const layout = computed<'workstation' | 'admin' | 'bare'>(() => {
 
   <!-- App-wide: a buzz takes over the screen wherever you are. -->
   <BuzzOverlay />
+  <!-- App-wide: slide-in toast + chime for new notifications. -->
+  <NotificationToastHost />
+  <!-- App-wide: cinematic first-run product tour. Inert until started. -->
+  <TourHost />
 </template>

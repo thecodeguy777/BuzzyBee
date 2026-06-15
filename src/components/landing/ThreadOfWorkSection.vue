@@ -105,6 +105,14 @@ const nodeLit = (i: number) => sp(i) > 0.08
 
 <template>
   <section ref="wrap" class="thread relative border-t border-white/5" :style="{ height: '480vh' }">
+    <!-- Rounded-hexagon clip (objectBoundingBox → scales to any hex size) -->
+    <svg width="0" height="0" class="absolute" aria-hidden="true">
+      <defs>
+        <clipPath id="thr-hex-clip" clipPathUnits="objectBoundingBox">
+          <path d="M 0.325 0.067 L 0.675 0.067 Q 0.75 0.067 0.788 0.132 L 0.963 0.435 Q 1 0.5 0.963 0.565 L 0.788 0.868 Q 0.75 0.933 0.675 0.933 L 0.325 0.933 Q 0.25 0.933 0.213 0.868 L 0.038 0.565 Q 0 0.5 0.038 0.435 L 0.213 0.132 Q 0.25 0.067 0.325 0.067 Z" />
+        </clipPath>
+      </defs>
+    </svg>
     <div class="sticky top-0 h-screen overflow-hidden flex flex-col">
       <!-- atmosphere -->
       <div class="absolute inset-0 pointer-events-none">
@@ -114,16 +122,16 @@ const nodeLit = (i: number) => sp(i) > 0.08
       <!-- header -->
       <div class="relative pt-10 md:pt-14 pb-4 text-center px-6">
         <div class="flex items-center gap-3 justify-center mb-3">
-          <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-amber-400/0 to-amber-400" />
-          <span class="font-mono text-[11px] font-medium uppercase tracking-[0.25em] text-amber-400">One thread of work</span>
-          <div class="w-8 h-0.5 rounded-full bg-gradient-to-l from-amber-400/0 to-amber-400" />
+          <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-[#a85be0]/0 to-[#a85be0]" />
+          <span class="font-mono text-[11px] font-medium uppercase tracking-[0.25em] text-[#a85be0]">One thread of work</span>
+          <div class="w-8 h-0.5 rounded-full bg-gradient-to-l from-[#a85be0]/0 to-[#a85be0]" />
         </div>
         <h2 class="font-display text-2xl md:text-4xl tracking-tight text-white">
           Watch one request travel the whole hive.
         </h2>
         <!-- progress counter -->
         <div class="absolute right-6 top-10 md:top-14 hidden md:flex items-baseline gap-1 font-mono text-white/30 text-sm tabular-nums">
-          <span class="text-amber-300 text-xl">{{ String(Math.max(1, activeStep + 1)).padStart(2, '0') }}</span>
+          <span class="text-[#c79bef] text-xl">{{ String(Math.max(1, activeStep + 1)).padStart(2, '0') }}</span>
           <span>/ 05</span>
         </div>
       </div>
@@ -138,8 +146,8 @@ const nodeLit = (i: number) => sp(i) > 0.08
               :style="{ strokeDasharray: 1, strokeDashoffset: 1 - Math.min(1, progress * 1.08) }" />
             <defs>
               <linearGradient id="thr-gold" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#f7c948" />
-                <stop offset="100%" stop-color="#f0890a" />
+                <stop offset="0%" stop-color="#a85be0" />
+                <stop offset="100%" stop-color="#6a4cdd" />
               </linearGradient>
             </defs>
           </svg>
@@ -151,12 +159,12 @@ const nodeLit = (i: number) => sp(i) > 0.08
           >
             <span
               class="w-5 h-5 rounded-full grid place-items-center shrink-0 border transition-all duration-500 z-10"
-              :class="nodeLit(i) ? 'bg-amber-400 border-amber-300 thr-node-lit' : 'bg-[#11141d] border-white/15'"
+              :class="nodeLit(i) ? 'bg-[#a85be0] border-[#c79bef] thr-node-lit' : 'bg-[#11141d] border-white/15'"
             >
-              <component :is="s.icon" class="w-2.5 h-2.5" :class="nodeLit(i) ? 'text-[#1a1304]' : 'text-white/40'" />
+              <component :is="s.icon" class="w-2.5 h-2.5" :class="nodeLit(i) ? 'text-white' : 'text-white/40'" />
             </span>
             <div class="min-w-0">
-              <div class="font-mono text-[9px] uppercase tracking-[0.2em]" :class="activeStep === i ? 'text-amber-300' : 'text-white/30'">{{ s.app }}</div>
+              <div class="font-mono text-[9px] uppercase tracking-[0.2em]" :class="activeStep === i ? 'text-[#c79bef]' : 'text-white/30'">{{ s.app }}</div>
               <div class="text-[13px] font-semibold leading-tight" :class="activeStep === i ? 'text-white' : 'text-white/50'">{{ s.label }}</div>
             </div>
           </div>
@@ -185,10 +193,10 @@ const nodeLit = (i: number) => sp(i) > 0.08
           <div class="thr-card" :style="cardStyle(1)">
             <div class="thr-card-head"><CheckSquare class="w-3 h-3" /> Board · HiveFlow</div>
             <div class="flex items-center gap-2.5 px-3.5 pb-3">
-              <span class="w-5 h-5 rounded-md grid place-items-center bg-amber-400/15 text-amber-300 shrink-0"><CheckSquare class="w-3 h-3" /></span>
+              <span class="w-5 h-5 rounded-md grid place-items-center bg-[#a85be0]/15 text-[#c79bef] shrink-0"><CheckSquare class="w-3 h-3" /></span>
               <span class="font-mono text-[10px] font-semibold text-white/35">TASK-214</span>
               <span class="flex-1 text-[13px] font-semibold text-white/90 truncate">Chase Henderson proposal</span>
-              <span class="thr-hex !w-[18px] !h-[18px] !text-[8px] bg-gradient-to-br from-amber-300 to-amber-500 !text-[#1a1304]">M</span>
+              <span class="thr-hex !w-[18px] !h-[18px] !text-[8px] bg-gradient-to-br from-[#a85be0] to-[#6a4cdd] !text-white">M</span>
               <span class="text-[9.5px] font-semibold px-1.5 py-0.5 rounded bg-white/8 text-white/55">created from chat</span>
             </div>
           </div>
@@ -222,9 +230,9 @@ const nodeLit = (i: number) => sp(i) > 0.08
               </span>
             </div>
             <div class="mx-3.5 mb-3 flex items-center gap-2 rounded-lg px-2.5 py-1.5 transition-all duration-500"
-              :class="wonStage === 2 ? 'bg-amber-400/10 opacity-100 translate-y-0' : 'opacity-0 translate-y-1'">
-              <span class="thr-hex !w-[18px] !h-[18px] !text-[8px] bg-gradient-to-br from-amber-300 to-amber-500 !text-[#1a1304]">🐝</span>
-              <span class="text-[11.5px] text-amber-200/90 font-medium">🏆 Deal won: Henderson Group — posted to #general by HiveMind</span>
+              :class="wonStage === 2 ? 'bg-[#a85be0]/10 opacity-100 translate-y-0' : 'opacity-0 translate-y-1'">
+              <span class="thr-hex !w-[18px] !h-[18px] !text-[8px] bg-gradient-to-br from-[#a85be0] to-[#6a4cdd] !text-white">🐝</span>
+              <span class="text-[11.5px] text-[#d4b3f2]/90 font-medium">🏆 Deal won: Henderson Group — posted to #general by HiveMind</span>
             </div>
           </div>
 
@@ -233,7 +241,7 @@ const nodeLit = (i: number) => sp(i) > 0.08
             <div class="thr-card-head"><Video class="w-3 h-3" /> Kickoff · HiveMeet</div>
             <div class="flex items-center gap-2.5 px-3.5 pb-3">
               <span class="relative flex -space-x-1.5">
-                <span class="thr-hex bg-gradient-to-br from-amber-300 to-amber-500 !text-[#1a1304] ring-2 ring-[#11141d]">M</span>
+                <span class="thr-hex bg-gradient-to-br from-[#a85be0] to-[#6a4cdd] !text-white ring-2 ring-[#11141d]">M</span>
                 <span class="thr-hex bg-gradient-to-br from-rose-400 to-rose-600 ring-2 ring-[#11141d]" :class="sp(4) > 0.45 ? 'thr-pop' : 'opacity-0'">RC</span>
               </span>
               <span class="text-[12px] text-white/70 truncate">meet/hd-7k2p · guest joined, no account needed</span>
@@ -252,17 +260,17 @@ const nodeLit = (i: number) => sp(i) > 0.08
         :style="{ opacity: finale, background: 'radial-gradient(ellipse at center, rgba(11,14,21,0.96) 30%, rgba(11,14,21,0.85))' }"
       >
         <div :style="{ transform: `scale(${0.92 + finale * 0.08})` }" class="transition-transform duration-300">
-          <Sparkles class="w-7 h-7 text-amber-300 mx-auto mb-4" />
+          <Sparkles class="w-7 h-7 text-[#c79bef] mx-auto mb-4" />
           <p class="font-display text-3xl md:text-5xl tracking-tight text-white leading-[1.1]">
             One hire. One thread.<br />
-            <span class="bg-gradient-to-r from-amber-300 to-orange-400 bg-clip-text text-transparent">Nothing dropped.</span>
+            <span class="bg-gradient-to-r from-[#c79bef] to-[#a85be0] bg-clip-text text-transparent">Nothing dropped.</span>
           </p>
           <p class="mt-4 text-white/55 max-w-md mx-auto text-sm leading-relaxed">
             Five tools' worth of work, connected end to end — by one VA who never had to leave the hive.
           </p>
           <a
             href="#contact"
-            class="inline-flex items-center gap-2 mt-7 text-sm font-semibold bg-gradient-to-r from-amber-400 to-orange-400 text-[#1a1304] px-6 py-3 rounded-md hover:opacity-90 transition-opacity"
+            class="inline-flex items-center gap-2 mt-7 text-sm font-semibold bg-gradient-to-r from-[#6a4cdd] to-[#a85be0] text-white px-6 py-3 rounded-md hover:opacity-90 transition-opacity"
             :class="finale > 0.6 ? 'pointer-events-auto' : ''"
           >
             See it live — book a demo
@@ -276,20 +284,20 @@ const nodeLit = (i: number) => sp(i) > 0.08
 
 <style scoped>
 .thread {
-  background: #0b0e15;
+  background: #160f1d;
 }
 .thr-glow {
   position: absolute;
   width: 760px; height: 560px;
   left: 50%; top: 55%;
   transform: translate(-50%, -50%);
-  background: radial-gradient(ellipse, rgba(245, 181, 10, 0.07), transparent 65%);
+  background: radial-gradient(ellipse, rgba(168, 91, 224, 0.07), transparent 65%);
   filter: blur(60px);
   transition: opacity 0.3s linear;
 }
 
 .thr-node-lit {
-  box-shadow: 0 0 14px rgba(245, 181, 10, 0.55);
+  box-shadow: 0 0 14px rgba(168, 91, 224, 0.55);
 }
 
 .thr-card {
@@ -315,7 +323,7 @@ const nodeLit = (i: number) => sp(i) > 0.08
   width: 26px;
   height: 26px;
   flex: none;
-  clip-path: polygon(25% 1%, 75% 1%, 100% 50%, 75% 99%, 25% 99%, 0% 50%);
+  clip-path: url(#thr-hex-clip);
   display: grid;
   place-items: center;
   font-size: 10px;
@@ -328,7 +336,7 @@ const nodeLit = (i: number) => sp(i) > 0.08
   width: 7px;
   height: 13px;
   margin-left: 2px;
-  background: #f5c93c;
+  background: #b673e8;
   vertical-align: text-bottom;
   animation: thr-blink 0.85s steps(1) infinite;
 }
@@ -350,7 +358,7 @@ const nodeLit = (i: number) => sp(i) > 0.08
   position: absolute;
   inset: 0;
   border-radius: 14px;
-  border: 1.5px solid rgba(245, 201, 60, 0.8);
+  border: 1.5px solid rgba(168, 91, 224, 0.8);
   animation: thr-burst 0.8s cubic-bezier(0.2, 0.7, 0.3, 1) both;
   pointer-events: none;
 }

@@ -174,19 +174,14 @@ export const useCrmStore = defineStore('crm', () => {
     }
   }
 
-  // Refetch just the deals (after an insert/delete elsewhere) without flattening
-  // the whole module or clobbering an in-flight optimistic move.
-  async function reloadDeals() {
-    const cid = clients.currentClientId
-    if (!cid) { deals.value = []; return }
-    const data = await fetchAllPaged((f, t) => supabase
-      .from('crm_deals')
-      .select(DEALS_SELECT)
-      .eq('client_id', cid)
-      .order('sort').order('created_at').order('id').range(f, t))
-    const next = (data as any[]).map(mapDeal)
-    // Preserve any deal we have a pending local write for.
-    deals.value = next.map((d) => (pending.has(d.id) ? deals.value.find((x) => x.id === d.id) ?? d : d))
+  // Pull a SINGLE deal (with its channel embed) into the list — used by the
+  // realtime INSERT / late-UPDATE paths and create. Never refetch the whole
+  // pipeline; at thousands of rows that locks the UI (it made create feel frozen).
+  async function fetchDealInto(id: string) {
+    const { data } = await supabase.from('crm_deals').select(DEALS_SELECT).eq('id', id).single()
+    if (data && !deals.value.some((d) => d.id === (data as any).id)) {
+      deals.value = [...deals.value, mapDeal(data)]
+    }
   }
 
   async function loadActivities(dealId: string, force = false) {
@@ -265,28 +260,34 @@ export const useCrmStore = defineStore('crm', () => {
   }): Promise<boolean> {
     const { useAuthStore } = await import('@/stores/auth')
     const me = useAuthStore().user?.id ?? null
+    const ownerId = input.ownerId ?? me
     const { data, error: err } = await supabase.from('crm_deals').insert({
       title: input.title.trim(), company_id: input.companyId, stage: input.stage,
-      value: input.value, owner_id: input.ownerId ?? me, close_on: input.close || null,
+      value: input.value, owner_id: ownerId, close_on: input.close || null,
       source: input.source || null, health: input.health ?? 'warm', channel_id: input.channelId ?? null,
       client_id: clients.currentClientId, created_by: me,
-    }).select('id').single()
+    }).select(DEALS_SELECT).single()
     if (err) {
       error.value = "Couldn't create deal — " + permMsg(err)
       return false
     }
+    // Optimistic insert of just the new row — never refetch the whole pipeline
+    // (it can be thousands of deals; that round-trip is what made create freeze).
+    if (data && !deals.value.some((d) => d.id === (data as any).id)) {
+      deals.value = [...deals.value, mapDeal(data)]
+    }
+    if (ownerId) void useTeamStore().fetchProfiles([ownerId])
     // Kickoff task on win — best-effort (the deal already exists; don't fail it).
-    if (input.kickoffTask && input.stage === 'won' && data?.id) {
+    if (input.kickoffTask && input.stage === 'won' && (data as any)?.id) {
       try {
         const { useTasksStore } = await import('@/stores/tasks')
         const co = companies.value[input.companyId]
         const task = await useTasksStore().createTask({ title: 'Kickoff: ' + input.title.trim(), client_id: co?.clientId ?? undefined })
-        if (task?.id) await linkTask(data.id, task.id)
+        if (task?.id) await linkTask((data as any).id, task.id)
       } catch (e) {
         error.value = 'Deal created, but the kickoff task could not be added — ' + (e as Error).message
       }
     }
-    await reloadDeals()
     return true
   }
 
@@ -694,13 +695,22 @@ export const useCrmStore = defineStore('crm', () => {
           const row = p.new
           if (!row || pending.has(row.id)) return // ignore our own in-flight write
           const idx = deals.value.findIndex((d) => d.id === row.id)
-          if (idx === -1) { void reloadDeals(); return }
+          if (idx === -1) {
+            // A deal we don't have yet (e.g. a missed insert). Pull just that row
+            // if it's this client's — never refetch the whole pipeline.
+            if (row.client_id === clients.currentClientId) void fetchDealInto(row.id)
+            return
+          }
           // Patch scalar fields; keep the embedded channelName/companyId we already have.
           const cur = deals.value[idx]
           const patched = { ...mapDeal(row), channelName: cur.channelName }
           deals.value = deals.value.map((d) => (d.id === row.id ? patched : d))
         } else {
-          void reloadDeals() // INSERT — needs the channel embed
+          // INSERT — pull just the new row (with its channel embed), scoped to
+          // this client. Our own create already added it optimistically.
+          const row = p.new
+          if (!row || pending.has(row.id) || deals.value.some((d) => d.id === row.id)) return
+          if (row.client_id === clients.currentClientId) void fetchDealInto(row.id)
         }
       })
       // Keep the deal panel's linked-task list in sync when links are made or
