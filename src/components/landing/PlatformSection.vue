@@ -62,14 +62,21 @@ const features = [
 ]
 
 const N = features.length
-const SCROLL_VH = 72
+const SCROLL_VH = 80 // runway per tab — gives the in-panel animation room to scrub
 const sectionEl = ref<HTMLElement | null>(null)
-const active = ref(0)
+const progress = ref(0) // 0..1 across the whole section
 const reduced = ref(false)
 
 const sectionStyle = computed(() => ({
   height: reduced.value ? 'auto' : `calc(100vh + ${(N - 1) * SCROLL_VH}vh)`,
 }))
+
+const clamp = (v: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v))
+const ease = (t: number) => 1 - Math.pow(1 - clamp(t), 3) // easeOutCubic
+
+// Which tab is on screen, and how far through its own scroll window (0..1).
+const active = computed(() => Math.min(N - 1, Math.floor(progress.value * N)))
+const lp = computed(() => clamp(progress.value * N - active.value))
 
 let raf = 0
 function onScroll() {
@@ -80,8 +87,7 @@ function onScroll() {
     if (!el) return
     const rect = el.getBoundingClientRect()
     const total = el.offsetHeight - window.innerHeight
-    const p = total > 0 ? Math.min(Math.max(-rect.top / total, 0), 1) : 0
-    active.value = Math.round(p * (N - 1))
+    progress.value = total > 0 ? clamp(-rect.top / total) : 0
   })
 }
 
@@ -89,23 +95,21 @@ function goTo(i: number) {
   const el = sectionEl.value
   if (!el || reduced.value) return
   const total = el.offsetHeight - window.innerHeight
-  const top = el.offsetTop + (total * i) / (N - 1)
+  const top = el.offsetTop + (total * (i + 0.5)) / N
   window.scrollTo({ top, behavior: 'smooth' })
 }
 
 onMounted(() => {
   reduced.value = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
-  if (reduced.value) { typed.value = PHRASE; return }
+  if (reduced.value) return
   window.addEventListener('scroll', onScroll, { passive: true })
   window.addEventListener('resize', onScroll)
   onScroll()
-  tick()
 })
 onBeforeUnmount(() => {
   window.removeEventListener('scroll', onScroll)
   window.removeEventListener('resize', onScroll)
   if (raf) cancelAnimationFrame(raf)
-  if (typeTimer) clearTimeout(typeTimer)
 })
 
 const activeKey = computed<Key>(() => features[active.value].key)
@@ -121,19 +125,53 @@ const topTitle = computed(() => {
   }
 })
 
-// Composer typewriter (Comms tab): types a phrase, holds, deletes, loops.
-const typed = ref('')
-const PHRASE = 'Flag the 3 hot Acme deals for the US reps'
-let ti = 0
-let dir = 1
-let typeTimer: ReturnType<typeof setTimeout> | undefined
-function tick() {
-  ti += dir
-  if (ti >= PHRASE.length) { ti = PHRASE.length; dir = -1; typed.value = PHRASE; typeTimer = setTimeout(tick, 1800); return }
-  if (ti <= 0) { ti = 0; dir = 1; typed.value = ''; typeTimer = setTimeout(tick, 700); return }
-  typed.value = PHRASE.slice(0, ti)
-  typeTimer = setTimeout(tick, dir > 0 ? 65 : 30)
+// ── scroll-driven choreography ─────────────────────────────────────
+// Each panel rises into place over the first slice of its scroll window.
+function panelStyle(i: number) {
+  if (active.value !== i) return { opacity: 0, pointerEvents: 'none' as const }
+  if (reduced.value) return { opacity: 1 }
+  const e = ease(lp.value / 0.12)
+  return { opacity: 1, pointerEvents: 'auto' as const, transform: `translateY(${(1 - e) * 16}px)` }
 }
+
+// Comms (tab 1): messages reveal one-by-one, then the composer types itself.
+const PHRASE = 'Flag the 3 hot Acme deals for the US reps'
+const typed = computed(() => {
+  if (reduced.value) return PHRASE
+  if (active.value !== 1) return ''
+  return PHRASE.slice(0, Math.round(clamp((lp.value - 0.52) / 0.4) * PHRASE.length))
+})
+function msgStyle(k: number) {
+  if (reduced.value || active.value !== 1) return {}
+  const e = ease(clamp((lp.value - k * 0.11) / 0.14))
+  return { opacity: String(e), transform: `translateY(${(1 - e) * 10}px)` }
+}
+
+// Board (tab 0): a cursor grabs a card and drags it into the next column.
+const dragStyle = computed(() => {
+  if (reduced.value || active.value !== 0) return { opacity: 0 }
+  const p = lp.value
+  const move = ease(clamp((p - 0.18) / 0.5))
+  return { opacity: String(clamp(p / 0.05)), transform: `translate(${move * 150}px, ${move * 48}px)` }
+})
+const dragCardStyle = computed(() => {
+  if (reduced.value || active.value !== 0) return {}
+  const l = clamp((lp.value - 0.1) / 0.08) - clamp((lp.value - 0.72) / 0.08)
+  return { transform: `rotate(${l * 2.5}deg) scale(${1 + l * 0.04})` }
+})
+const cursorStyle = computed(() => {
+  if (reduced.value || active.value !== 0) return {}
+  const pinch = clamp((lp.value - 0.1) / 0.05) - clamp((lp.value - 0.2) / 0.05)
+  return { transform: `scale(${1 - pinch * 0.2})` }
+})
+
+// Time (tab 3): the running session ticks up as you scroll.
+const runClock = computed(() => {
+  const total = 39 * 60 + 18
+  const s = reduced.value ? total : Math.round((active.value === 3 ? lp.value : 0) * total)
+  const p2 = (n: number) => String(n).padStart(2, '0')
+  return `${p2(Math.floor(s / 3600))}:${p2(Math.floor((s % 3600) / 60))}:${p2(s % 60)}`
+})
 </script>
 
 <template>
@@ -225,7 +263,7 @@ function tick() {
             <!-- swapping content -->
             <main class="ps-main">
               <!-- ─────────── TASKS (HiveFlow) ─────────── -->
-              <div class="ps-panel ps-pad" :class="{ 'is-on': activeKey === 'tasks' }">
+              <div class="ps-panel ps-pad" :style="panelStyle(0)">
                 <div class="ps-panel-head">
                   <div><div class="ps-panel-title">Spring Campaign</div><div class="ps-panel-sub">11 tasks · 4 assignees</div></div>
                   <span class="ps-ghost"><ZoomOut :size="13" :stroke-width="2" /> Zoom: Default</span>
@@ -258,14 +296,14 @@ function tick() {
                   </div>
                 </div>
                 <!-- looping cursor-drag flourish -->
-                <div class="ps-drag" aria-hidden="true">
-                  <div class="ps-drag-card"><div class="ps-tt">Audit current landing page</div><div class="ps-tmeta"><span class="ps-ref">TASK-0009</span></div></div>
-                  <svg class="ps-cursor" viewBox="0 0 24 24" width="20" height="20"><path d="M5 3l14 7-6 2-2 6z" fill="#fff" stroke="#16181d" stroke-width="1.2" stroke-linejoin="round" /></svg>
+                <div class="ps-drag" aria-hidden="true" :style="dragStyle">
+                  <div class="ps-drag-card" :style="dragCardStyle"><div class="ps-tt">Audit current landing page</div><div class="ps-tmeta"><span class="ps-ref">TASK-0009</span></div></div>
+                  <svg class="ps-cursor" :style="cursorStyle" viewBox="0 0 24 24" width="20" height="20"><path d="M5 3l14 7-6 2-2 6z" fill="#fff" stroke="#16181d" stroke-width="1.2" stroke-linejoin="round" /></svg>
                 </div>
               </div>
 
               <!-- ─────────── COMMS (HiveChat) ─────────── -->
-              <div class="ps-panel ps-comms" :class="{ 'is-on': activeKey === 'chat' }">
+              <div class="ps-panel ps-comms" :style="panelStyle(1)">
                 <div class="ps-chrail">
                   <div class="ps-ws"><span class="ps-online-dot" /><div><div class="ps-ws-name">HiveMind</div><div class="ps-ws-on">8 online</div></div></div>
                   <div class="ps-chlabel">Channels</div>
@@ -280,28 +318,28 @@ function tick() {
                   <div class="ps-chhead"><Hash :size="14" :stroke-width="2.2" class="ps-mut" /><span class="ps-chhead-name">general</span><span class="ps-grow" /><span class="ps-huddle-btn"><Headphones :size="13" :stroke-width="2" /> Huddle</span></div>
                   <div class="ps-chlist">
                     <div class="ps-div"><span>Today · June 15</span></div>
-                    <div class="ps-msg">
+                    <div class="ps-msg" :style="msgStyle(0)">
                       <span class="ps-hx" style="background:#12A594">MS</span>
                       <div class="ps-msg-b"><div class="ps-msg-h"><span class="ps-name" style="color:#3ec9b6">Maria Santos</span><span class="ps-time">9:02 AM</span></div><div class="ps-text">Morning team 🐝 pulling the new Acme listings into the CRM now — done before the US reps log on.</div></div>
                     </div>
-                    <div class="ps-msg ps-msg-group"><span class="ps-gutter">9:03</span><div class="ps-msg-b"><div class="ps-text">Found 6 dupes, merging by dialer_lead_id.</div></div></div>
-                    <div class="ps-msg ps-msg-hover">
+                    <div class="ps-msg ps-msg-group" :style="msgStyle(1)"><span class="ps-gutter">9:03</span><div class="ps-msg-b"><div class="ps-text">Found 6 dupes, merging by dialer_lead_id.</div></div></div>
+                    <div class="ps-msg ps-msg-hover" :style="msgStyle(2)">
                       <span class="ps-hx" style="background:#8E4EC6">JR</span>
                       <div class="ps-msg-b"><div class="ps-msg-h"><span class="ps-name" style="color:#b48ce0">Jayson Remigio</span><span class="ps-time">9:14 AM</span></div><div class="ps-text"><span class="ps-mention">@Maria Santos</span> nice. Once that's in, flag the 3 hot deals so the reps see them first?</div><div class="ps-react"><span class="ps-rpill is-mine">🐝 3</span><span class="ps-thread">2 replies · last 9:21 AM</span></div></div>
                       <div class="ps-toolbar"><span class="ps-tbi"><Smile :size="14" :stroke-width="1.9" /></span><span class="ps-tbi"><MessageSquare :size="14" :stroke-width="1.9" /></span><span class="ps-tbi ps-tbi-pri"><CheckSquare :size="14" :stroke-width="1.9" /></span><span class="ps-tbi"><Pin :size="14" :stroke-width="1.9" /></span></div>
                     </div>
-                    <div class="ps-msg">
+                    <div class="ps-msg" :style="msgStyle(3)">
                       <span class="ps-hx" style="background:#0090FF">DP</span>
                       <div class="ps-msg-b"><div class="ps-msg-h"><span class="ps-name" style="color:#5bb0ff">Dwayne Pereda</span><span class="ps-time">9:18 AM</span></div><div class="ps-text">Reps are dialing the Riverside batch — 42 connected, 5 callbacks booked so far.</div><div class="ps-react"><span class="ps-rpill">🔥 4</span><span class="ps-rpill">🚀 2</span></div></div>
                     </div>
                   </div>
-                  <div class="ps-typing"><span class="ps-hx ps-hx--xs" style="background:#0090FF">DP</span> Dwayne is typing<span class="ps-dots"><i /><i /><i /></span></div>
+                  <div v-if="!typed" class="ps-typing"><span class="ps-hx ps-hx--xs" style="background:#0090FF">DP</span> Dwayne is typing<span class="ps-dots"><i /><i /><i /></span></div>
                   <div class="ps-composer"><span class="ps-comp-typed"><span v-if="!typed" class="ps-comp-ph">Message #general — type / for commands</span>{{ typed }}<i class="ps-caret" /></span><span class="ps-send"><ArrowRight :size="14" :stroke-width="2.4" /></span></div>
                 </div>
               </div>
 
               <!-- ─────────── CRM (HiveDeals) ─────────── -->
-              <div class="ps-panel ps-pad" :class="{ 'is-on': activeKey === 'crm' }">
+              <div class="ps-panel ps-pad" :style="panelStyle(2)">
                 <div class="ps-panel-head"><div><div class="ps-panel-title">Pipeline</div><div class="ps-panel-sub">$58,500 open · 14 deals</div></div><span class="ps-ghost">Board · Table</span></div>
                 <div class="ps-board">
                   <div class="ps-col">
@@ -324,7 +362,7 @@ function tick() {
               </div>
 
               <!-- ─────────── TIME (HiveTrack) ─────────── -->
-              <div class="ps-panel ps-pad" :class="{ 'is-on': activeKey === 'time' }">
+              <div class="ps-panel ps-pad" :style="panelStyle(3)">
                 <div class="ps-panel-head"><div><div class="ps-panel-title">Time</div><div class="ps-panel-sub">Honest activity log. Timestamps only — no screenshots, no keystrokes.</div></div><span class="ps-ghost"><Download :size="13" :stroke-width="2" /> CSV</span></div>
                 <div class="ps-range"><span class="is-on">Today</span><span>This week</span><span>Last week</span><span>This month</span></div>
                 <div class="ps-stats2">
@@ -338,7 +376,7 @@ function tick() {
                 <div class="ps-sess-h">Sessions</div>
                 <div class="ps-sess">
                   <div class="ps-sess-l"><div class="ps-sess-c">HiveMind · Daily wrap-up + tomorrow prep</div><div class="ps-sess-t">Jun 15, 4:40 PM → running</div></div>
-                  <div class="ps-sess-r"><span class="ps-dur">00:39:18</span><span class="ps-badge-run">Running</span></div>
+                  <div class="ps-sess-r"><span class="ps-dur">{{ runClock }}</span><span class="ps-badge-run">Running</span></div>
                 </div>
                 <div class="ps-sess">
                   <div class="ps-sess-l"><div class="ps-sess-c">Coastal Realty <StickyNote :size="11" :stroke-width="2" class="ps-mut" /> Skip-traced 60 leads, updated dispositions</div><div class="ps-sess-t">Jun 15, 9:02 AM → 1:14 PM</div></div>
@@ -351,7 +389,7 @@ function tick() {
               </div>
 
               <!-- ─────────── COMMAND CENTER (HiveReview) ─────────── -->
-              <div class="ps-panel ps-pad" :class="{ 'is-on': activeKey === 'command' }">
+              <div class="ps-panel ps-pad" :style="panelStyle(4)">
                 <div class="ps-hero">
                   <div class="ps-hero-eye">MONDAY, JUNE 15</div>
                   <div class="ps-hero-h">Good morning, <span class="ps-hero-name">Jayson.</span> <span class="ps-hero-tail">3 things are overdue.</span></div>
@@ -459,8 +497,7 @@ function tick() {
 .ps-top-i { width: 30px; height: 30px; border-radius: 9999px; display: grid; place-items: center; color: rgba(238,240,242,0.55); }
 
 .ps-main { position: relative; flex: 1; min-height: 0; overflow: hidden; }
-.ps-panel { position: absolute; inset: 0; opacity: 0; transform: translateY(10px) scale(0.995); transition: opacity 0.45s ease, transform 0.45s cubic-bezier(0.22,1,0.36,1); pointer-events: none; overflow: hidden; }
-.ps-panel.is-on { opacity: 1; transform: none; pointer-events: auto; }
+.ps-panel { position: absolute; inset: 0; opacity: 0; pointer-events: none; overflow: hidden; transition: opacity 0.3s ease; }
 .ps-pad { padding: 1rem 1.1rem; }
 
 /* ── shared primitives ── */
@@ -644,35 +681,10 @@ function tick() {
 .ps-dots i:nth-child(2) { animation-delay: 0.2s; }
 .ps-dots i:nth-child(3) { animation-delay: 0.4s; }
 @keyframes ps-dot { 0%, 60%, 100% { opacity: 0.3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-2px); } }
-/* comms: messages stagger in when the tab activates */
-.ps-comms.is-on .ps-msg { opacity: 0; animation: ps-msgin 0.5s ease forwards; }
-.ps-comms.is-on .ps-msg:nth-child(2) { animation-delay: 0.15s; }
-.ps-comms.is-on .ps-msg:nth-child(3) { animation-delay: 0.55s; }
-.ps-comms.is-on .ps-msg:nth-child(4) { animation-delay: 0.95s; }
-.ps-comms.is-on .ps-msg:nth-child(5) { animation-delay: 1.4s; }
-@keyframes ps-msgin { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-
-/* board: looping cursor that grabs + drags a card to the next column */
-.ps-drag { position: absolute; top: 92px; left: 16px; width: 148px; z-index: 6; pointer-events: none; opacity: 0; }
-.ps-panel.is-on .ps-drag { animation: ps-dragmove 7s ease-in-out infinite; }
-@keyframes ps-dragmove {
-  0% { opacity: 0; transform: translate(0, 0); }
-  7% { opacity: 1; transform: translate(0, 0); }
-  17% { transform: translate(2px, -4px); }
-  52% { transform: translate(150px, 48px); }
-  64% { opacity: 1; transform: translate(150px, 48px); }
-  74%, 100% { opacity: 0; transform: translate(150px, 48px); }
-}
-.ps-drag-card { background: var(--b100); border: 1px solid rgba(178,102,187,0.55); border-radius: 8px; padding: 0.5rem 0.55rem; box-shadow: 0 16px 32px -10px rgba(0,0,0,0.75); }
-.ps-panel.is-on .ps-drag-card { animation: ps-draglift 7s ease-in-out infinite; transform-origin: center; }
-@keyframes ps-draglift {
-  0%, 7% { transform: rotate(0) scale(1); }
-  17%, 60% { transform: rotate(2.5deg) scale(1.04); }
-  66%, 100% { transform: rotate(0) scale(1); }
-}
-.ps-cursor { position: absolute; right: -2px; bottom: -6px; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.55)); }
-.ps-panel.is-on .ps-cursor { animation: ps-pinch 7s ease-in-out infinite; transform-origin: top left; }
-@keyframes ps-pinch { 0%, 11% { transform: scale(1); } 15%, 19% { transform: scale(0.8); } 25%, 100% { transform: scale(1); } }
+/* board: cursor + dragged card — positions driven by scroll (inline styles) */
+.ps-drag { position: absolute; top: 92px; left: 16px; width: 148px; z-index: 6; pointer-events: none; }
+.ps-drag-card { background: var(--b100); border: 1px solid rgba(178,102,187,0.55); border-radius: 8px; padding: 0.5rem 0.55rem; box-shadow: 0 16px 32px -10px rgba(0,0,0,0.75); transform-origin: center; }
+.ps-cursor { position: absolute; right: -2px; bottom: -6px; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.55)); transform-origin: top left; }
 
 /* reduced motion: static stack */
 .ps.is-reduced { height: auto !important; }
@@ -684,9 +696,8 @@ function tick() {
 .ps.is-reduced .ps-panel { position: absolute; }
 .ps.is-reduced .ps-comb { display: none; }
 @media (prefers-reduced-motion: reduce) {
-  .ps-ping::after, .ps-drag, .ps-drag-card, .ps-cursor, .ps-dots i, .ps-caret { animation: none !important; }
+  .ps-ping::after, .ps-dots i, .ps-caret { animation: none !important; }
   .ps-drag { display: none; }
-  .ps-comms.is-on .ps-msg { opacity: 1; animation: none; }
   .ps-caret { opacity: 1; }
 }
 </style>
