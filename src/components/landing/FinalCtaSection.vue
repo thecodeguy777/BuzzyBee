@@ -76,7 +76,7 @@ const ctaHref = formToken ? `/f/${formToken}` : 'mailto:hello@hivemind.co'
   border-radius: 32px;
   padding: 64px;
   color: #fff;
-  background: linear-gradient(118deg, #2f2bb8 0%, #5a3fd6 42%, #9a55df 78%, #bd6ad9 100%);
+  background: linear-gradient(118deg, #46123f 0%, #5e1b57 38%, #8e3a97 72%, #b266bb 100%);
 }
 .cta .hexw {
   position: absolute;

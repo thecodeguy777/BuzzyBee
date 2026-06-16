@@ -66,9 +66,9 @@ const pillars = [
       <!-- Header -->
       <div v-reveal class="text-center max-w-2xl mx-auto mb-14">
         <div class="flex items-center gap-3 mb-3 justify-center">
-          <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-purple-500"></div>
+          <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-plum"></div>
           <span class="text-xs font-medium uppercase tracking-wider text-primary">Vetted talent</span>
-          <div class="w-8 h-0.5 rounded-full bg-gradient-to-l from-primary to-purple-500"></div>
+          <div class="w-8 h-0.5 rounded-full bg-gradient-to-l from-primary to-plum"></div>
         </div>
         <h2 class="font-display text-3xl md:text-4xl tracking-tight leading-tight text-base-content">
           We don't place admins. We place professionals.
@@ -102,7 +102,7 @@ const pillars = [
             :key="pl.title"
             class="relative border border-base-300 rounded-lg p-6 bg-base-100 group hover:border-primary/30 transition-all duration-300"
           >
-            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-primary/10 to-purple-500/10 border border-primary/15 flex items-center justify-center mb-4">
+            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-primary/10 to-plum/10 border border-primary/15 flex items-center justify-center mb-4">
               <component :is="pl.icon" class="w-5 h-5 text-primary" />
             </div>
             <h3 class="text-base font-semibold text-base-content mb-2">{{ pl.title }}</h3>

@@ -43,7 +43,7 @@ const stepActive = (i: number) => p.value > (i + 0.35) / steps.length
       <!-- Header -->
       <div v-reveal class="max-w-2xl mb-14">
         <div class="flex items-center gap-3 mb-3">
-          <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-purple-500"></div>
+          <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-plum"></div>
           <span class="text-xs font-medium uppercase tracking-wider text-primary">How It Works</span>
         </div>
         <h2 class="font-display text-3xl md:text-4xl tracking-tight leading-tight text-base-content">
@@ -58,7 +58,7 @@ const stepActive = (i: number) => p.value > (i + 0.35) / steps.length
       <div ref="stepsEl" v-reveal="150" class="relative">
         <!-- Connector track + animated fill (desktop) -->
         <div class="hidden md:block absolute top-8 left-[10%] right-[10%] h-0.5 rounded-full bg-base-300"></div>
-        <div class="hidden md:block absolute top-8 left-[10%] h-0.5 rounded-full bg-gradient-to-r from-primary via-purple-500 to-primary origin-left" :style="{ width: '80%', transform: `scaleX(${lineProgress})` }"></div>
+        <div class="hidden md:block absolute top-8 left-[10%] h-0.5 rounded-full bg-gradient-to-r from-primary via-plum to-primary origin-left" :style="{ width: '80%', transform: `scaleX(${lineProgress})` }"></div>
 
         <div class="grid gap-6 md:grid-cols-5">
           <div

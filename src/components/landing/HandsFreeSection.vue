@@ -38,11 +38,11 @@ const allDone = computed(() => doneCount.value === tasks.length)
         <!-- Copy -->
         <div v-reveal>
           <div class="flex items-center gap-3 mb-3">
-            <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-purple-500"></div>
-            <span class="text-xs font-medium uppercase tracking-wider text-primary">Hands-free</span>
+            <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-plum"></div>
+            <span class="text-xs font-medium uppercase tracking-wider text-primary">Off your plate</span>
           </div>
           <h2 class="font-display text-3xl md:text-4xl lg:text-5xl tracking-tight leading-[1.1] text-base-content">
-            Look ma &mdash; no hands.
+            You were closing. Maria was clearing.
           </h2>
           <p class="mt-5 text-base text-base-content/60 leading-relaxed max-w-md">
             Your whole to-do list, handled while you were out closing deals. You delegate once &mdash; your VA and the platform take it from there. No nudging, no following up, no "did you get to this?"
@@ -86,7 +86,7 @@ const allDone = computed(() => doneCount.value === tasks.length)
             class="mt-5 pt-4 border-t border-base-300 text-center text-xs transition-colors duration-300"
             :class="allDone ? 'text-primary font-medium' : 'text-base-content/45'"
           >
-            {{ allDone ? "Inbox zero — and you didn't lift a finger. ✨" : 'Working through it…' }}
+            {{ allDone ? 'Inbox zero — Maria handled every one.' : 'Working through it…' }}
           </div>
         </div>
       </div>

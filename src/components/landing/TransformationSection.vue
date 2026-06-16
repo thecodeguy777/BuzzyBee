@@ -42,7 +42,7 @@ const phase = computed(() => (p.value < 0.45 ? 'Before' : 'After'))
         <!-- Copy -->
         <div v-reveal>
           <div class="flex items-center gap-3 mb-3">
-            <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-purple-500"></div>
+            <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-plum"></div>
             <span class="text-xs font-medium uppercase tracking-wider text-primary">Before &amp; after</span>
           </div>
           <h2 class="font-display text-3xl md:text-4xl lg:text-5xl tracking-tight leading-[1.1] text-base-content">
@@ -71,7 +71,7 @@ const phase = computed(() => (p.value < 0.45 ? 'Before' : 'After'))
           <!-- Color glow that blooms in as things resolve -->
           <div
             class="absolute inset-8 rounded-[40px] blur-3xl pointer-events-none transition-none"
-            style="background: radial-gradient(ellipse at center, #2563eb55, #a855f733 55%, transparent 75%)"
+            style="background: radial-gradient(ellipse at center, #b266bb55, #8e3a9733 55%, transparent 75%)"
             :style="{ opacity: colored }"
           ></div>
 
@@ -94,9 +94,9 @@ const phase = computed(() => (p.value < 0.45 ? 'Before' : 'After'))
             <!-- Chat card (top-right) -->
             <div class="absolute right-0 top-0 w-56 max-w-[74%] rounded-xl border border-base-300 bg-base-100 shadow-xl p-4" :style="settle(30, -14, 6)">
               <div class="flex items-start gap-2.5">
-                <div class="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-purple-500 text-white flex items-center justify-center text-[11px] font-bold shrink-0">M</div>
+                <div class="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-plum text-white flex items-center justify-center text-[11px] font-bold shrink-0">M</div>
                 <div>
-                  <div class="text-[11px] font-semibold text-base-content">Maria</div>
+                  <div class="text-[11px] font-semibold text-base-content">Maria Santos</div>
                   <div class="mt-1 text-xs text-base-content/70 bg-base-200 rounded-lg rounded-tl-none px-3 py-2">Closed the Johnson deal 🎉</div>
                 </div>
               </div>
@@ -122,7 +122,7 @@ const phase = computed(() => (p.value < 0.45 ? 'Before' : 'After'))
                   <span class="w-1.5 h-1.5 rounded-full bg-secondary"></span> Showing · 2:00 PM
                 </div>
                 <div class="flex items-center gap-2 text-[11px] text-base-content/70">
-                  <span class="w-1.5 h-1.5 rounded-full bg-purple-500"></span> Closing · 4:30 PM
+                  <span class="w-1.5 h-1.5 rounded-full bg-plum"></span> Closing · 4:30 PM
                 </div>
               </div>
             </div>

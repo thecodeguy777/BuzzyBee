@@ -26,7 +26,7 @@ import SiteFooter from '@/components/landing/SiteFooter.vue'
 </script>
 
 <template>
-  <div class="min-h-screen bg-base-100 text-base-content">
+  <div class="landing-surface min-h-screen bg-base-100 text-base-content">
     <LandingNav flush-dark />
     <HeroJourneySection />
     <!-- People first: lead with who you hire, then the software they work in -->

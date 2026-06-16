@@ -15,14 +15,15 @@ const p = computed(() => (prefersReduced ? 1 : progress.value))
 
 const clamp = (v: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v))
 
-// Applicants that get filtered out — each with the reason hiring the old way hurts.
+// Candidates the matching process filters out — neutral fit/mismatch reasons,
+// not character verdicts. They're capable people who don't fit THIS role.
 const rejects = [
-  { name: 'Jordan P.', role: 'General VA', flaw: 'No industry experience' },
-  { name: 'Alex R.', role: 'Admin assistant', flaw: 'Wrong time zone' },
-  { name: 'Sam T.', role: 'Freelancer', flaw: 'Ghosted the interview' },
-  { name: 'Casey M.', role: 'Generalist', flaw: 'Rate too high' },
-  { name: 'Riley K.', role: 'Junior VA', flaw: 'Needs months of training' },
-  { name: 'Drew L.', role: 'Applicant #47', flaw: 'Failed the skills test' }
+  { name: 'Jordan P.', role: 'General VA', flaw: 'New to real estate' },
+  { name: 'Alex R.', role: 'Admin assistant', flaw: 'Time-zone mismatch' },
+  { name: 'Sam T.', role: 'Freelancer', flaw: 'Different specialty' },
+  { name: 'Casey M.', role: 'Generalist', flaw: 'Outside your budget' },
+  { name: 'Riley K.', role: 'Junior VA', flaw: 'Needs ramp-up time' },
+  { name: 'Drew L.', role: 'Generalist', flaw: 'Skills not a fit' }
 ]
 const N = rejects.length
 const REJECT_END = 0.58
@@ -92,7 +93,7 @@ const skipDone = (at: number) => p.value >= at
         <!-- Left: copy + "what you skip" checklist -->
         <div>
           <div class="flex items-center gap-3 mb-3">
-            <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-purple-500"></div>
+            <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-plum"></div>
             <span class="text-xs font-medium uppercase tracking-wider text-primary">Done for you</span>
           </div>
           <h2 class="font-display text-3xl md:text-4xl lg:text-5xl tracking-tight leading-[1.1] text-base-content">
@@ -142,14 +143,14 @@ const skipDone = (at: number) => p.value >= at
               <div class="absolute -inset-3 rounded-3xl bg-primary/20 blur-2xl -z-10" :style="{ opacity: glow }"></div>
 
               <div class="flex items-center gap-3">
-                <div class="relative w-12 h-12 rounded-full bg-gradient-to-br from-primary/15 to-purple-500/15 border border-primary/20 flex items-center justify-center text-sm font-bold text-primary">
-                  MR
+                <div class="relative w-12 h-12 rounded-full bg-gradient-to-br from-primary/15 to-plum/15 border border-primary/20 flex items-center justify-center text-sm font-bold text-primary">
+                  MS
                   <span class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center border-2 border-base-100">
                     <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
                   </span>
                 </div>
                 <div class="min-w-0">
-                  <div class="text-sm font-semibold text-base-content">Maria R.</div>
+                  <div class="text-sm font-semibold text-base-content">Maria Santos</div>
                   <div class="text-[11px] text-base-content/55">Real Estate VA · 6 yrs</div>
                 </div>
                 <span class="ml-auto text-[9px] font-bold uppercase tracking-wider bg-primary/10 text-primary px-2 py-1 rounded">98% fit</span>

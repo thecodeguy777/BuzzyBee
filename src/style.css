@@ -89,6 +89,15 @@
   --shadow-hc-1: 0 1px 2px rgba(20, 12, 22, 0.05), 0 1px 1px rgba(20, 12, 22, 0.04);
   --shadow-hc-2: 0 2px 4px rgba(20, 12, 22, 0.06), 0 12px 28px -10px rgba(33, 18, 38, 0.18);
   --shadow-hc-3: 0 4px 8px rgba(20, 12, 22, 0.08), 0 20px 44px -12px rgba(33, 18, 38, 0.26);
+
+  /* Marketing accent companion. `primary` is the deep aubergine (#611f69);
+     `plum` is the lighter mid-plum it pairs with in landing gradients/tints.
+     This is the single canonical second stop — it replaces the off-brand
+     Tailwind purple-500 (#a855f7, a colder blue-violet) that had crept into the
+     marketing sections. Generates bg-plum / text-plum / from-plum / to-plum /
+     plum-soft utilities. */
+  --color-plum: #b266bb;
+  --color-plum-soft: #d59bdb;
 }
 :root {
   --hc-paper: var(--color-base-100);
@@ -193,12 +202,22 @@ body {
   color: var(--hm-gray-900);
 }
 
-/* Display font — Hanken Grotesk for headlines */
+/* Display font — Hanken Grotesk for headlines (the workstation app keeps this). */
 .font-display,
 .font-serif {
   font-family: 'Hanken Grotesk', 'Inter', system-ui, sans-serif;
   font-weight: 800;
   letter-spacing: -0.02em;
+}
+
+/* Landing/marketing surface promotes headlines to Clash Display — the same
+   premium display face the hero uses inline — so every section matches the
+   hero instead of reading as a second brand. Scoped to .landing-surface (the
+   LandingPage root) so the app's dense UI headings are never affected.
+   Weight stays 800 → renders Clash 700 (its heaviest loaded weight, no faux-bold). */
+.landing-surface .font-display {
+  font-family: 'Clash Display', 'Hanken Grotesk', 'Inter', system-ui, sans-serif;
+  letter-spacing: -0.025em;
 }
 
 .font-mono {

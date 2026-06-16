@@ -28,9 +28,9 @@ const industries = [
     <div class="relative max-w-6xl mx-auto px-6">
       <div v-reveal class="text-center max-w-2xl mx-auto mb-12">
         <div class="flex items-center gap-3 mb-3 justify-center">
-          <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-purple-500"></div>
+          <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-plum"></div>
           <span class="text-xs font-medium uppercase tracking-wider text-primary">Who it's for</span>
-          <div class="w-8 h-0.5 rounded-full bg-gradient-to-l from-primary to-purple-500"></div>
+          <div class="w-8 h-0.5 rounded-full bg-gradient-to-l from-primary to-plum"></div>
         </div>
         <h2 class="font-display text-2xl md:text-3xl tracking-tight leading-tight text-base-content">
           A professional who already knows your world.
@@ -46,7 +46,7 @@ const industries = [
           :key="ind.name"
           class="group relative flex flex-col border border-base-300 rounded-xl bg-base-100 p-5 hover:border-primary/30 hover:shadow-lg transition-all duration-300"
         >
-          <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-primary/10 to-purple-500/10 border border-primary/15 flex items-center justify-center mb-3.5 group-hover:scale-105 transition-transform">
+          <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-primary/10 to-plum/10 border border-primary/15 flex items-center justify-center mb-3.5 group-hover:scale-105 transition-transform">
             <component :is="ind.icon" class="w-5 h-5 text-primary" :stroke-width="1.9" />
           </div>
           <h3 class="text-[15px] font-semibold text-base-content">{{ ind.name }}</h3>

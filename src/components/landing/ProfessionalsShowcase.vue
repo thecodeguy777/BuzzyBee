@@ -9,9 +9,9 @@ import { BadgeCheck, Check } from 'lucide-vue-next'
 
 const pros = [
   {
-    initials: 'MR',
+    initials: 'MS',
     color: '#8E4EC6',
-    name: 'Maria R.',
+    name: 'Maria Santos',
     role: 'Real Estate VA',
     years: '6 yrs',
     knows: ['Follow Up Boss', 'Dotloop', 'MLS', 'Canva'],
@@ -49,9 +49,9 @@ const pros = [
       <!-- Header -->
       <div v-reveal class="text-center max-w-2xl mx-auto mb-14">
         <div class="flex items-center gap-3 mb-3 justify-center">
-          <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-purple-500"></div>
+          <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-plum"></div>
           <span class="text-xs font-medium uppercase tracking-wider text-primary">The people you hire</span>
-          <div class="w-8 h-0.5 rounded-full bg-gradient-to-l from-primary to-purple-500"></div>
+          <div class="w-8 h-0.5 rounded-full bg-gradient-to-l from-primary to-plum"></div>
         </div>
         <h2 class="font-display text-3xl md:text-4xl tracking-tight leading-tight text-base-content">
           You're not buying software. You're hiring a professional.
@@ -115,7 +115,7 @@ const pros = [
       <div v-reveal="200" class="mt-10 text-center">
         <p class="text-sm text-base-content/60">
           <span class="font-semibold text-base-content">Every plan includes one</span> —
-          matched to your business, managed by a dedicated PM, and backed by the whole hive.
+          matched to your business, managed by a dedicated project manager, and backed by the whole hive.
         </p>
       </div>
     </div>

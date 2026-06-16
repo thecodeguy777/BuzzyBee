@@ -37,7 +37,7 @@ const features = [
   },
   {
     key: 'crm' as Key,
-    name: 'HiveDeals',
+    name: 'HiveCRM',
     type: 'CRM & pipeline',
     replaces: ['Follow Up Boss', 'HubSpot'],
     desc: 'Your VA works your leads and deals. You watch them move from first touch to closed-won — no spreadsheet handoffs.',
@@ -359,7 +359,7 @@ const sparkStyle = computed(() => ({
                       <span class="ps-hx" style="background:#12A594">MS</span>
                       <div class="ps-msg-b"><div class="ps-msg-h"><span class="ps-name" style="color:#3ec9b6">Maria Santos</span><span class="ps-time">9:02 AM</span></div><div class="ps-text">Morning team 🐝 pulling the new Acme listings into the CRM now — done before the US reps log on.</div></div>
                     </div>
-                    <div class="ps-msg ps-msg-group" :style="msgStyle(1)"><span class="ps-gutter">9:03</span><div class="ps-msg-b"><div class="ps-text">Found 6 dupes, merging by dialer_lead_id.</div></div></div>
+                    <div class="ps-msg ps-msg-group" :style="msgStyle(1)"><span class="ps-gutter">9:03</span><div class="ps-msg-b"><div class="ps-text">Found 6 duplicate contacts — merging them now.</div></div></div>
                     <div class="ps-msg ps-msg-hover" :style="msgStyle(2)">
                       <span class="ps-hx" style="background:#8E4EC6">JR</span>
                       <div class="ps-msg-b"><div class="ps-msg-h"><span class="ps-name" style="color:#b48ce0">Jayson Remigio</span><span class="ps-time">9:14 AM</span></div><div class="ps-text"><span class="ps-mention">@Maria Santos</span> nice. Once that's in, flag the 3 hot deals so the reps see them first?</div><div class="ps-react"><span class="ps-rpill is-mine">🐝 3</span><span class="ps-thread">2 replies · last 9:21 AM</span></div></div>
@@ -375,7 +375,7 @@ const sparkStyle = computed(() => ({
                 </div>
               </div>
 
-              <!-- ─────────── CRM (HiveDeals) ─────────── -->
+              <!-- ─────────── CRM (HiveCRM) ─────────── -->
               <div class="ps-panel ps-pad" :style="panelStyle(2)">
                 <div class="ps-panel-head"><div><div class="ps-panel-title">Pipeline</div><div class="ps-panel-sub">{{ pipelineVal }} open · 14 deals</div></div><span class="ps-ghost">Board · Table</span></div>
                 <div class="ps-board">
@@ -516,13 +516,13 @@ const sparkStyle = computed(() => ({
   background: var(--b100); color: var(--ink); border: 1px solid rgba(255,255,255,0.08);
   box-shadow: 0 50px 110px -36px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.03), 0 0 70px -18px rgba(168,91,224,0.32);
 }
-.ps-side { width: 52px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0; background: linear-gradient(180deg, #1e2a6e 0%, #211a52 50%, #14102f 100%); }
+.ps-side { width: 52px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0; background: linear-gradient(180deg, #2e1133 0%, #210a26 50%, #14081a 100%); }
 .ps-side-mark { width: 30px; height: 30px; margin-bottom: 6px; }
-.ps-side-hex { width: 100%; height: 100%; fill: #a5b4fc; }
+.ps-side-hex { width: 100%; height: 100%; fill: #c79bef; }
 .ps-side-i { position: relative; width: 36px; height: 36px; border-radius: 9px; display: grid; place-items: center; color: rgba(255,255,255,0.6); transition: all 0.2s; }
 .ps-side-i:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.9); }
 .ps-side-i.is-on { background: rgba(255,255,255,0.14); color: #fff; }
-.ps-side-dot { position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; border-radius: 9999px; background: #ef8497; box-shadow: 0 0 0 2px #211a52; }
+.ps-side-dot { position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; border-radius: 9999px; background: #ef8497; box-shadow: 0 0 0 2px #210a26; }
 .ps-side-sep { width: 20px; height: 1px; background: rgba(255,255,255,0.14); margin: 4px 0; }
 .ps-side-grow { flex: 1; }
 
@@ -675,7 +675,7 @@ const sparkStyle = computed(() => ({
 .ps-person.ps-off { opacity: 0.55; }
 .ps-pstat-dot { position: absolute; top: 22px; right: 16px; width: 9px; height: 9px; border-radius: 9999px; border: 2px solid var(--b100); }
 .ps-blue-dot { background: var(--blue); }
-.ps-violet-dot { background: #8b5cf6; }
+.ps-violet-dot { background: #a85be0; }
 .ps-green-dot { background: var(--green); }
 .ps-off-dot { background: rgba(238,240,242,0.25); }
 .ps-pn { font-size: 0.68rem; font-weight: 600; }
