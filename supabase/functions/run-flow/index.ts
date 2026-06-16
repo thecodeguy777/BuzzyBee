@@ -33,10 +33,19 @@ function json(body: unknown, status = 200) {
 type Ctx = Record<string, any>
 function resolvePath(path: string, ctx: Ctx): string {
   const key = path.trim()
+  const out = (v: any) => (v == null ? null : (typeof v === 'string' ? v : JSON.stringify(v)))
+  // 1) dotted path — {{answers.f24-fy3}}, {{form.title}}, {{source.x}}
   let cur: any = ctx
   for (const part of key.split('.')) { cur = cur?.[part]; if (cur == null) break }
-  if (cur == null && ctx.answers && ctx.answers[key] != null) cur = ctx.answers[key]
-  return cur == null ? '' : (typeof cur === 'string' ? cur : JSON.stringify(cur))
+  if (cur != null) return out(cur) ?? ''
+  // 2) bare answer id — {{f24-fy3}}
+  if (ctx.answers && ctx.answers[key] != null) return out(ctx.answers[key]) ?? ''
+  // 3) human field name (case-insensitive) — {{First name}}, {{Email}}
+  if (ctx.labels && typeof ctx.labels === 'object') {
+    const hit = Object.keys(ctx.labels).find((l) => l.toLowerCase() === key.toLowerCase())
+    if (hit && ctx.labels[hit] != null && ctx.labels[hit] !== '') return out(ctx.labels[hit]) ?? ''
+  }
+  return ''
 }
 function tmpl(input: unknown, ctx: Ctx): string {
   return String(input ?? '').replace(/\{\{([^}]+)\}\}/g, (_m, p) => resolvePath(p, ctx))
