@@ -1,4 +1,12 @@
 <script setup lang="ts">
+// The discovery-call CTA reuses the app's existing public Forms flow — no
+// separate booking system. A staff member publishes a "Book a discovery call"
+// form in /app/forms (anyone can submit it anonymously at /f/:token, which
+// persists to buzzybee.form_responses), then sets VITE_DISCOVERY_FORM_TOKEN to
+// that form's token. Until it's set, the CTA falls back to email so the funnel
+// is never a dead end. Swap to an embedded inline form here once booking is spec'd.
+const formToken = import.meta.env.VITE_DISCOVERY_FORM_TOKEN as string | undefined
+const ctaHref = formToken ? `/f/${formToken}` : 'mailto:hello@hivemind.co'
 </script>
 
 <template>
@@ -18,7 +26,7 @@
               for week one &mdash; no commitment, no pressure.
             </p>
             <div class="cta-btns">
-              <a class="btn btn-white" href="mailto:hello@hivemind.co">
+              <a class="btn btn-white" :href="ctaHref">
                 Book a discovery call
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
               </a>
@@ -36,7 +44,7 @@
             <div class="big">20 min</div>
             <div class="row">
               <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2.5" /><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3" /></svg></div>
-              <div><div class="rt">Pick a time that works</div><div class="rs">Same-week slots, your timezone</div></div>
+              <div><div class="rt">Tell us what you need</div><div class="rs">We follow up within one business day</div></div>
             </div>
             <div class="row">
               <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5a7.5 7.5 0 0 1-10.9 6.7L4 20l1.3-4A7.5 7.5 0 1 1 20 11.5Z" /></svg></div>

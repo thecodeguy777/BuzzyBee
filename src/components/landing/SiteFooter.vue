@@ -3,6 +3,10 @@ import hivemindMark from '@/assets/landing/hivemind-mark.svg'
 
 const year = new Date().getFullYear()
 
+// Only real, working destinations are listed. Aspirational pages (About,
+// Careers, Blog, VA guide) and the legal pages (Privacy, Terms, Security) were
+// removed rather than shipped as dead href="#" links — re-add them here as real
+// routed pages before public launch.
 const columns = [
   {
     title: 'Product',
@@ -13,19 +17,10 @@ const columns = [
     ]
   },
   {
-    title: 'Company',
+    title: 'Get started',
     links: [
-      { label: 'About', href: '#' },
-      { label: 'Careers', href: '#' },
-      { label: 'Contact', href: 'mailto:hello@hivemind.co' }
-    ]
-  },
-  {
-    title: 'Resources',
-    links: [
-      { label: 'Real estate VA guide', href: '#' },
-      { label: 'Security & privacy', href: '#' },
-      { label: 'Blog', href: '#' }
+      { label: 'Book a discovery call', href: '#contact' },
+      { label: 'Email us', href: 'mailto:hello@hivemind.co' }
     ]
   }
 ]
@@ -57,17 +52,14 @@ const columns = [
         </div>
       </div>
 
-      <!-- Bottom row -->
+      <!-- Bottom row. Legal links (Privacy / Terms / Security) intentionally omitted
+           until they point at real pages — add them back here before public launch. -->
       <div class="mt-8 pt-5 border-t border-base-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-[11px] text-base-content/40">
         <div class="flex items-center gap-2.5">
           <img :src="hivemindMark" alt="HiveMind" class="w-5 h-auto opacity-80" />
           <span>&copy; {{ year }} HiveMind. All rights reserved.</span>
         </div>
-        <div class="flex items-center gap-4">
-          <a href="#" class="hover:text-primary transition-colors">Privacy</a>
-          <a href="#" class="hover:text-primary transition-colors">Terms</a>
-          <a href="#" class="hover:text-primary transition-colors">Security</a>
-        </div>
+        <a href="#contact" class="hover:text-primary transition-colors">Book a discovery call &rarr;</a>
       </div>
     </div>
   </footer>
