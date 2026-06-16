@@ -1,7 +1,8 @@
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth'
+import { useClientsStore } from '@/stores/clients'
 import type { FormStructure } from '@/lib/formFields'
 import { buildTemplate } from '@/lib/formFields'
 
@@ -38,11 +39,17 @@ export interface FormResponse {
 
 export const useFormsStore = defineStore('forms', () => {
   const auth = useAuthStore()
+  const clients = useClientsStore()
 
   const forms = ref<FormRow[]>([])
   const loaded = ref(false)
   const loading = ref(false)
   const error = ref<string | null>(null)
+
+  // Scoped to the active client workspace (like emailTemplates.visible / the CRM).
+  const visible = computed(() => forms.value.filter((f) => f.client_id === clients.currentClientId))
+  // Forms not tied to any client yet — surfaced as "Unfiled" so they're never lost.
+  const unfiled = computed(() => forms.value.filter((f) => !f.client_id))
 
   async function fetchAll() {
     loading.value = true
@@ -93,6 +100,7 @@ export const useFormsStore = defineStore('forms', () => {
         submit_label: 'Submit request',
         multi: built.multi,
         structure: { steps: built.steps },
+        client_id: clients.currentClientId ?? null,
         created_by: auth.user?.id ?? null,
       })
       .select('*')
@@ -117,6 +125,33 @@ export const useFormsStore = defineStore('forms', () => {
       return false
     }
     return true
+  }
+
+  /** Copy a form (fields/layout/settings) into a client — the reuse path. Cross-
+   *  client copies drop the project/status link (they belong to the old client). */
+  async function cloneForm(sourceId: string, targetClientId: string | null): Promise<FormRow | null> {
+    const src = byId(sourceId) ?? (await load(sourceId))
+    if (!src) return null
+    const sameClient = targetClientId === src.client_id
+    const { data, error: err } = await supabase
+      .from('forms')
+      .insert({
+        title: src.title + ' (copy)',
+        description: src.description,
+        submit_label: src.submit_label,
+        multi: src.multi,
+        structure: JSON.parse(JSON.stringify(src.structure)),
+        client_id: targetClientId,
+        project_id: sameClient ? src.project_id : null,
+        land_status_key: sameClient ? src.land_status_key : null,
+        created_by: auth.user?.id ?? null,
+      })
+      .select('*')
+      .single()
+    if (err) { error.value = err.message; return null }
+    const row = data as FormRow
+    forms.value = [row, ...forms.value]
+    return row
   }
 
   async function remove(id: string): Promise<boolean> {
@@ -146,7 +181,7 @@ export const useFormsStore = defineStore('forms', () => {
     return (data ?? []) as FormResponse[]
   }
 
-  return { forms, loaded, loading, error, fetchAll, byId, load, createForm, save, remove, fetchResponses }
+  return { forms, visible, unfiled, loaded, loading, error, fetchAll, byId, load, createForm, cloneForm, save, remove, fetchResponses }
 })
 
 // ── Public (anon) helpers — used by the /f/:token fill page ───────────────────

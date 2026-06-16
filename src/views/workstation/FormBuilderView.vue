@@ -230,8 +230,12 @@ function removeOption(i: number) {
 
 // ── Connect tab ───────────────────────────────────────────────────────────────
 interface ProjOption { id: string; label: string }
+// Limit the picker to the form's client (forms are client-scoped now); legacy
+// client-less forms still see every project so they can be filed.
 const projectOptions = computed<ProjOption[]>(() =>
-  projects.projects.map((p) => ({ id: p.id, label: `${clients.clients.find((c) => c.id === p.client_id)?.name ?? 'Client'} · ${p.name}` })),
+  projects.projects
+    .filter((p) => !form.client_id || p.client_id === form.client_id)
+    .map((p) => ({ id: p.id, label: `${clients.clients.find((c) => c.id === p.client_id)?.name ?? 'Client'} · ${p.name}` })),
 )
 function onProjectChange(pid: string) {
   form.project_id = pid || null
