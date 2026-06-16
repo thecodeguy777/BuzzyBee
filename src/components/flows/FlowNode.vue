@@ -3,20 +3,21 @@
 // tiles (accent-soft icon square + label) so the flow studio reads as a sibling.
 import { computed } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
-import { nodeDef, START_DEF, type FlowNodeType } from '@/lib/flowNodes'
+import { nodeDef, triggerDef, START_DEF, type FlowNodeType } from '@/lib/flowNodes'
 
 const props = defineProps<{
   id: string
-  data: { kind: FlowNodeType; config: Record<string, any> }
+  data: { kind: FlowNodeType; config: Record<string, any>; trigger?: { type: string; config: Record<string, any> } }
   selected?: boolean
 }>()
 
 const isStart = computed(() => props.data.kind === 'start')
+const trig = computed(() => (isStart.value ? triggerDef(props.data.trigger?.type ?? '') : undefined))
 const def = computed(() => nodeDef(props.data.kind))
-const icon = computed(() => (isStart.value ? START_DEF.icon : def.value?.icon))
-const label = computed(() => (isStart.value ? START_DEF.label : def.value?.label ?? props.data.kind))
-const group = computed(() => (isStart.value ? 'Trigger' : def.value?.group ?? ''))
-const summary = computed(() => (isStart.value ? '' : def.value?.summary?.(props.data.config ?? {}) ?? ''))
+const icon = computed(() => (isStart.value ? (trig.value?.icon ?? START_DEF.icon) : def.value?.icon))
+const label = computed(() => (isStart.value ? (trig.value?.label ?? 'Pick a trigger') : (def.value?.label ?? props.data.kind)))
+const group = computed(() => (isStart.value ? 'When' : def.value?.group ?? ''))
+const summary = computed(() => (isStart.value ? (trig.value?.summary?.(props.data.trigger?.config ?? {}) ?? '') : (def.value?.summary?.(props.data.config ?? {}) ?? '')))
 </script>
 
 <template>

@@ -1,35 +1,44 @@
 <script setup lang="ts">
-// The flow studio — a sibling of CrmDesignStudio. Studio bar + [palette | Vue
-// Flow canvas | inspector] + a Runs slide-over. One flow per form; autosaves the
-// node graph to flows.graph, which the run-flow edge function executes on submit.
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
-import { useRouter } from 'vue-router'
+// The flow studio — sibling of CrmDesignStudio. Opens by FLOW id (the standalone
+// /app/automations/:id route) or by FORM id (a form's "Automation" tab, which
+// find-or-creates that form's flow). Studio bar (name + Trigger picker + Enabled
+// + Runs) over [palette | Vue Flow canvas | inspector]. Autosaves the graph; the
+// run-flow edge function executes it when the trigger fires.
+import { ref, computed, watch, onMounted, onBeforeUnmount, defineAsyncComponent } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/controls/dist/style.css'
-import { ChevronLeft, Workflow, Loader2, Check, X, History, MousePointer2 } from 'lucide-vue-next'
+import { ChevronLeft, Workflow, Loader2, Check, X, History, MousePointer2, LayoutTemplate } from 'lucide-vue-next'
 import FlowPalette from '@/components/flows/FlowPalette.vue'
 import FlowInspector from '@/components/flows/FlowInspector.vue'
 import FlowNode from '@/components/flows/FlowNode.vue'
 import HexClipDef from '@/components/shared/HexClipDef.vue'
-import { useFlowsStore, type FlowRunRow } from '@/stores/flows'
+// Heavy (rich-text editor, designer) — load only when editing a design.
+const CrmDesignStudio = defineAsyncComponent(() => import('@/components/crm/CrmDesignStudio.vue'))
+import { useFlowsStore, type FlowRunRow, type FlowTrigger } from '@/stores/flows'
 import { useFormsStore } from '@/stores/forms'
 import { useProjectsStore } from '@/stores/projects'
 import { useClientsStore } from '@/stores/clients'
 import { useStatusesStore } from '@/stores/statuses'
 import { useEmailTemplatesStore } from '@/stores/emailTemplates'
-import { flowDrag, nodeDef, newNodeId, type FlowNodeType, type FlowGraph } from '@/lib/flowNodes'
+import { useChannelsStore } from '@/stores/channels'
+import { flowDrag, nodeDef, newNodeId, TRIGGER_DEFS, type FlowNodeType, type FlowGraph } from '@/lib/flowNodes'
 
-const props = defineProps<{ id: string }>() // the form id
+const props = defineProps<{ id: string }>() // form id (form tab) OR flow id (automations)
 const router = useRouter()
+const route = useRoute()
+const isFormEntry = computed(() => route.name === 'workstation-form-flow')
+
 const flows = useFlowsStore()
 const formsStore = useFormsStore()
 const projects = useProjectsStore()
 const clients = useClientsStore()
 const statuses = useStatusesStore()
 const emailTpl = useEmailTemplatesStore()
+const channelsStore = useChannelsStore()
 
 const {
   nodes, edges, addNodes, addEdges, onConnect, onNodeClick, onPaneClick,
@@ -39,14 +48,16 @@ const {
 const ready = ref(false)
 const notFound = ref(false)
 const flowId = ref<string | null>(null)
+const flowName = ref('')
 const enabled = ref(false)
-const formTitle = ref('')
+const trigger = ref<FlowTrigger>({ type: 'manual', config: {} })
+const clientId = ref<string | null>(null)
 const formProjectId = ref<string | null>(null)
-const formClientId = ref<string | null>(null)
 const formFields = ref<{ id: string; label: string }[]>([])
 const selectedId = ref<string | null>(null)
 const selectedNode = computed(() => nodes.value.find((n) => n.id === selectedId.value) ?? null)
 const onlyStart = computed(() => nodes.value.length <= 1)
+const startNodeId = computed(() => nodes.value.find((n) => (n.data as any).kind === 'start')?.id ?? 'start')
 
 onConnect((c) => addEdges({ ...c, type: 'smoothstep' }))
 onNodeClick(({ node }) => { selectedId.value = node.id })
@@ -57,17 +68,17 @@ onMounted(async () => {
   if (!projects.loaded) await projects.fetchAll().catch(() => {})
   if (!statuses.byProject.value || !Object.keys(statuses.byProject.value).length) await statuses.fetchAll().catch(() => {})
   await emailTpl.load().catch(() => {})
-  const form = await formsStore.load(props.id)
-  if (!form) { notFound.value = true; return }
-  formTitle.value = form.title
-  formProjectId.value = form.project_id
-  formClientId.value = form.client_id
-  formFields.value = (form.structure?.steps ?? []).flatMap((s: any) =>
-    (s.fields ?? []).filter((f: any) => f.props?.label).map((f: any) => ({ id: f.id, label: f.props.label })))
-  const flow = await flows.loadOrCreate(props.id)
+  if (!channelsStore.channels.length) await channelsStore.load().catch(() => {})
+  if (!formsStore.loaded) await formsStore.fetchAll().catch(() => {})
+
+  const flow = isFormEntry.value ? await flows.loadOrCreate(props.id) : await flows.loadById(props.id)
   if (!flow) { notFound.value = true; return }
   flowId.value = flow.id
+  flowName.value = flow.name
   enabled.value = flow.enabled
+  trigger.value = flow.trigger ?? { type: 'manual', config: {} }
+  clientId.value = flow.client_id
+  await loadTriggerForm()
   applyGraph(flow.graph)
   ready.value = true
 })
@@ -77,41 +88,71 @@ onBeforeUnmount(() => {
   if (saveState.value === 'saving') void flush()
 })
 
+// For a form-submitted trigger, resolve that form's fields (for {{insert field}})
+// and project (for the Status picker).
+async function loadTriggerForm() {
+  formFields.value = []
+  formProjectId.value = null
+  if (trigger.value.type === 'form_submitted' && trigger.value.config?.form_id) {
+    const form = await formsStore.load(trigger.value.config.form_id)
+    if (form) {
+      formProjectId.value = form.project_id
+      formFields.value = (form.structure?.steps ?? []).flatMap((s: any) =>
+        (s.fields ?? []).filter((f: any) => f.props?.label).map((f: any) => ({ id: f.id, label: f.props.label })))
+    }
+  }
+}
+
+function startData() {
+  return { kind: 'start' as FlowNodeType, config: {}, trigger: trigger.value }
+}
 function applyGraph(graph: FlowGraph | null) {
   const g = graph && Array.isArray(graph.nodes) ? graph : { nodes: [], edges: [] }
   const vfNodes = g.nodes.length
-    ? g.nodes.map((n) => ({ id: n.id, type: 'flow', position: n.position ?? { x: 0, y: 0 }, data: { kind: n.type, config: n.config ?? {} }, deletable: n.type !== 'start' }))
-    : [{ id: 'start', type: 'flow', position: { x: 320, y: 48 }, data: { kind: 'start' as FlowNodeType, config: {} }, deletable: false }]
+    ? g.nodes.map((n) => ({ id: n.id, type: 'flow', position: n.position ?? { x: 0, y: 0 }, data: n.type === 'start' ? startData() : { kind: n.type, config: n.config ?? {} }, deletable: n.type !== 'start' }))
+    : [{ id: 'start', type: 'flow', position: { x: 320, y: 48 }, data: startData(), deletable: false }]
+  if (!vfNodes.some((n) => (n.data as any).kind === 'start')) {
+    vfNodes.unshift({ id: 'start', type: 'flow', position: { x: 320, y: 48 }, data: startData(), deletable: false })
+  }
   setNodes(vfNodes)
   setEdges((g.edges ?? []).map((e) => ({ id: e.id, source: e.source, target: e.target, type: 'smoothstep' })))
 }
-
 function toGraph(): FlowGraph {
   return {
     nodes: nodes.value.map((n) => ({
-      id: n.id, type: (n.data as any).kind, config: (n.data as any).config ?? {},
+      id: n.id,
+      type: (n.data as any).kind,
+      config: (n.data as any).kind === 'start' ? {} : ((n.data as any).config ?? {}),
       position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
     })),
     edges: edges.value.map((e) => ({ id: e.id, source: e.source, target: e.target })),
   }
 }
 
-// ── autosave (debounced) ──
+// ── autosave graph ──
 const saveState = ref<'idle' | 'saving' | 'saved'>('idle')
 let timer: ReturnType<typeof setTimeout> | undefined
-function queueSave() {
-  if (!ready.value || !flowId.value) return
-  saveState.value = 'saving'
-  clearTimeout(timer)
-  timer = setTimeout(flush, 700)
-}
-async function flush() {
-  if (!flowId.value) return
-  const ok = await flows.save(flowId.value, { graph: toGraph() })
-  saveState.value = ok ? 'saved' : 'idle'
-  if (ok) setTimeout(() => { if (saveState.value === 'saved') saveState.value = 'idle' }, 1500)
-}
+function queueSave() { if (!ready.value || !flowId.value) return; saveState.value = 'saving'; clearTimeout(timer); timer = setTimeout(flush, 700) }
+async function flush() { if (!flowId.value) return; const ok = await flows.save(flowId.value, { graph: toGraph() }); saveState.value = ok ? 'saved' : 'idle'; if (ok) setTimeout(() => { if (saveState.value === 'saved') saveState.value = 'idle' }, 1500) }
 watch([nodes, edges], queueSave, { deep: true })
+
+// ── trigger control (studio bar) ──
+const clientForms = computed(() => formsStore.forms.filter((f) => f.client_id === clientId.value).map((f) => ({ id: f.id, title: f.title })))
+async function persistTrigger() {
+  updateNodeData(startNodeId.value, startData())
+  await loadTriggerForm()
+  if (flowId.value) await flows.save(flowId.value, { trigger: trigger.value })
+}
+async function setTriggerType(type: string) {
+  trigger.value = { type, config: type === trigger.value.type ? trigger.value.config : {} }
+  await persistTrigger()
+}
+async function setTriggerForm(formId: string) {
+  const config: Record<string, any> = { ...trigger.value.config }
+  if (formId) config.form_id = formId; else delete config.form_id
+  trigger.value = { ...trigger.value, config }
+  await persistTrigger()
+}
 
 // ── node ops ──
 function addNodeOfType(type: FlowNodeType) {
@@ -154,59 +195,83 @@ const inspProjects = computed(() => projects.projects.map((p: any) => ({
 const inspStatuses = computed(() =>
   formProjectId.value ? (statuses.forProject(formProjectId.value) ?? []).map((s: any) => ({ key: s.key, label: s.label })) : [])
 const inspTemplates = computed(() =>
-  emailTpl.templates.filter((t) => t.clientId === formClientId.value).map((t) => ({ id: t.id, name: t.name })))
+  emailTpl.templates.filter((t) => t.clientId === clientId.value).map((t) => ({ id: t.id, name: t.name })))
+const inspChannels = computed(() =>
+  channelsStore.channels.filter((c) => !c.is_dm && c.client_id === clientId.value).map((c) => ({ id: c.id, name: c.name })))
 
-// ── enabled toggle ──
-async function toggleEnabled() {
-  if (!flowId.value) return
-  enabled.value = !enabled.value
-  await flows.save(flowId.value, { enabled: enabled.value })
+async function toggleEnabled() { if (!flowId.value) return; enabled.value = !enabled.value; await flows.save(flowId.value, { enabled: enabled.value }) }
+async function renameFlow() { if (flowId.value) await flows.save(flowId.value, { name: flowName.value || 'Untitled automation' }) }
+function goBack() {
+  if (isFormEntry.value) router.push({ name: 'workstation-form-builder', params: { id: props.id } })
+  else router.push({ name: 'workstation-automations' })
+}
+
+// ── edit-design overlay (Email node → Edit this design) ──
+const editingDesignId = ref<string | null>(null)
+const copiedToken = ref<string | null>(null)
+// Built in script — putting literal "}}" inside a template interpolation breaks the parser.
+const tokenLabel = (l: string) => '{{' + l + '}}'
+function copyToken(label: string) {
+  const tok = `{{${label}}}`
+  void navigator.clipboard?.writeText(tok)
+  copiedToken.value = tok
+  setTimeout(() => { if (copiedToken.value === tok) copiedToken.value = null }, 1500)
 }
 
 // ── runs panel ──
 const runsOpen = ref(false)
 const runs = ref<FlowRunRow[]>([])
 const runsLoading = ref(false)
-async function openRuns() {
-  runsOpen.value = true
-  if (!flowId.value) return
-  runsLoading.value = true
-  runs.value = await flows.fetchRuns(flowId.value)
-  runsLoading.value = false
-}
+async function openRuns() { runsOpen.value = true; if (!flowId.value) return; runsLoading.value = true; runs.value = await flows.fetchRuns(flowId.value); runsLoading.value = false }
 const fmtTime = (s: string) => new Date(s).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 </script>
 
 <template>
   <div v-if="notFound" class="h-full grid place-items-center">
     <div class="text-center">
-      <p class="font-display text-lg font-semibold mb-1">Form not found</p>
-      <button class="btn btn-sm btn-ghost" @click="router.push({ name: 'workstation-forms' })">Back to forms</button>
+      <p class="font-display text-lg font-semibold mb-1">Automation not found</p>
+      <button class="btn btn-sm btn-ghost" @click="router.push({ name: 'workstation-automations' })">Back to automations</button>
     </div>
   </div>
 
   <div v-else class="h-full flex flex-col min-h-0">
-    <!-- shared honeycomb clip so node handles can be hexagons (on-brand) -->
     <HexClipDef />
     <!-- studio bar -->
-    <div class="h-[54px] flex-none flex items-center gap-3 px-3 border-b border-base-300 bg-base-100">
-      <button class="w-9 h-9 rounded-lg grid place-items-center hover:bg-base-200" title="Back to form" @click="router.push({ name: 'workstation-form-builder', params: { id } })">
+    <div class="h-[54px] flex-none flex items-center gap-2.5 px-3 border-b border-base-300 bg-base-100">
+      <button class="w-9 h-9 rounded-lg grid place-items-center hover:bg-base-200" title="Back" @click="goBack">
         <ChevronLeft class="w-5 h-5" :stroke-width="1.75" />
       </button>
       <span class="w-[30px] h-[30px] rounded-[9px] grid place-items-center shrink-0" style="background: var(--accent-soft); color: var(--accent-fg)">
         <Workflow class="w-[17px] h-[17px]" :stroke-width="1.75" />
       </span>
-      <div class="leading-tight min-w-0">
-        <div class="text-[10.5px] text-base-content/40 font-bold uppercase tracking-wide">Automation</div>
-        <div class="text-[14px] font-bold truncate max-w-[240px]">{{ formTitle }}</div>
+      <input
+        v-model="flowName"
+        class="w-44 px-2 py-1 rounded-lg border border-transparent bg-transparent text-[14px] font-bold outline-none focus:bg-base-200 focus:border-base-300"
+        placeholder="Automation name"
+        @change="renameFlow"
+      />
+
+      <!-- Trigger picker -->
+      <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-base-200/60 border border-base-300">
+        <span class="text-[10.5px] font-bold text-base-content/45 uppercase tracking-wide">When</span>
+        <select class="bg-transparent text-[13px] font-medium outline-none cursor-pointer" :value="trigger.type" @change="setTriggerType(($event.target as HTMLSelectElement).value)">
+          <option v-for="t in TRIGGER_DEFS" :key="t.type" :value="t.type" :disabled="t.soon">{{ t.label }}{{ t.soon ? ' (soon)' : '' }}</option>
+        </select>
+        <template v-if="trigger.type === 'form_submitted'">
+          <span class="text-base-content/30">·</span>
+          <select class="bg-transparent text-[13px] outline-none cursor-pointer max-w-[150px] truncate" :value="trigger.config?.form_id ?? ''" @change="setTriggerForm(($event.target as HTMLSelectElement).value)">
+            <option value="">Any form</option>
+            <option v-for="f in clientForms" :key="f.id" :value="f.id">{{ f.title }}</option>
+          </select>
+        </template>
       </div>
-      <span class="text-xs text-base-content/35 inline-flex items-center gap-1 ml-1">
+
+      <span class="text-xs text-base-content/35 inline-flex items-center gap-1">
         <Loader2 v-if="saveState === 'saving'" class="w-3 h-3 animate-spin" />
         <Check v-else-if="saveState === 'saved'" class="w-3 h-3 text-success" :stroke-width="2.5" />
-        {{ saveState === 'saving' ? 'Saving' : saveState === 'saved' ? 'Saved' : '' }}
       </span>
       <div class="flex-1" />
-      <label class="flex items-center gap-2 mr-1 cursor-pointer" :title="enabled ? 'Runs on every submission' : 'Off — submissions do nothing'">
+      <label class="flex items-center gap-2 mr-1 cursor-pointer" :title="enabled ? 'Runs when the trigger fires' : 'Off — the trigger does nothing'">
         <input type="checkbox" class="toggle toggle-primary toggle-sm" :checked="enabled" @change="toggleEnabled" />
         <span class="text-[13px] font-medium whitespace-nowrap">{{ enabled ? 'Enabled' : 'Disabled' }}</span>
       </label>
@@ -218,14 +283,7 @@ const fmtTime = (s: string) => new Date(s).toLocaleString(undefined, { month: 's
       <FlowPalette @add="addNodeOfType" />
 
       <div class="flex-1 relative" @drop.prevent="onDrop" @dragover.prevent>
-        <VueFlow
-          :default-edge-options="{ type: 'smoothstep' }"
-          :delete-key-code="null"
-          :min-zoom="0.3"
-          :max-zoom="1.6"
-          fit-view-on-init
-          class="flow-canvas"
-        >
+        <VueFlow :default-edge-options="{ type: 'smoothstep' }" :delete-key-code="null" :min-zoom="0.3" :max-zoom="1.6" fit-view-on-init class="flow-canvas">
           <Background :gap="16" pattern-color="color-mix(in oklab, var(--color-base-content) 16%, transparent)" />
           <Controls :show-interactive="false" />
           <template #node-flow="nodeProps">
@@ -237,7 +295,7 @@ const fmtTime = (s: string) => new Date(s).toLocaleString(undefined, { month: 's
           <Loader2 class="w-6 h-6 animate-spin text-base-content/30" />
         </div>
         <div v-else-if="onlyStart" class="absolute left-1/2 -translate-x-1/2 bottom-10 pointer-events-none flex items-center gap-2 text-[13px] text-base-content/50 bg-base-100/85 border border-base-300 rounded-full px-3.5 py-1.5 shadow-sm">
-          <MousePointer2 class="w-4 h-4" /> Drag a node from the left, then connect it under “Form submitted”
+          <MousePointer2 class="w-4 h-4" /> Drag a node from the left, then connect it under the trigger
         </div>
       </div>
 
@@ -247,9 +305,28 @@ const fmtTime = (s: string) => new Date(s).toLocaleString(undefined, { month: 's
         :projects="inspProjects"
         :statuses="inspStatuses"
         :templates="inspTemplates"
+        :channels="inspChannels"
         @update="updateConfig"
         @delete="deleteSelected"
+        @edit-design="editingDesignId = $event"
       />
+    </div>
+
+    <!-- Edit-design overlay: the Email Studio focused on the picked design -->
+    <div v-if="editingDesignId" class="fixed inset-0 z-[130] bg-base-100 flex flex-col">
+      <div class="h-[52px] flex-none flex items-center gap-2 px-4 border-b border-base-300">
+        <span class="w-[28px] h-[28px] rounded-lg grid place-items-center" style="background: var(--accent-soft); color: var(--accent-fg)"><LayoutTemplate :size="15" /></span>
+        <span class="text-[14px] font-bold">Edit email design</span>
+        <span class="text-[12px] text-base-content/45 hidden sm:inline">— save in the designer, then close</span>
+        <span class="flex-1" />
+        <button class="btn btn-sm btn-primary gap-1.5" @click="editingDesignId = null"><X class="w-4 h-4" /> Done</button>
+      </div>
+      <div v-if="formFields.length" class="flex-none flex items-center gap-1.5 px-4 py-2 border-b border-base-300 bg-base-200/50 overflow-x-auto">
+        <span class="text-[11px] font-semibold text-base-content/50 shrink-0">Insert a field (click to copy, paste into your text):</span>
+        <button v-for="ff in formFields" :key="ff.id" type="button" class="ed-token shrink-0" @click="copyToken(ff.label)">{{ tokenLabel(ff.label) }}</button>
+        <span v-if="copiedToken" class="text-[11px] font-semibold text-success shrink-0 ml-1">Copied {{ copiedToken }}</span>
+      </div>
+      <CrmDesignStudio :open-template-id="editingDesignId" class="flex-1 min-h-0" />
     </div>
 
     <!-- Runs slide-over -->
@@ -265,7 +342,7 @@ const fmtTime = (s: string) => new Date(s).toLocaleString(undefined, { month: 's
         <div class="flex-1 overflow-y-auto p-3">
           <div v-if="runsLoading" class="grid place-items-center py-10"><Loader2 class="w-5 h-5 animate-spin text-base-content/30" /></div>
           <div v-else-if="!runs.length" class="text-center py-12 px-4 text-base-content/40 text-[13px]">
-            No runs yet. Turn the flow on, then submit the form — runs show up here.
+            No runs yet. Turn it on, then fire the trigger — runs show up here.
           </div>
           <div v-else class="flex flex-col gap-2">
             <div v-for="r in runs" :key="r.id" class="border border-base-300 rounded-xl p-3">
@@ -300,4 +377,6 @@ const fmtTime = (s: string) => new Date(s).toLocaleString(undefined, { month: 's
 .run-failed { background: #c2253c; }
 .run-running, .run-pending { background: #c2700c; }
 .run-waiting { background: var(--accent); }
+.ed-token { font-family: ui-monospace, 'Geist Mono', monospace; font-size: 11.5px; font-weight: 600; padding: 3px 8px; border-radius: 7px; background: var(--accent-soft); color: var(--accent-fg); border: 1px solid var(--accent-bord); white-space: nowrap; }
+.ed-token:hover { filter: brightness(0.97); }
 </style>

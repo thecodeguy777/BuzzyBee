@@ -13,10 +13,12 @@ const props = defineProps<{
   projects: { id: string; label: string }[]
   statuses: { key: string; label: string }[]
   templates: { id: string; name: string }[]
+  channels: { id: string; name: string }[]
 }>()
 const emit = defineEmits<{
   (e: 'update', patch: Record<string, unknown>): void
   (e: 'delete'): void
+  (e: 'edit-design', templateId: string): void
 }>()
 
 const def = computed(() => (props.node ? nodeDef(props.node.data.kind) : undefined))
@@ -25,8 +27,8 @@ const isStart = computed(() => props.node?.data.kind === 'start')
 
 const set = (key: string, v: unknown) => emit('update', { [key]: v })
 const openMenu = ref<string | null>(null)
-function insertToken(key: string, fieldId: string) {
-  set(key, String(cfg.value[key] ?? '') + `{{answers.${fieldId}}}`)
+function insertToken(key: string, label: string) {
+  set(key, String(cfg.value[key] ?? '') + `{{${label}}}`)
   openMenu.value = null
 }
 </script>
@@ -38,10 +40,10 @@ function insertToken(key: string, fieldId: string) {
       <template v-if="isStart">
         <div class="flex items-center gap-2 mb-3">
           <span class="fi-ico"><GripVertical :size="15" /></span>
-          <span class="text-[14px] font-bold">Form submitted</span>
+          <span class="text-[14px] font-bold">Trigger</span>
         </div>
         <p class="text-[12.5px] text-base-content/55 leading-relaxed">
-          This is where every run begins. Connect nodes below it — they run, in order, each time someone submits this form.
+          This is where every run begins. Set <strong>what starts it</strong> in the top bar ("When …"), then connect actions below — they run, in order, each time the trigger fires.
         </p>
       </template>
 
@@ -65,7 +67,7 @@ function insertToken(key: string, fieldId: string) {
                 insert field <ChevronDown :size="11" />
               </button>
               <div v-if="openMenu === f.key" class="fi-menu">
-                <button v-for="ff in formFields" :key="ff.id" type="button" @click="insertToken(f.key, ff.id)">{{ ff.label }}</button>
+                <button v-for="ff in formFields" :key="ff.id" type="button" @click="insertToken(f.key, ff.label)">{{ ff.label }}</button>
               </div>
             </div>
           </div>
@@ -101,11 +103,16 @@ function insertToken(key: string, fieldId: string) {
             <option value="">First column (default)</option>
             <option v-for="s in statuses" :key="s.key" :value="s.key">{{ s.label }}</option>
           </select>
-          <input
-            v-else-if="f.kind === 'channel'"
-            class="crm-insp-in" :value="cfg[f.key]" placeholder="Comms channel id"
-            @input="set(f.key, ($event.target as HTMLInputElement).value)"
-          />
+          <template v-else-if="f.kind === 'channel'">
+            <select
+              class="crm-insp-in" :value="cfg[f.key] ?? ''"
+              @change="set(f.key, ($event.target as HTMLSelectElement).value || null)"
+            >
+              <option value="">Pick a channel…</option>
+              <option v-for="ch in channels" :key="ch.id" :value="ch.id">#{{ ch.name }}</option>
+            </select>
+            <p v-if="!channels.length" class="fi-hint">No channels for this client yet — create one in Comms first.</p>
+          </template>
           <template v-else-if="f.kind === 'template'">
             <select
               class="crm-insp-in" :value="cfg[f.key] ?? ''"
@@ -114,6 +121,9 @@ function insertToken(key: string, fieldId: string) {
               <option value="">Plain email (type a body below)</option>
               <option v-for="t in templates" :key="t.id" :value="t.id">{{ t.name }}</option>
             </select>
+            <button v-if="cfg[f.key]" type="button" class="fi-editlink" @click="emit('edit-design', String(cfg[f.key]))">
+              Edit this design ↗
+            </button>
             <p v-if="!templates.length" class="fi-hint">
               No saved designs for this form's client yet — build them in the Email Studio (CRM → Designs).
             </p>
@@ -163,4 +173,10 @@ function insertToken(key: string, fieldId: string) {
 }
 .fi-menu button:hover { background: var(--accent-soft); color: var(--accent-fg); }
 .fi-hint { font-size: 11px; font-weight: 500; text-transform: none; letter-spacing: 0; color: color-mix(in oklab, var(--color-base-content) 42%, transparent); margin-top: 6px; line-height: 1.45; }
+.fi-editlink {
+  display: inline-flex; align-items: center; margin-top: 7px; font-size: 12px; font-weight: 700;
+  text-transform: none; letter-spacing: 0; color: var(--accent-fg);
+  padding: 5px 9px; border-radius: 8px; background: var(--accent-soft); border: 1px solid var(--accent-bord);
+}
+.fi-editlink:hover { filter: brightness(0.97); }
 </style>

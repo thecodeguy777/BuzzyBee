@@ -25,6 +25,10 @@ const emit = defineEmits<{
   (e: 'compose', template: EmailTemplate): void
 }>()
 
+// When embedded (e.g. from the flow builder's Email node), open straight to a
+// specific design's editor instead of the library.
+const props = defineProps<{ openTemplateId?: string }>()
+
 const tplStore = useEmailTemplatesStore()
 
 // ── Library vs editor ─────────────────────────────────────────────────────────
@@ -259,8 +263,12 @@ function onKey(e: KeyboardEvent) {
   }
 }
 
-onMounted(() => {
-  void tplStore.load()
+onMounted(async () => {
+  await tplStore.load()
+  if (props.openTemplateId) {
+    const t = tplStore.templates.find((x) => x.id === props.openTemplateId)
+    if (t) openExisting(t)
+  }
   document.addEventListener('keydown', onKey)
 })
 onBeforeUnmount(() => document.removeEventListener('keydown', onKey))

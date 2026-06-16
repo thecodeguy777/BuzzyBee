@@ -15,6 +15,7 @@ import {
   Handshake,
   Target,
   FileText,
+  Workflow,
   Settings
 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
@@ -57,6 +58,8 @@ const topNavItems = computed<NavItem[]>(() => {
   items.push({ to: '/app/nectar', label: 'Nectar', icon: Target })
   // Forms — intake builder; submissions land as tasks. PMs/admins build them.
   if (auth.role === 'pm' || auth.isAdmin) items.push({ to: '/app/forms', label: 'Forms', icon: FileText })
+  // Automations — event-driven flow builder (form submitted, task/deal events…).
+  if (auth.role === 'pm' || auth.isAdmin) items.push({ to: '/app/automations', label: 'Automations', icon: Workflow })
   return items
 })
 const bottomNavItems = computed<NavItem[]>(() => {

@@ -35,7 +35,10 @@ const fullBleed = computed(
     route.path.startsWith('/app/messages') ||
     route.path.startsWith('/app/crm') ||
     // The form builder is a 3-pane editor that manages its own scroll.
-    /^\/app\/forms\/.+/.test(route.path),
+    /^\/app\/forms\/.+/.test(route.path) ||
+    // The flow builder (/app/automations/:id) is a 3-pane editor too; the
+    // Automations LIST (/app/automations) stays padded like a normal page.
+    /^\/app\/automations\/.+/.test(route.path),
 )
 
 // Tasks keeps the padded canvas but on the white surface — its board columns

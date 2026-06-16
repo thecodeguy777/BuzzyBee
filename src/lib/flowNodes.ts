@@ -10,7 +10,7 @@
 import {
   Mail, Webhook, Globe, CheckSquare, CircleDot, MessageSquare, MessageCircle,
   PhoneCall, FileSearch, ClipboardCheck, Brain, Sparkles, Video, Phone,
-  GitBranch, Clock, Shuffle, UserCheck, Play,
+  GitBranch, Clock, Shuffle, UserCheck, Play, FileText, Handshake, Zap,
 } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
@@ -127,8 +127,31 @@ export const FLOW_NODE_DEFS: FlowNodeDef[] = [
   { type: 'manual', label: 'Manual Review', group: 'Flow control', icon: UserCheck, soon: true, fields: [], defaultConfig: {} },
 ]
 
-/** The fixed entry node — represents the form submission. */
-export const START_DEF = { label: 'Form submitted', icon: Play }
+/** The fixed entry node — its label/icon come from the flow's trigger. */
+export const START_DEF = { label: 'Trigger', icon: Play }
+
+// ── Trigger registry — what STARTS a flow. Mirrors the dispatcher's trigger
+// types. Live triggers fire today; "soon" ones await their DB event + runner
+// context (Phase 2). `config` keys become the dispatcher's containment filter.
+export interface TriggerDef {
+  type: string
+  label: string
+  icon: Component
+  soon?: boolean
+  summary?: (config: Record<string, any>) => string
+}
+export const TRIGGER_DEFS: TriggerDef[] = [
+  { type: 'form_submitted', label: 'Form submitted', icon: FileText, summary: (c) => (c.form_id ? 'A specific form' : 'Any form for this client') },
+  { type: 'task_created', label: 'Task created', icon: CheckSquare, soon: true },
+  { type: 'task_status_changed', label: 'Task status changed', icon: CircleDot, soon: true },
+  { type: 'deal_created', label: 'Deal created', icon: Handshake, soon: true },
+  { type: 'deal_stage_changed', label: 'Deal stage changed', icon: Handshake, soon: true },
+  { type: 'dialer_disposition', label: 'Call dispositioned', icon: PhoneCall, soon: true },
+  { type: 'manual', label: 'Manual — run now', icon: Zap, soon: true },
+]
+export function triggerDef(t: string): TriggerDef | undefined {
+  return TRIGGER_DEFS.find((d) => d.type === t)
+}
 
 export function nodeDef(t: FlowNodeType): FlowNodeDef | undefined {
   return FLOW_NODE_DEFS.find((d) => d.type === t)
