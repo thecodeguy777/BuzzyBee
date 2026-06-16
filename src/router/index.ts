@@ -152,6 +152,13 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, layout: 'workstation' }
   },
   {
+    path: '/app/forms/:id/flow',
+    name: 'workstation-form-flow',
+    component: () => import('@/views/workstation/FlowBuilderView.vue'),
+    props: true,
+    meta: { requiresAuth: true, layout: 'workstation' }
+  },
+  {
     path: '/f/:token',
     name: 'public-form',
     component: () => import('@/views/shared/PublicFormView.vue'),

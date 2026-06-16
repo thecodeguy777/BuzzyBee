@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   ChevronLeft, Eye, Share2, Plus, X, GripVertical, ChevronUp, ChevronDown,
-  Copy as CopyIcon, Trash2, ArrowRight, Table2, Check, Loader2, FileText, Inbox,
+  Copy as CopyIcon, Trash2, ArrowRight, Table2, Check, Loader2, FileText, Inbox, Workflow,
 } from 'lucide-vue-next'
 import {
   FIELD_DEFS, TABLE_COLS, TEMPLATE_NAMES, makeField, buildTemplate, newFieldId,
@@ -325,6 +325,7 @@ const pvLast = computed(() => pvStep.value === form.structure.steps.length - 1)
         <input type="checkbox" class="toggle toggle-primary toggle-sm" :checked="form.multi" @change="toggleMulti" />
         <span class="text-[13px] font-medium whitespace-nowrap">Multi-step</span>
       </label>
+      <button class="btn btn-sm btn-ghost gap-1.5" @click="router.push({ name: 'workstation-form-flow', params: { id } })"><Workflow class="w-4 h-4" :stroke-width="1.75" /> Automation</button>
       <button class="btn btn-sm btn-ghost gap-1.5" @click="router.push({ name: 'workstation-form-responses', params: { id } })"><Inbox class="w-4 h-4" :stroke-width="1.75" /> Responses</button>
       <button class="btn btn-sm btn-ghost gap-1.5" @click="openPreview"><Eye class="w-4 h-4" :stroke-width="1.75" /> Preview</button>
       <button v-if="form.published" class="btn btn-sm btn-ghost gap-1.5" @click="copyLink"><CopyIcon class="w-4 h-4" :stroke-width="1.75" /> Copy link</button>
