@@ -80,6 +80,8 @@ export function useMeetingRoom() {
   const cameraOn = ref(false)
   const localCamera = ref<MediaStream | null>(null)
   const remoteCameras = ref<Record<string, MediaStream>>({})
+  /** Mirror my own tile only for the front/selfie camera, not the rear. */
+  const selfMirrored = ref(true)
   /** Background effect (blur). Persists so it carries across sessions. */
   const bgMode = ref<BgMode>(
     typeof window !== 'undefined' && window.localStorage.getItem('buzzybee.comms.bg') === 'blur'
@@ -112,6 +114,14 @@ export function useMeetingRoom() {
   let rawCamStream: MediaStream | null = null
   let vbg: VideoBackground | null = null
   let cameraFacing: 'user' | 'environment' = 'user'
+  // Concurrency guards for the async camera lifecycle — getUserMedia and the
+  // blur-pipeline init are long awaits. The in-flight locks stop toggle-spam
+  // from double-enabling (two streams / orphaned senders); camGen invalidates a
+  // stale completion when the user leaves or toggles off mid-await.
+  let camBusy = false
+  let flipBusy = false
+  let bgBusy = false
+  let camGen = 0
   // Honoured once the call goes live — lets the green-room "join with camera on"
   // choice carry through (incl. guests who wait in the lobby first).
   let startCameraOnLive = false
@@ -672,50 +682,70 @@ export function useMeetingRoom() {
       await sender.setParameters(params)
     } catch { /* unsupported */ }
   }
+  function persistBg(m: BgMode) {
+    try { window.localStorage.setItem('buzzybee.comms.bg', m) } catch { /* ignore */ }
+  }
   async function enableCamera() {
-    if (!amAdmitted.value || cameraOn.value) return
-    let raw: MediaStream
+    if (!amAdmitted.value || cameraOn.value || camBusy) return
+    camBusy = true
+    const gen = camGen
+    let raw: MediaStream | null = null
+    let pipe: VideoBackground | null = null
+    let committed = false
     try {
-      const deviceId =
-        typeof window !== 'undefined' ? window.localStorage.getItem('buzzybee.comms.cam-device') : null
-      const video = camConstraints()
-      if (deviceId) video.deviceId = { exact: deviceId }
-      raw = await navigator.mediaDevices.getUserMedia({ video, audio: false })
-    } catch {
-      error.value = 'Camera access was blocked — allow it in your browser to turn your camera on.'
-      return
+      try {
+        const deviceId =
+          typeof window !== 'undefined' ? window.localStorage.getItem('buzzybee.comms.cam-device') : null
+        const video = camConstraints()
+        if (deviceId) video.deviceId = { exact: deviceId }
+        raw = await navigator.mediaDevices.getUserMedia({ video, audio: false })
+      } catch {
+        error.value = 'Camera access was blocked — allow it in your browser to turn your camera on.'
+        return
+      }
+      // Cancelled (left / toggled off) during the permission prompt.
+      if (gen !== camGen || !raw) return
+      const rawTrack = raw.getVideoTracks()[0]
+      if (!rawTrack) return
+      // Route through the blur pipeline if the user wants a background. On
+      // failure the pipeline returns null and we send the raw camera.
+      let sendTrack = rawTrack
+      if (bgMode.value === 'blur') {
+        pipe = await createVideoBackground(raw, 'blur')
+        if (gen !== camGen) return // cancelled during init → finally cleans up
+        if (pipe) sendTrack = pipe.track
+        else { bgMode.value = 'none'; persistBg('none') }
+      }
+      // ── Commit (no awaits past here) ──
+      rawCamStream = raw
+      vbg = pipe
+      const out = new MediaStream([sendTrack])
+      cameraStream = out
+      if ('contentHint' in sendTrack) (sendTrack as any).contentHint = 'motion'
+      selfMirrored.value = cameraFacing === 'user'
+      cameraOn.value = true
+      localCamera.value = out
+      committed = true
+      for (const entry of peers.values()) {
+        entry.camSender = entry.pc.addTrack(sendTrack, out)
+        preferH264(entry.pc, entry.camSender)
+        void tuneCamSender(entry.camSender)
+      }
+      // Device unplugged / OS revoked the camera → reflect it in the UI.
+      rawTrack.addEventListener('ended', () => disableCamera())
+      announceMedia()
+      trackPresence()
+    } finally {
+      if (!committed) {
+        pipe?.destroy()
+        raw?.getTracks().forEach((t) => t.stop())
+      }
+      camBusy = false
     }
-    const rawTrack = raw.getVideoTracks()[0]
-    if (!rawTrack) {
-      raw.getTracks().forEach((t) => t.stop())
-      return
-    }
-    rawCamStream = raw
-    // Route through the blur pipeline if the user wants a background. On failure
-    // the pipeline returns null and we send the raw camera (reflecting it in UI).
-    let sendTrack = rawTrack
-    if (bgMode.value === 'blur') {
-      vbg = await createVideoBackground(raw, 'blur')
-      if (vbg) sendTrack = vbg.track
-      else bgMode.value = 'none'
-    }
-    const out = new MediaStream([sendTrack])
-    cameraStream = out
-    if ('contentHint' in sendTrack) (sendTrack as any).contentHint = 'motion'
-    cameraOn.value = true
-    localCamera.value = out
-    for (const entry of peers.values()) {
-      entry.camSender = entry.pc.addTrack(sendTrack, out)
-      preferH264(entry.pc, entry.camSender)
-      void tuneCamSender(entry.camSender)
-    }
-    // Device unplugged / OS revoked the camera → reflect it in the UI.
-    rawTrack.addEventListener('ended', () => disableCamera())
-    announceMedia()
-    trackPresence()
   }
   function disableCamera() {
-    if (!cameraOn.value && !cameraStream && !rawCamStream) return
+    camGen++ // cancel any in-flight enable / flip / blur-build
+    const hadState = cameraOn.value || !!cameraStream || !!rawCamStream || !!vbg
     for (const entry of peers.values()) {
       if (entry.camSender) {
         try { entry.pc.removeTrack(entry.camSender) } catch { /* ignore */ }
@@ -730,15 +760,20 @@ export function useMeetingRoom() {
     cameraStream = null
     localCamera.value = null
     cameraOn.value = false
-    announceMedia()
-    trackPresence()
+    if (hadState) {
+      announceMedia()
+      trackPresence()
+    }
   }
   function toggleCamera() {
-    if (cameraOn.value) disableCamera()
+    // Treat a tap while an enable is mid-flight as "turn off" — disableCamera
+    // bumps camGen so the in-flight enable aborts and stops its stream.
+    if (cameraOn.value || camBusy) disableCamera()
     else void enableCamera()
   }
   // Swap the sent camera track on every peer without renegotiating (same msid),
-  // and inside the stable cameraStream so the self-preview + announced id hold.
+  // and inside the stable cameraStream so the announced id holds. localCamera
+  // gets a fresh object so the self-preview <video> re-binds to the new track.
   function swapCameraTrack(newTrack: MediaStreamTrack) {
     if (!cameraStream) return
     for (const entry of peers.values()) {
@@ -750,18 +785,32 @@ export function useMeetingRoom() {
     if (old && old !== newTrack) cameraStream.removeTrack(old)
     if (!cameraStream.getVideoTracks().includes(newTrack)) cameraStream.addTrack(newTrack)
     if ('contentHint' in newTrack) (newTrack as any).contentHint = 'motion'
+    localCamera.value = new MediaStream([newTrack])
   }
   // Toggle background blur live. Builds/destroys the segmentation pipeline and
   // swaps the sent track — the raw track keeps feeding the pipeline as its
   // source, so it's never stopped while blur is on.
   async function setBackground(mode: BgMode) {
     bgMode.value = mode
-    try { window.localStorage.setItem('buzzybee.comms.bg', mode) } catch { /* ignore */ }
+    persistBg(mode)
     if (!cameraOn.value || !rawCamStream || !cameraStream) return // applies next enable
     if (mode === 'blur' && !vbg) {
-      vbg = await createVideoBackground(rawCamStream, 'blur')
-      if (!vbg) { bgMode.value = 'none'; return }
-      swapCameraTrack(vbg.track)
+      if (bgBusy) return
+      bgBusy = true
+      const gen = camGen
+      try {
+        const pipe = await createVideoBackground(rawCamStream, 'blur')
+        // Cancelled, camera turned off, or toggled back to none meanwhile.
+        if (gen !== camGen || !cameraOn.value || bgMode.value !== 'blur' || !rawCamStream) {
+          pipe?.destroy()
+          return
+        }
+        if (!pipe) { bgMode.value = 'none'; persistBg('none'); return }
+        vbg = pipe
+        swapCameraTrack(vbg.track)
+      } finally {
+        bgBusy = false
+      }
     } else if (mode === 'none' && vbg) {
       const raw = rawCamStream.getVideoTracks()[0]
       if (raw) swapCameraTrack(raw)
@@ -775,32 +824,37 @@ export function useMeetingRoom() {
   // source (the sent processed track is unchanged). Without blur, swap the raw
   // track on every sender via replaceTrack (same msid — no renegotiation).
   async function flipCamera() {
-    if (!cameraOn.value || !rawCamStream) return
+    if (!cameraOn.value || !rawCamStream || flipBusy) return
+    flipBusy = true
+    const gen = camGen
     const next = cameraFacing === 'user' ? 'environment' : 'user'
-    let stream: MediaStream
+    let stream: MediaStream | null = null
     try {
-      const video = camConstraints()
-      video.facingMode = { ideal: next }
-      stream = await navigator.mediaDevices.getUserMedia({ video, audio: false })
-    } catch {
-      return
+      try {
+        const video = camConstraints()
+        video.facingMode = { ideal: next }
+        stream = await navigator.mediaDevices.getUserMedia({ video, audio: false })
+      } catch {
+        return
+      }
+      // Cancelled (left / camera off) during the prompt → finally stops stream.
+      if (gen !== camGen || !cameraOn.value || !rawCamStream || !stream) return
+      const newTrack = stream.getVideoTracks()[0]
+      if (!newTrack) return
+      if ('contentHint' in newTrack) (newTrack as any).contentHint = 'motion'
+      cameraFacing = next
+      selfMirrored.value = next === 'user'
+      const oldRaw = rawCamStream
+      if (vbg) vbg.setSource(stream)
+      else swapCameraTrack(newTrack)
+      rawCamStream = stream
+      stream = null // committed — don't stop it in finally
+      oldRaw.getTracks().forEach((t) => t.stop())
+      newTrack.addEventListener('ended', () => disableCamera())
+    } finally {
+      stream?.getTracks().forEach((t) => t.stop())
+      flipBusy = false
     }
-    const newTrack = stream.getVideoTracks()[0]
-    if (!newTrack) {
-      stream.getTracks().forEach((t) => t.stop())
-      return
-    }
-    if ('contentHint' in newTrack) (newTrack as any).contentHint = 'motion'
-    cameraFacing = next
-    const oldRaw = rawCamStream
-    if (vbg) {
-      vbg.setSource(stream)
-    } else {
-      swapCameraTrack(newTrack)
-    }
-    rawCamStream = stream
-    oldRaw.getTracks().forEach((t) => t.stop())
-    newTrack.addEventListener('ended', () => disableCamera())
   }
 
   // ── Controls ────────────────────────────────────────────────────────────────
@@ -858,6 +912,7 @@ export function useMeetingRoom() {
   }
 
   function teardownMedia() {
+    camGen++ // abort any in-flight enable/flip/blur-build
     stopScreenShare()
     vbg?.destroy()
     vbg = null
@@ -920,6 +975,7 @@ export function useMeetingRoom() {
     cameraOn,
     localCamera,
     remoteCameras,
+    selfMirrored,
     bgMode,
     speaking,
     chat,

@@ -11,7 +11,12 @@ const props = defineProps<{ mic: PermState; cam: PermState }>()
 const emit = defineEmits<{ recheck: [] }>()
 
 const blocked = computed(() => props.mic === 'denied' || props.cam === 'denied')
-const ready = computed(() => props.mic === 'granted' && props.cam === 'granted')
+// Ready = nothing blocked and at least one explicitly granted. Tolerates
+// 'unknown' (Safari can't always query 'camera'/'microphone') so a granted
+// session isn't stuck showing the "we'll ask" banner forever.
+const ready = computed(
+  () => props.mic !== 'denied' && props.cam !== 'denied' && (props.mic === 'granted' || props.cam === 'granted'),
+)
 const blockedLabel = computed(() => {
   const b: string[] = []
   if (props.cam === 'denied') b.push('Camera')

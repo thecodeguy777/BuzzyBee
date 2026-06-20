@@ -144,33 +144,30 @@ onBeforeUnmount(stopMicPreview)
 // stream is released on join; the room re-acquires (no second prompt). Whether
 // it's on when they click Join carries into the call via { startCamera }.
 const camPreviewOn = ref(false)
-const camPreviewEl = ref<HTMLVideoElement | null>(null)
-let camPreviewStream: MediaStream | null = null
+// Reactive so the green-room preview can render through <MeetingVideo>, which
+// carries the iOS autoplay-retry + tap-to-play recovery.
+const camPreviewStream = ref<MediaStream | null>(null)
 async function toggleCamPreview() {
   if (camPreviewOn.value) {
     stopCamPreview()
     return
   }
+  let stream: MediaStream
   try {
-    camPreviewStream = await navigator.mediaDevices.getUserMedia({
+    stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: 'user' } },
       audio: false,
     })
   } catch {
     return
   }
+  camPreviewStream.value = stream
   camPreviewOn.value = true
-  await nextTick()
-  if (camPreviewEl.value) {
-    camPreviewEl.value.srcObject = camPreviewStream
-    void camPreviewEl.value.play().catch(() => {})
-  }
 }
 function stopCamPreview() {
-  camPreviewStream?.getTracks().forEach((t) => t.stop())
-  camPreviewStream = null
+  camPreviewStream.value?.getTracks().forEach((t) => t.stop())
+  camPreviewStream.value = null
   camPreviewOn.value = false
-  if (camPreviewEl.value) camPreviewEl.value.srcObject = null
 }
 onBeforeUnmount(stopCamPreview)
 
@@ -311,15 +308,13 @@ function camStream(p: Participant): MediaStream | null {
 
         <!-- self-view preview: check framing before joining -->
         <div class="relative rounded-xl overflow-hidden mb-4 aspect-video" style="background: var(--tile); border: 1px solid var(--mtg-border)">
-          <video
-            v-show="camPreviewOn"
-            ref="camPreviewEl"
-            autoplay
-            playsinline
-            muted
-            class="w-full h-full object-cover scale-x-[-1]"
+          <MeetingVideo
+            v-if="camPreviewOn && camPreviewStream"
+            :stream="camPreviewStream"
+            :mirror="true"
+            class="absolute inset-0"
           />
-          <div v-if="!camPreviewOn" class="absolute inset-0 grid place-items-center text-center">
+          <div v-else class="absolute inset-0 grid place-items-center text-center">
             <div>
               <HexAvatar :name="guestName || 'You'" :size="52" />
               <div class="text-[11.5px] font-semibold mt-2" style="color: var(--mtg-fg-3)">Camera is off</div>
@@ -502,7 +497,7 @@ function camStream(p: Participant): MediaStream | null {
           <div class="flex gap-2.5 h-24 flex-none overflow-x-auto">
             <div v-for="p in room.admittedPeople.value" :key="p.userId" class="w-[150px] flex-none">
               <div class="mtg-tile h-full" :class="room.speaking.value.has(p.userId) ? 'speaking' : ''">
-                <MeetingVideo v-if="camStream(p)" :stream="camStream(p)" :mirror="isYou(p)" class="absolute inset-0" />
+                <MeetingVideo v-if="camStream(p)" :stream="camStream(p)" :mirror="isYou(p) && room.selfMirrored.value" class="absolute inset-0" />
                 <HexAvatar v-else :name="p.name" :color-key="p.userId" :size="44" />
                 <span class="mtg-ring" />
                 <span class="mtg-chip left-2 bottom-2 !text-[11px]">
@@ -528,7 +523,7 @@ function camStream(p: Participant): MediaStream | null {
         >
           <div v-for="p in room.admittedPeople.value" :key="p.userId" class="min-h-0 min-w-0">
             <div class="mtg-tile w-full h-full" :class="room.speaking.value.has(p.userId) ? 'speaking' : ''">
-              <MeetingVideo v-if="camStream(p)" :stream="camStream(p)" :mirror="isYou(p)" class="absolute inset-0" />
+              <MeetingVideo v-if="camStream(p)" :stream="camStream(p)" :mirror="isYou(p) && room.selfMirrored.value" class="absolute inset-0" />
               <HexAvatar v-else :name="p.name" :color-key="p.userId" :size="72" />
               <span class="mtg-ring" />
               <span class="mtg-chip left-2.5 bottom-2.5">
