@@ -161,7 +161,10 @@ async function toggleCamPreview() {
   }
   camPreviewOn.value = true
   await nextTick()
-  if (camPreviewEl.value) camPreviewEl.value.srcObject = camPreviewStream
+  if (camPreviewEl.value) {
+    camPreviewEl.value.srcObject = camPreviewStream
+    void camPreviewEl.value.play().catch(() => {})
+  }
 }
 function stopCamPreview() {
   camPreviewStream?.getTracks().forEach((t) => t.stop())
@@ -237,7 +240,11 @@ const stageStream = computed(
 )
 watch(stageStream, () => {
   nextTick(() => {
-    if (screenVideo.value) screenVideo.value.srcObject = stageStream.value
+    if (screenVideo.value) {
+      screenVideo.value.srcObject = stageStream.value
+      // iOS Safari won't autoplay a late-bound srcObject — nudge it.
+      void screenVideo.value.play().catch(() => {})
+    }
   })
 })
 function fullscreenScreen() {

@@ -203,6 +203,7 @@ export function useMeetingRoom() {
     ch.on('broadcast', { event: 'rtc' }, (m: { payload?: any }) => void handleSignal(m.payload))
     ch.on('broadcast', { event: 'ctrl' }, (m: { payload?: any }) => onCtrl(m.payload))
     ch.on('broadcast', { event: 'media' }, (m: { payload?: any }) => onMedia(m.payload))
+    ch.on('broadcast', { event: 'media-req' }, (m: { payload?: any }) => onMediaReq(m.payload))
     ch.on('broadcast', { event: 'chat' }, (m: { payload?: any }) => {
       const p = m.payload as MeetingChatMsg | undefined
       if (p?.text) chat.value = [...chat.value, p]
@@ -393,6 +394,7 @@ export function useMeetingRoom() {
       const vt = screenStream.getVideoTracks()[0]
       if (vt) {
         entry.screenSender = pc.addTrack(vt, screenStream)
+        preferH264(pc, entry.screenSender)
         void tuneScreenSender(entry.screenSender)
       }
     }
@@ -400,6 +402,7 @@ export function useMeetingRoom() {
       const ct = cameraStream.getVideoTracks()[0]
       if (ct) {
         entry.camSender = pc.addTrack(ct, cameraStream)
+        preferH264(pc, entry.camSender)
         void tuneCamSender(entry.camSender)
       }
     }
@@ -423,6 +426,8 @@ export function useMeetingRoom() {
           pendingVideo.set(stream.id, { userId, stream })
           e.track.addEventListener('ended', () => dropVideoStream(userId, stream.id))
           classifyVideo(userId)
+          // Still parked → announcement missed/raced; ask the sender to resend.
+          if (pendingVideo.has(stream.id)) requestMedia(userId)
         }
       } else {
         let el = entry.audioEl
@@ -511,6 +516,24 @@ export function useMeetingRoom() {
       await sender.setParameters(params)
     } catch { /* unsupported */ }
   }
+
+  // iOS Safari decodes H.264 in hardware but VP8 only in software — under mesh
+  // load that fails silently → black remote video while (Opus) audio is fine.
+  // Chrome defaults to VP8, so force H.264 first on every video transceiver we
+  // send, before negotiation, so Chrome↔iOS legs don't pick VP8.
+  function preferH264(pc: RTCPeerConnection, sender?: RTCRtpSender) {
+    try {
+      const caps = (RTCRtpReceiver as any).getCapabilities?.('video') as RTCRtpCapabilities | undefined
+      if (!caps?.codecs?.length) return
+      const h264 = caps.codecs.filter((c) => /h264/i.test(c.mimeType))
+      if (!h264.length) return
+      const ordered = [...h264, ...caps.codecs.filter((c) => !/h264/i.test(c.mimeType))]
+      const tr = pc.getTransceivers().find((t) => t.sender === sender)
+      if (tr && 'setCodecPreferences' in tr) {
+        try { (tr as any).setCodecPreferences(ordered) } catch { /* invalid order */ }
+      }
+    } catch { /* getCapabilities unsupported */ }
+  }
   function removeRemoteScreen(userId: string) {
     if (!remoteScreens.value[userId]) return
     const next = { ...remoteScreens.value }
@@ -534,6 +557,7 @@ export function useMeetingRoom() {
     localScreen.value = screenStream
     for (const entry of peers.values()) {
       entry.screenSender = entry.pc.addTrack(track, screenStream)
+      preferH264(entry.pc, entry.screenSender)
       void tuneScreenSender(entry.screenSender)
     }
     track.addEventListener('ended', () => stopScreenShare())
@@ -581,6 +605,16 @@ export function useMeetingRoom() {
     if (!p || p.from === myId.value) return
     mediaState.set(p.from, { cam: p.cam ?? null, screen: p.screen ?? null })
     classifyVideo(p.from)
+  }
+  // Receiver asks a peer to (re)announce its cam/screen ids when it's holding
+  // video it can't classify yet (the 'media' broadcast was missed or raced the
+  // track). Makes classification self-healing instead of fire-and-forget.
+  function requestMedia(userId: string) {
+    broadcast(channel, 'media-req', { from: myId.value, to: userId })
+  }
+  function onMediaReq(p: any) {
+    if (!p || p.to !== myId.value) return
+    announceMedia()
   }
   // Match this user's parked video streams against their announced ids, and
   // drop any role they've turned off.
@@ -651,6 +685,7 @@ export function useMeetingRoom() {
     localCamera.value = stream
     for (const entry of peers.values()) {
       entry.camSender = entry.pc.addTrack(track, stream)
+      preferH264(entry.pc, entry.camSender)
       void tuneCamSender(entry.camSender)
     }
     // Device unplugged / OS revoked the camera → reflect it in the UI.
