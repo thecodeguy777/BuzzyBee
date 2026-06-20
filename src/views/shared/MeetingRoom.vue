@@ -77,9 +77,11 @@ onMounted(async () => {
 async function joinAsGuest() {
   if (!guestName.value.trim()) return
   window.localStorage.setItem(GUEST_NAME_KEY, guestName.value.trim())
+  const startCamera = camPreviewOn.value
   stopMicPreview()
+  stopCamPreview()
   needsName.value = false
-  await room.join(props.token, guestName.value)
+  await room.join(props.token, guestName.value, { startCamera })
 }
 
 // ── Green-room mic check ──────────────────────────────────────────────────────
@@ -136,6 +138,39 @@ function stopMicPreview() {
   micLevel.value = 0
 }
 onBeforeUnmount(stopMicPreview)
+
+// ── Green-room camera preview ─────────────────────────────────────────────────
+// Self-view before joining, so guests can check framing/lighting. The preview
+// stream is released on join; the room re-acquires (no second prompt). Whether
+// it's on when they click Join carries into the call via { startCamera }.
+const camPreviewOn = ref(false)
+const camPreviewEl = ref<HTMLVideoElement | null>(null)
+let camPreviewStream: MediaStream | null = null
+async function toggleCamPreview() {
+  if (camPreviewOn.value) {
+    stopCamPreview()
+    return
+  }
+  try {
+    camPreviewStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'user' } },
+      audio: false,
+    })
+  } catch {
+    return
+  }
+  camPreviewOn.value = true
+  await nextTick()
+  if (camPreviewEl.value) camPreviewEl.value.srcObject = camPreviewStream
+}
+function stopCamPreview() {
+  camPreviewStream?.getTracks().forEach((t) => t.stop())
+  camPreviewStream = null
+  camPreviewOn.value = false
+  if (camPreviewEl.value) camPreviewEl.value.srcObject = null
+}
+onBeforeUnmount(stopCamPreview)
+
 function leaveRoom() {
   void room.leave()
   left.value = true
@@ -265,7 +300,34 @@ function camStream(p: Participant): MediaStream | null {
           <span class="font-display text-sm font-semibold tracking-wide" style="color: var(--mtg-fg-2)">HiveMind Meet</span>
         </div>
         <p class="text-[0.7rem] font-bold uppercase tracking-widest mb-1.5" style="color: #d3a3d8">You're invited to</p>
-        <h1 class="font-display text-2xl font-bold mb-6">{{ roomTitle }}</h1>
+        <h1 class="font-display text-2xl font-bold mb-4">{{ roomTitle }}</h1>
+
+        <!-- self-view preview: check framing before joining -->
+        <div class="relative rounded-xl overflow-hidden mb-4 aspect-video" style="background: var(--tile); border: 1px solid var(--mtg-border)">
+          <video
+            v-show="camPreviewOn"
+            ref="camPreviewEl"
+            autoplay
+            playsinline
+            muted
+            class="w-full h-full object-cover scale-x-[-1]"
+          />
+          <div v-if="!camPreviewOn" class="absolute inset-0 grid place-items-center text-center">
+            <div>
+              <HexAvatar :name="guestName || 'You'" :size="52" />
+              <div class="text-[11.5px] font-semibold mt-2" style="color: var(--mtg-fg-3)">Camera is off</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            class="mtg-ctrlbtn !w-11 !h-11 absolute left-1/2 -translate-x-1/2 bottom-2.5"
+            :class="camPreviewOn ? 'active' : ''"
+            :title="camPreviewOn ? 'Turn camera off' : 'Turn camera on'"
+            @click="toggleCamPreview"
+          >
+            <component :is="camPreviewOn ? Video : VideoOff" class="w-[18px] h-[18px]" :stroke-width="1.75" />
+          </button>
+        </div>
 
         <label class="block mb-4">
           <span class="block text-xs font-semibold mb-1.5" style="color: var(--mtg-fg-2)">Your name</span>

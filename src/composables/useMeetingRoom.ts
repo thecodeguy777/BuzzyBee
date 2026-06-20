@@ -101,6 +101,9 @@ export function useMeetingRoom() {
   let screenStream: MediaStream | null = null
   let cameraStream: MediaStream | null = null
   let cameraFacing: 'user' | 'environment' = 'user'
+  // Honoured once the call goes live — lets the green-room "join with camera on"
+  // choice carry through (incl. guests who wait in the lobby first).
+  let startCameraOnLive = false
   let audioCtx: AudioContext | null = null
   let speakingRaf = 0
   const analysers = new Map<string, AnalyserNode>()
@@ -155,10 +158,11 @@ export function useMeetingRoom() {
     return meta
   }
 
-  async function join(tk: string, displayName?: string) {
+  async function join(tk: string, displayName?: string, opts?: { startCamera?: boolean }) {
     token.value = tk
     status.value = 'joining'
     error.value = null
+    startCameraOnLive = !!opts?.startCamera
     const meta = await resolve(tk)
     if (!meta) {
       status.value = 'error'
@@ -294,6 +298,10 @@ export function useMeetingRoom() {
     }
     trackPresence()
     reconcilePeers()
+    if (startCameraOnLive) {
+      startCameraOnLive = false
+      await enableCamera()
+    }
   }
 
   async function endMeeting() {
