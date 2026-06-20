@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import {
-  Mic, MicOff, Video, VideoOff, MonitorUp, MonitorOff, PhoneOff, Wand2, Copy, Check, Crown, Users, Loader2,
+  Mic, MicOff, Video, VideoOff, SwitchCamera, MonitorUp, MonitorOff, PhoneOff, Wand2, Copy, Check, Crown, Users, Loader2,
   Maximize2, X, Hand, Smile, MessageSquare, UserPlus, Send, Clock,
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
@@ -26,6 +26,20 @@ const room = useMeetingRoom()
 // people to unblock them before they try to join.
 const perms = useMediaPermissions()
 const permsBlocked = computed(() => perms.mic.value === 'denied' || perms.cam.value === 'denied')
+
+// ── Responsive / device ───────────────────────────────────────────────────────
+const vw = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
+function onResize() { vw.value = window.innerWidth }
+onMounted(() => window.addEventListener('resize', onResize))
+onBeforeUnmount(() => window.removeEventListener('resize', onResize))
+const isPhone = computed(() => vw.value < 640)
+// Screen-share isn't available on iOS Safari (no getDisplayMedia) — hide the
+// button rather than offer something that silently fails. Flip-camera only
+// makes sense on touch devices with a front/back camera.
+const canShareScreen =
+  typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getDisplayMedia
+const isTouch =
+  typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches
 
 const GUEST_NAME_KEY = 'buzzybee.meet.guest-name'
 const guestName = ref(window.localStorage.getItem(GUEST_NAME_KEY) ?? '')
@@ -159,6 +173,9 @@ const mmss = computed(() => {
 const gridCols = computed(() => {
   const n = room.admittedPeople.value.length
   if (n <= 1) return 1
+  // Phones (portrait): stack a pair vertically, otherwise cap at 2 columns so
+  // tiles stay tall enough to read a face.
+  if (isPhone.value) return n <= 2 ? 1 : 2
   if (n <= 4) return 2
   if (n <= 9) return 3
   return 4
@@ -241,8 +258,8 @@ function camStream(p: Participant): MediaStream | null {
        surface — portal included — lives on the dark stage. -->
   <div class="mtg h-screen h-[100dvh] w-full overflow-hidden flex flex-col">
     <!-- ── Guest portal: name + mic check ── -->
-    <div v-if="needsName" class="flex-1 flex items-center justify-center p-4">
-      <div class="mtg-card w-full max-w-md">
+    <div v-if="needsName" class="flex-1 overflow-y-auto flex p-4">
+      <div class="mtg-card w-full max-w-md m-auto">
         <div class="flex items-center gap-2 mb-6">
           <img :src="hivemindMark" alt="" class="w-5 h-auto" />
           <span class="font-display text-sm font-semibold tracking-wide" style="color: var(--mtg-fg-2)">HiveMind Meet</span>
@@ -371,7 +388,7 @@ function camStream(p: Participant): MediaStream | null {
         </div>
         <button class="mtg-pillbtn" @click="copyLink">
           <component :is="copied ? Check : Copy" class="w-4 h-4" :stroke-width="1.75" />
-          {{ copied ? 'Copied' : 'Copy link' }}
+          <span class="hidden sm:inline">{{ copied ? 'Copied' : 'Copy link' }}</span>
         </button>
       </div>
 
@@ -544,7 +561,7 @@ function camStream(p: Participant): MediaStream | null {
       </div>
 
       <!-- control bar (wraps on narrow screens instead of overflowing) -->
-      <div class="flex-none flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 px-[18px] pt-3.5 pb-[18px] relative">
+      <div class="mtg-controls flex-none flex flex-wrap items-center justify-center gap-2 sm:gap-3 px-2.5 sm:px-[18px] pt-3.5 relative">
         <div class="absolute left-[18px] bottom-5 hidden md:flex items-center gap-2 text-[12.5px] font-semibold" style="color: var(--mtg-fg-2)">
           <Clock class="w-[15px] h-[15px]" :stroke-width="1.75" />
           <span class="tabular-nums">{{ mmss }}</span>
@@ -558,7 +575,11 @@ function camStream(p: Participant): MediaStream | null {
           <component :is="room.cameraOn.value ? Video : VideoOff" class="w-[22px] h-[22px]" :stroke-width="1.75" />
         </button>
 
-        <button class="mtg-ctrlbtn" :class="room.sharingScreen.value ? 'active' : ''" :title="room.sharingScreen.value ? 'Stop presenting' : 'Present now'" @click="room.toggleScreenShare()">
+        <button v-if="isTouch && room.cameraOn.value" class="mtg-ctrlbtn" title="Flip camera" @click="room.flipCamera()">
+          <SwitchCamera class="w-[22px] h-[22px]" :stroke-width="1.75" />
+        </button>
+
+        <button v-if="canShareScreen" class="mtg-ctrlbtn" :class="room.sharingScreen.value ? 'active' : ''" :title="room.sharingScreen.value ? 'Stop presenting' : 'Present now'" @click="room.toggleScreenShare()">
           <component :is="room.sharingScreen.value ? MonitorOff : MonitorUp" class="w-[23px] h-[23px]" :stroke-width="1.75" />
         </button>
 
@@ -631,13 +652,18 @@ function camStream(p: Participant): MediaStream | null {
   color: var(--mtg-fg);
 }
 .mtg-header {
-  height: 58px;
+  min-height: 58px;
   flex: none;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 18px;
+  /* Reserve the notch / status-bar inset on phones so the title clears it. */
+  padding: env(safe-area-inset-top) 18px 0;
   border-bottom: 1px solid var(--mtg-border);
+}
+.mtg-controls {
+  /* Keep the bar above the iOS home indicator. */
+  padding-bottom: max(18px, env(safe-area-inset-bottom));
 }
 .mtg-pillbtn {
   display: flex;
@@ -669,6 +695,10 @@ function camStream(p: Participant): MediaStream | null {
 }
 .mtg-ctrlbtn:hover { background: rgba(255, 255, 255, 0.18); }
 .mtg-ctrlbtn:active { transform: scale(0.94); }
+/* Tighter controls on phones so the bar stays one or two rows, not three. */
+@media (max-width: 640px) {
+  .mtg-ctrlbtn { width: 46px; height: 46px; }
+}
 .mtg-ctrlbtn.danger { background: #e23b54; }
 .mtg-ctrlbtn.danger:hover { background: #cf2f47; }
 .mtg-ctrlbtn.muted { background: #e23b54; }
@@ -737,6 +767,7 @@ function camStream(p: Participant): MediaStream | null {
     width: min(340px, 92vw);
     z-index: 30;
     box-shadow: -12px 0 32px rgba(0, 0, 0, 0.4);
+    padding-top: env(safe-area-inset-top);
   }
 }
 @keyframes mtgFlyUp {

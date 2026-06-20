@@ -100,6 +100,7 @@ export function useMeetingRoom() {
   let nsPipeline: NoisePipeline | null = null
   let screenStream: MediaStream | null = null
   let cameraStream: MediaStream | null = null
+  let cameraFacing: 'user' | 'environment' = 'user'
   let audioCtx: AudioContext | null = null
   let speakingRaf = 0
   const analysers = new Map<string, AnalyserNode>()
@@ -601,9 +602,13 @@ export function useMeetingRoom() {
   // time — good enough for the 2–8 range this room targets.
   function camConstraints(): MediaTrackConstraints {
     const n = admittedPeople.value.length
-    if (n >= 6) return { width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 20, max: 24 } }
-    if (n >= 4) return { width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 24, max: 30 } }
-    return { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30, max: 30 } }
+    const base: MediaTrackConstraints =
+      n >= 6 ? { width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 20, max: 24 } }
+      : n >= 4 ? { width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 24, max: 30 } }
+      : { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30, max: 30 } }
+    // Default to the selfie cam on phones/tablets.
+    base.facingMode = { ideal: cameraFacing }
+    return base
   }
   async function tuneCamSender(sender: RTCRtpSender) {
     try {
@@ -663,6 +668,40 @@ export function useMeetingRoom() {
   function toggleCamera() {
     if (cameraOn.value) disableCamera()
     else void enableCamera()
+  }
+  // Flip front/back camera (mobile). replaceTrack swaps the track on every
+  // sender WITHOUT renegotiating and keeps the same msid, so we reuse the same
+  // cameraStream object (its id is what we announced) — just swap its track.
+  async function flipCamera() {
+    if (!cameraOn.value || !cameraStream) return
+    const next = cameraFacing === 'user' ? 'environment' : 'user'
+    let stream: MediaStream
+    try {
+      const video = camConstraints()
+      video.facingMode = { ideal: next }
+      stream = await navigator.mediaDevices.getUserMedia({ video, audio: false })
+    } catch {
+      return
+    }
+    const newTrack = stream.getVideoTracks()[0]
+    if (!newTrack) {
+      stream.getTracks().forEach((t) => t.stop())
+      return
+    }
+    if ('contentHint' in newTrack) (newTrack as any).contentHint = 'motion'
+    cameraFacing = next
+    for (const entry of peers.values()) {
+      if (entry.camSender) {
+        try { await entry.camSender.replaceTrack(newTrack) } catch { /* ignore */ }
+      }
+    }
+    const old = cameraStream.getVideoTracks()[0]
+    if (old) {
+      cameraStream.removeTrack(old)
+      old.stop()
+    }
+    cameraStream.addTrack(newTrack)
+    newTrack.addEventListener('ended', () => disableCamera())
   }
 
   // ── Controls ────────────────────────────────────────────────────────────────
@@ -794,6 +833,7 @@ export function useMeetingRoom() {
     toggleHand,
     toggleScreenShare,
     toggleCamera,
+    flipCamera,
     toggleNoise,
     sendChat,
     sendReaction,
