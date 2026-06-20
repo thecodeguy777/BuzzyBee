@@ -1,23 +1,31 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import {
-  Mic, MicOff, MonitorUp, MonitorOff, PhoneOff, Wand2, Copy, Check, Crown, Users, Loader2,
+  Mic, MicOff, Video, VideoOff, MonitorUp, MonitorOff, PhoneOff, Wand2, Copy, Check, Crown, Users, Loader2,
   Maximize2, X, Hand, Smile, MessageSquare, UserPlus, Send, Clock,
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
+import MeetingVideo from '@/components/shared/MeetingVideo.vue'
 import hivemindMark from '@/assets/landing/hivemind-mark-dark.svg'
 import { useAuthStore } from '@/stores/auth'
 import { useMeetingRoom, type Participant } from '@/composables/useMeetingRoom'
+import { useMediaPermissions } from '@/composables/useMediaPermissions'
+import MediaPermissionNotice from '@/components/shared/MediaPermissionNotice.vue'
 
 // Meeting room, rebuilt to the Claude Design handoff (Meeting.html): dark
 // stage, adaptive tile grid, presenting layout with filmstrip, People/Chat
-// side panel, round control bar, flying reactions. The prototype's REC pill
-// and camera toggle are deliberately absent — no recording, no video calls;
-// we don't render chrome for features that don't exist.
+// side panel, round control bar, flying reactions. Camera is opt-in (off by
+// default) — tiles fall back to avatars until someone turns it on. The
+// prototype's REC pill stays absent: recording doesn't exist yet.
 
 const props = defineProps<{ token: string }>()
 const auth = useAuthStore()
 const room = useMeetingRoom()
+
+// Check mic + camera permissions the moment the link loads, so we can guide
+// people to unblock them before they try to join.
+const perms = useMediaPermissions()
+const permsBlocked = computed(() => perms.mic.value === 'denied' || perms.cam.value === 'denied')
 
 const GUEST_NAME_KEY = 'buzzybee.meet.guest-name'
 const guestName = ref(window.localStorage.getItem(GUEST_NAME_KEY) ?? '')
@@ -219,6 +227,12 @@ function chatTime(at: number) {
   return new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
 }
 const isYou = (p: Participant) => p.userId === room.myId.value
+
+// A participant's live camera stream, or null (→ tile falls back to avatar).
+function camStream(p: Participant): MediaStream | null {
+  if (p.userId === room.myId.value) return room.cameraOn.value ? room.localCamera.value : null
+  return room.remoteCameras.value[p.userId] ?? null
+}
 </script>
 
 <template>
@@ -273,6 +287,14 @@ const isYou = (p: Participant) => p.userId === room.myId.value
             Mic access was blocked — allow it in your browser, or join muted and fix it after.
           </p>
         </div>
+
+        <!-- permission readiness, checked on load -->
+        <MediaPermissionNotice
+          :mic="perms.mic.value"
+          :cam="perms.cam.value"
+          class="mb-5"
+          @recheck="perms.refresh"
+        />
 
         <button class="mtg-join" :disabled="!guestName.trim()" @click="joinAsGuest">
           Join meeting
@@ -353,6 +375,11 @@ const isYou = (p: Participant) => p.userId === room.myId.value
         </button>
       </div>
 
+      <!-- permission banner — only when blocked (an actionable reset is needed) -->
+      <div v-if="permsBlocked" class="flex-none px-4 pt-3">
+        <MediaPermissionNotice :mic="perms.mic.value" :cam="perms.cam.value" @recheck="perms.refresh" />
+      </div>
+
       <!-- body -->
       <div class="flex-1 flex min-h-0 relative">
         <!-- PRESENTING layout: big share + filmstrip -->
@@ -389,8 +416,9 @@ const isYou = (p: Participant) => p.userId === room.myId.value
           <div class="flex gap-2.5 h-24 flex-none overflow-x-auto">
             <div v-for="p in room.admittedPeople.value" :key="p.userId" class="w-[150px] flex-none">
               <div class="mtg-tile h-full" :class="room.speaking.value.has(p.userId) ? 'speaking' : ''">
+                <MeetingVideo v-if="camStream(p)" :stream="camStream(p)" :mirror="isYou(p)" class="absolute inset-0" />
+                <HexAvatar v-else :name="p.name" :color-key="p.userId" :size="44" />
                 <span class="mtg-ring" />
-                <HexAvatar :name="p.name" :color-key="p.userId" :size="44" />
                 <span class="mtg-chip left-2 bottom-2 !text-[11px]">
                   <MicOff v-if="p.muted" class="w-3 h-3" style="color: #ff8a9b" :stroke-width="2" />
                   {{ p.name }}{{ isYou(p) ? ' (you)' : '' }}
@@ -414,8 +442,9 @@ const isYou = (p: Participant) => p.userId === room.myId.value
         >
           <div v-for="p in room.admittedPeople.value" :key="p.userId" class="min-h-0 min-w-0">
             <div class="mtg-tile w-full h-full" :class="room.speaking.value.has(p.userId) ? 'speaking' : ''">
+              <MeetingVideo v-if="camStream(p)" :stream="camStream(p)" :mirror="isYou(p)" class="absolute inset-0" />
+              <HexAvatar v-else :name="p.name" :color-key="p.userId" :size="72" />
               <span class="mtg-ring" />
-              <HexAvatar :name="p.name" :color-key="p.userId" :size="72" />
               <span class="mtg-chip left-2.5 bottom-2.5">
                 <MicOff v-if="p.muted" class="w-3.5 h-3.5" style="color: #ff8a9b" :stroke-width="2" />
                 {{ p.name }}{{ isYou(p) ? ' (you)' : '' }}
@@ -525,7 +554,11 @@ const isYou = (p: Participant) => p.userId === room.myId.value
           <component :is="room.muted.value ? MicOff : Mic" class="w-[22px] h-[22px]" :stroke-width="1.75" />
         </button>
 
-        <button class="mtg-ctrlbtn !w-[62px]" :class="room.sharingScreen.value ? 'active' : ''" :title="room.sharingScreen.value ? 'Stop presenting' : 'Present now'" @click="room.toggleScreenShare()">
+        <button class="mtg-ctrlbtn" :class="room.cameraOn.value ? 'active' : ''" :title="room.cameraOn.value ? 'Turn camera off' : 'Turn camera on'" @click="room.toggleCamera()">
+          <component :is="room.cameraOn.value ? Video : VideoOff" class="w-[22px] h-[22px]" :stroke-width="1.75" />
+        </button>
+
+        <button class="mtg-ctrlbtn" :class="room.sharingScreen.value ? 'active' : ''" :title="room.sharingScreen.value ? 'Stop presenting' : 'Present now'" @click="room.toggleScreenShare()">
           <component :is="room.sharingScreen.value ? MonitorOff : MonitorUp" class="w-[23px] h-[23px]" :stroke-width="1.75" />
         </button>
 
@@ -573,7 +606,7 @@ const isYou = (p: Participant) => p.userId === room.myId.value
         <button v-if="room.isHost.value" class="h-[52px] px-5 rounded-full text-sm font-bold text-white" style="background: #e23b54" @click="room.endMeeting()">
           End for all
         </button>
-        <button class="mtg-ctrlbtn danger !w-[62px]" title="Leave call" @click="leaveRoom">
+        <button class="mtg-ctrlbtn danger" title="Leave call" @click="leaveRoom">
           <PhoneOff class="w-[22px] h-[22px]" :stroke-width="1.75" />
         </button>
       </div>
@@ -625,6 +658,7 @@ const isYou = (p: Participant) => p.userId === room.myId.value
 .mtg-ctrlbtn {
   width: 52px;
   height: 52px;
+  flex: none;
   border-radius: 50%;
   display: grid;
   place-items: center;

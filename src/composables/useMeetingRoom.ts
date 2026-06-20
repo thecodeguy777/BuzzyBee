@@ -30,6 +30,8 @@ export interface Participant {
   admitted: boolean
   muted: boolean
   sharing?: boolean
+  /** Camera on — mirrors `sharing`; lets presence reconcile remote cameras. */
+  cam?: boolean
   hand?: boolean
   since?: number
 }
@@ -73,6 +75,10 @@ export function useMeetingRoom() {
   /** My own share stream — so the presenter sees what everyone else sees. */
   const localScreen = ref<MediaStream | null>(null)
   const remoteScreens = ref<Record<string, MediaStream>>({})
+  /** Camera: off by default (opt-in). localCamera = my own preview. */
+  const cameraOn = ref(false)
+  const localCamera = ref<MediaStream | null>(null)
+  const remoteCameras = ref<Record<string, MediaStream>>({})
   const speaking = ref<Set<string>>(new Set())
   // In-call chat + reactions are ephemeral by design — they live exactly as
   // long as the call does, so plain broadcast (no DB) is the right transport.
@@ -93,6 +99,7 @@ export function useMeetingRoom() {
   let rawStream: MediaStream | null = null
   let nsPipeline: NoisePipeline | null = null
   let screenStream: MediaStream | null = null
+  let cameraStream: MediaStream | null = null
   let audioCtx: AudioContext | null = null
   let speakingRaf = 0
   const analysers = new Map<string, AnalyserNode>()
@@ -101,6 +108,7 @@ export function useMeetingRoom() {
     pc: RTCPeerConnection
     audioEl?: HTMLAudioElement
     screenSender?: RTCRtpSender
+    camSender?: RTCRtpSender
     /** ICE candidates that raced ahead of the remote description — flushed after it lands. */
     pendingIce: RTCIceCandidateInit[]
     /** True once presence has confirmed this user admitted (see reconcilePeers). */
@@ -111,6 +119,15 @@ export function useMeetingRoom() {
   }
   const peers = new Map<string, PeerEntry>()
   let channel: RealtimeChannel | null = null
+
+  // Camera-vs-screen disambiguation. A bare WebRTC video track is unlabelled —
+  // the receiver can't tell a face from a shared screen. So each sender
+  // broadcasts which MediaStream id is its camera vs its screen (stream ids
+  // survive the round-trip via the SDP msid), and the receiver classifies
+  // incoming video by id. `pendingVideo` parks tracks that arrive before their
+  // announcement (broadcast vs SDP have no ordering guarantee).
+  const mediaState = new Map<string, { cam: string | null; screen: string | null }>()
+  const pendingVideo = new Map<string, { userId: string; stream: MediaStream }>()
 
   const admittedPeople = computed(() => online.value.filter((p) => p.admitted))
   const waiting = computed(() => online.value.filter((p) => !p.admitted && p.userId !== myId.value))
@@ -180,6 +197,7 @@ export function useMeetingRoom() {
     ch.on('presence', { event: 'leave' }, onPresence)
     ch.on('broadcast', { event: 'rtc' }, (m: { payload?: any }) => void handleSignal(m.payload))
     ch.on('broadcast', { event: 'ctrl' }, (m: { payload?: any }) => onCtrl(m.payload))
+    ch.on('broadcast', { event: 'media' }, (m: { payload?: any }) => onMedia(m.payload))
     ch.on('broadcast', { event: 'chat' }, (m: { payload?: any }) => {
       const p = m.payload as MeetingChatMsg | undefined
       if (p?.text) chat.value = [...chat.value, p]
@@ -203,6 +221,7 @@ export function useMeetingRoom() {
       admitted: amAdmitted.value,
       muted: muted.value,
       sharing: sharingScreen.value,
+      cam: cameraOn.value,
       hand: handRaised.value,
       since: undefined,
     } satisfies Participant)
@@ -218,6 +237,8 @@ export function useMeetingRoom() {
     online.value = [...seen.values()]
     const sharers = new Set(online.value.filter((p) => p.sharing).map((p) => p.userId))
     for (const uid of Object.keys(remoteScreens.value)) if (!sharers.has(uid)) removeRemoteScreen(uid)
+    const cammers = new Set(online.value.filter((p) => p.cam).map((p) => p.userId))
+    for (const uid of Object.keys(remoteCameras.value)) if (!cammers.has(uid)) removeRemoteCamera(uid)
     if (amAdmitted.value) reconcilePeers()
   }
 
@@ -366,6 +387,13 @@ export function useMeetingRoom() {
         void tuneScreenSender(entry.screenSender)
       }
     }
+    if (cameraStream) {
+      const ct = cameraStream.getVideoTracks()[0]
+      if (ct) {
+        entry.camSender = pc.addTrack(ct, cameraStream)
+        void tuneCamSender(entry.camSender)
+      }
+    }
     pc.onicecandidate = (e) => {
       if (e.candidate) sendRtc(userId, 'ice', e.candidate.toJSON())
     }
@@ -381,8 +409,12 @@ export function useMeetingRoom() {
     }
     pc.ontrack = (e) => {
       if (e.track.kind === 'video') {
-        remoteScreens.value = { ...remoteScreens.value, [userId]: e.streams[0] }
-        e.track.addEventListener('ended', () => removeRemoteScreen(userId))
+        const stream = e.streams[0]
+        if (stream) {
+          pendingVideo.set(stream.id, { userId, stream })
+          e.track.addEventListener('ended', () => dropVideoStream(userId, stream.id))
+          classifyVideo(userId)
+        }
       } else {
         let el = entry.audioEl
         if (!el) {
@@ -405,9 +437,13 @@ export function useMeetingRoom() {
   function reconcilePeers() {
     if (!amAdmitted.value) return
     const wanted = new Set(admittedPeople.value.map((p) => p.userId).filter((u) => u !== myId.value))
+    let addedPeer = false
     for (const uid of wanted) {
+      if (!peers.has(uid)) addedPeer = true
       getPeer(uid).confirmed = true
     }
+    // A new peer needs to learn which of my video streams is cam vs screen.
+    if (addedPeer && (cameraOn.value || sharingScreen.value)) announceMedia()
     for (const uid of [...peers.keys()]) {
       if (wanted.has(uid)) continue
       // A joiner's offer can outrun their presence join — only reap peers
@@ -492,6 +528,7 @@ export function useMeetingRoom() {
       void tuneScreenSender(entry.screenSender)
     }
     track.addEventListener('ended', () => stopScreenShare())
+    announceMedia()
     trackPresence()
   }
   function stopScreenShare() {
@@ -506,11 +543,126 @@ export function useMeetingRoom() {
     screenStream = null
     localScreen.value = null
     sharingScreen.value = false
+    announceMedia()
     trackPresence()
   }
   function toggleScreenShare() {
     if (sharingScreen.value) stopScreenShare()
     else void startScreenShare()
+  }
+
+  // ── Camera ────────────────────────────────────────────────────────────────
+  function removeRemoteCamera(userId: string) {
+    if (!remoteCameras.value[userId]) return
+    const next = { ...remoteCameras.value }
+    delete next[userId]
+    remoteCameras.value = next
+  }
+
+  // Broadcast which of my stream ids is the camera vs the screen. Full state
+  // (not deltas) so a single latest message is enough even if one is missed.
+  function announceMedia() {
+    broadcast(channel, 'media', {
+      from: myId.value,
+      cam: cameraStream?.id ?? null,
+      screen: screenStream?.id ?? null,
+    })
+  }
+  function onMedia(p: any) {
+    if (!p || p.from === myId.value) return
+    mediaState.set(p.from, { cam: p.cam ?? null, screen: p.screen ?? null })
+    classifyVideo(p.from)
+  }
+  // Match this user's parked video streams against their announced ids, and
+  // drop any role they've turned off.
+  function classifyVideo(userId: string) {
+    const ms = mediaState.get(userId)
+    for (const [sid, rec] of [...pendingVideo]) {
+      if (rec.userId !== userId) continue
+      if (ms?.cam === sid) {
+        remoteCameras.value = { ...remoteCameras.value, [userId]: rec.stream }
+        pendingVideo.delete(sid)
+      } else if (ms?.screen === sid) {
+        remoteScreens.value = { ...remoteScreens.value, [userId]: rec.stream }
+        pendingVideo.delete(sid)
+      }
+    }
+    if (ms && ms.cam == null && remoteCameras.value[userId]) removeRemoteCamera(userId)
+    if (ms && ms.screen == null && remoteScreens.value[userId]) removeRemoteScreen(userId)
+  }
+  function dropVideoStream(userId: string, streamId: string) {
+    pendingVideo.delete(streamId)
+    if (remoteCameras.value[userId]?.id === streamId) removeRemoteCamera(userId)
+    if (remoteScreens.value[userId]?.id === streamId) removeRemoteScreen(userId)
+  }
+
+  // Shrink capture + send bitrate as the call grows so the mesh upload stays
+  // sane (each camera is sent once per other participant). Sized at enable
+  // time — good enough for the 2–8 range this room targets.
+  function camConstraints(): MediaTrackConstraints {
+    const n = admittedPeople.value.length
+    if (n >= 6) return { width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 20, max: 24 } }
+    if (n >= 4) return { width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 24, max: 30 } }
+    return { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30, max: 30 } }
+  }
+  async function tuneCamSender(sender: RTCRtpSender) {
+    try {
+      const params = sender.getParameters()
+      if (!params.encodings || params.encodings.length === 0) params.encodings = [{}]
+      const n = admittedPeople.value.length
+      params.encodings[0].maxBitrate = n >= 6 ? 250_000 : n >= 4 ? 400_000 : 600_000
+      await sender.setParameters(params)
+    } catch { /* unsupported */ }
+  }
+  async function enableCamera() {
+    if (!amAdmitted.value || cameraOn.value) return
+    let stream: MediaStream
+    try {
+      const deviceId =
+        typeof window !== 'undefined' ? window.localStorage.getItem('buzzybee.comms.cam-device') : null
+      const video = camConstraints()
+      if (deviceId) video.deviceId = { exact: deviceId }
+      stream = await navigator.mediaDevices.getUserMedia({ video, audio: false })
+    } catch {
+      error.value = 'Camera access was blocked — allow it in your browser to turn your camera on.'
+      return
+    }
+    const track = stream.getVideoTracks()[0]
+    if (!track) {
+      stream.getTracks().forEach((t) => t.stop())
+      return
+    }
+    cameraStream = stream
+    if ('contentHint' in track) (track as any).contentHint = 'motion'
+    cameraOn.value = true
+    localCamera.value = stream
+    for (const entry of peers.values()) {
+      entry.camSender = entry.pc.addTrack(track, stream)
+      void tuneCamSender(entry.camSender)
+    }
+    // Device unplugged / OS revoked the camera → reflect it in the UI.
+    track.addEventListener('ended', () => disableCamera())
+    announceMedia()
+    trackPresence()
+  }
+  function disableCamera() {
+    if (!cameraOn.value && !cameraStream) return
+    for (const entry of peers.values()) {
+      if (entry.camSender) {
+        try { entry.pc.removeTrack(entry.camSender) } catch { /* ignore */ }
+        entry.camSender = undefined
+      }
+    }
+    cameraStream?.getTracks().forEach((t) => t.stop())
+    cameraStream = null
+    localCamera.value = null
+    cameraOn.value = false
+    announceMedia()
+    trackPresence()
+  }
+  function toggleCamera() {
+    if (cameraOn.value) disableCamera()
+    else void enableCamera()
   }
 
   // ── Controls ────────────────────────────────────────────────────────────────
@@ -559,13 +711,24 @@ export function useMeetingRoom() {
       e.audioEl.srcObject = null
       e.audioEl.remove()
     }
+    removeRemoteCamera(userId)
+    removeRemoteScreen(userId)
+    mediaState.delete(userId)
+    for (const [sid, rec] of [...pendingVideo]) if (rec.userId === userId) pendingVideo.delete(sid)
     analysers.delete(userId)
     peers.delete(userId)
   }
 
   function teardownMedia() {
     stopScreenShare()
+    cameraStream?.getTracks().forEach((t) => t.stop())
+    cameraStream = null
+    localCamera.value = null
+    cameraOn.value = false
     remoteScreens.value = {}
+    remoteCameras.value = {}
+    mediaState.clear()
+    pendingVideo.clear()
     for (const uid of [...peers.keys()]) closePeer(uid)
     nsPipeline?.destroy()
     nsPipeline = null
@@ -612,6 +775,9 @@ export function useMeetingRoom() {
     sharingScreen,
     localScreen,
     remoteScreens,
+    cameraOn,
+    localCamera,
+    remoteCameras,
     speaking,
     chat,
     reactions,
@@ -627,6 +793,7 @@ export function useMeetingRoom() {
     toggleMute,
     toggleHand,
     toggleScreenShare,
+    toggleCamera,
     toggleNoise,
     sendChat,
     sendReaction,
