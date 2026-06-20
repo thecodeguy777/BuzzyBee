@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import {
-  Mic, MicOff, Video, VideoOff, SwitchCamera, MonitorUp, MonitorOff, PhoneOff, Wand2, Copy, Check, Crown, Users, Loader2,
+  Mic, MicOff, Video, VideoOff, SwitchCamera, Sparkles, MonitorUp, MonitorOff, PhoneOff, Wand2, Copy, Check, Crown, Users, Loader2,
   Maximize2, X, Hand, Smile, MessageSquare, UserPlus, Send, Clock,
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
@@ -646,6 +646,16 @@ function camStream(p: Participant): MediaStream | null {
 
         <button v-if="isTouch && room.cameraOn.value" class="mtg-ctrlbtn" title="Flip camera" @click="room.flipCamera()">
           <SwitchCamera class="w-[22px] h-[22px]" :stroke-width="1.75" />
+        </button>
+
+        <button
+          v-if="room.cameraOn.value"
+          class="mtg-ctrlbtn"
+          :class="room.bgMode.value === 'blur' ? 'active' : ''"
+          :title="room.bgMode.value === 'blur' ? 'Turn off background blur' : 'Blur my background'"
+          @click="room.setBackground(room.bgMode.value === 'blur' ? 'none' : 'blur')"
+        >
+          <Sparkles class="w-[22px] h-[22px]" :stroke-width="1.75" />
         </button>
 
         <button v-if="canShareScreen" class="mtg-ctrlbtn" :class="room.sharingScreen.value ? 'active' : ''" :title="room.sharingScreen.value ? 'Stop presenting' : 'Present now'" @click="room.toggleScreenShare()">

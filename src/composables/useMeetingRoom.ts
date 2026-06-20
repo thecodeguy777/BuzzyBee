@@ -5,6 +5,7 @@ import { broadcast } from '@/lib/realtime'
 import { useAuthStore } from '@/stores/auth'
 import { iceServers } from '@/lib/iceServers'
 import { createNoisePipeline, type NoisePipeline } from '@/lib/noiseSuppressor'
+import { createVideoBackground, type VideoBackground, type BgMode } from '@/lib/virtualBackground'
 
 // Gmeet-style guest meeting rooms. WebRTC audio + screen-share mesh signaled
 // over a PUBLIC realtime channel `meet:<token>` — the unguessable token in the
@@ -79,6 +80,12 @@ export function useMeetingRoom() {
   const cameraOn = ref(false)
   const localCamera = ref<MediaStream | null>(null)
   const remoteCameras = ref<Record<string, MediaStream>>({})
+  /** Background effect (blur). Persists so it carries across sessions. */
+  const bgMode = ref<BgMode>(
+    typeof window !== 'undefined' && window.localStorage.getItem('buzzybee.comms.bg') === 'blur'
+      ? 'blur'
+      : 'none',
+  )
   const speaking = ref<Set<string>>(new Set())
   // In-call chat + reactions are ephemeral by design — they live exactly as
   // long as the call does, so plain broadcast (no DB) is the right transport.
@@ -100,6 +107,10 @@ export function useMeetingRoom() {
   let nsPipeline: NoisePipeline | null = null
   let screenStream: MediaStream | null = null
   let cameraStream: MediaStream | null = null
+  // The unprocessed camera (feeds the blur pipeline as its source); cameraStream
+  // is what we actually send (raw or processed). vbg = the blur pipeline or null.
+  let rawCamStream: MediaStream | null = null
+  let vbg: VideoBackground | null = null
   let cameraFacing: 'user' | 'environment' = 'user'
   // Honoured once the call goes live — lets the green-room "join with camera on"
   // choice carry through (incl. guests who wait in the lobby first).
@@ -663,44 +674,58 @@ export function useMeetingRoom() {
   }
   async function enableCamera() {
     if (!amAdmitted.value || cameraOn.value) return
-    let stream: MediaStream
+    let raw: MediaStream
     try {
       const deviceId =
         typeof window !== 'undefined' ? window.localStorage.getItem('buzzybee.comms.cam-device') : null
       const video = camConstraints()
       if (deviceId) video.deviceId = { exact: deviceId }
-      stream = await navigator.mediaDevices.getUserMedia({ video, audio: false })
+      raw = await navigator.mediaDevices.getUserMedia({ video, audio: false })
     } catch {
       error.value = 'Camera access was blocked — allow it in your browser to turn your camera on.'
       return
     }
-    const track = stream.getVideoTracks()[0]
-    if (!track) {
-      stream.getTracks().forEach((t) => t.stop())
+    const rawTrack = raw.getVideoTracks()[0]
+    if (!rawTrack) {
+      raw.getTracks().forEach((t) => t.stop())
       return
     }
-    cameraStream = stream
-    if ('contentHint' in track) (track as any).contentHint = 'motion'
+    rawCamStream = raw
+    // Route through the blur pipeline if the user wants a background. On failure
+    // the pipeline returns null and we send the raw camera (reflecting it in UI).
+    let sendTrack = rawTrack
+    if (bgMode.value === 'blur') {
+      vbg = await createVideoBackground(raw, 'blur')
+      if (vbg) sendTrack = vbg.track
+      else bgMode.value = 'none'
+    }
+    const out = new MediaStream([sendTrack])
+    cameraStream = out
+    if ('contentHint' in sendTrack) (sendTrack as any).contentHint = 'motion'
     cameraOn.value = true
-    localCamera.value = stream
+    localCamera.value = out
     for (const entry of peers.values()) {
-      entry.camSender = entry.pc.addTrack(track, stream)
+      entry.camSender = entry.pc.addTrack(sendTrack, out)
       preferH264(entry.pc, entry.camSender)
       void tuneCamSender(entry.camSender)
     }
     // Device unplugged / OS revoked the camera → reflect it in the UI.
-    track.addEventListener('ended', () => disableCamera())
+    rawTrack.addEventListener('ended', () => disableCamera())
     announceMedia()
     trackPresence()
   }
   function disableCamera() {
-    if (!cameraOn.value && !cameraStream) return
+    if (!cameraOn.value && !cameraStream && !rawCamStream) return
     for (const entry of peers.values()) {
       if (entry.camSender) {
         try { entry.pc.removeTrack(entry.camSender) } catch { /* ignore */ }
         entry.camSender = undefined
       }
     }
+    vbg?.destroy()
+    vbg = null
+    rawCamStream?.getTracks().forEach((t) => t.stop())
+    rawCamStream = null
     cameraStream?.getTracks().forEach((t) => t.stop())
     cameraStream = null
     localCamera.value = null
@@ -712,11 +737,45 @@ export function useMeetingRoom() {
     if (cameraOn.value) disableCamera()
     else void enableCamera()
   }
-  // Flip front/back camera (mobile). replaceTrack swaps the track on every
-  // sender WITHOUT renegotiating and keeps the same msid, so we reuse the same
-  // cameraStream object (its id is what we announced) — just swap its track.
+  // Swap the sent camera track on every peer without renegotiating (same msid),
+  // and inside the stable cameraStream so the self-preview + announced id hold.
+  function swapCameraTrack(newTrack: MediaStreamTrack) {
+    if (!cameraStream) return
+    for (const entry of peers.values()) {
+      if (entry.camSender) {
+        try { void entry.camSender.replaceTrack(newTrack) } catch { /* ignore */ }
+      }
+    }
+    const old = cameraStream.getVideoTracks()[0]
+    if (old && old !== newTrack) cameraStream.removeTrack(old)
+    if (!cameraStream.getVideoTracks().includes(newTrack)) cameraStream.addTrack(newTrack)
+    if ('contentHint' in newTrack) (newTrack as any).contentHint = 'motion'
+  }
+  // Toggle background blur live. Builds/destroys the segmentation pipeline and
+  // swaps the sent track — the raw track keeps feeding the pipeline as its
+  // source, so it's never stopped while blur is on.
+  async function setBackground(mode: BgMode) {
+    bgMode.value = mode
+    try { window.localStorage.setItem('buzzybee.comms.bg', mode) } catch { /* ignore */ }
+    if (!cameraOn.value || !rawCamStream || !cameraStream) return // applies next enable
+    if (mode === 'blur' && !vbg) {
+      vbg = await createVideoBackground(rawCamStream, 'blur')
+      if (!vbg) { bgMode.value = 'none'; return }
+      swapCameraTrack(vbg.track)
+    } else if (mode === 'none' && vbg) {
+      const raw = rawCamStream.getVideoTracks()[0]
+      if (raw) swapCameraTrack(raw)
+      vbg.destroy()
+      vbg = null
+    } else if (vbg) {
+      vbg.setMode(mode)
+    }
+  }
+  // Flip front/back camera (mobile). With blur on, re-point the pipeline's
+  // source (the sent processed track is unchanged). Without blur, swap the raw
+  // track on every sender via replaceTrack (same msid — no renegotiation).
   async function flipCamera() {
-    if (!cameraOn.value || !cameraStream) return
+    if (!cameraOn.value || !rawCamStream) return
     const next = cameraFacing === 'user' ? 'environment' : 'user'
     let stream: MediaStream
     try {
@@ -733,17 +792,14 @@ export function useMeetingRoom() {
     }
     if ('contentHint' in newTrack) (newTrack as any).contentHint = 'motion'
     cameraFacing = next
-    for (const entry of peers.values()) {
-      if (entry.camSender) {
-        try { await entry.camSender.replaceTrack(newTrack) } catch { /* ignore */ }
-      }
+    const oldRaw = rawCamStream
+    if (vbg) {
+      vbg.setSource(stream)
+    } else {
+      swapCameraTrack(newTrack)
     }
-    const old = cameraStream.getVideoTracks()[0]
-    if (old) {
-      cameraStream.removeTrack(old)
-      old.stop()
-    }
-    cameraStream.addTrack(newTrack)
+    rawCamStream = stream
+    oldRaw.getTracks().forEach((t) => t.stop())
     newTrack.addEventListener('ended', () => disableCamera())
   }
 
@@ -803,6 +859,10 @@ export function useMeetingRoom() {
 
   function teardownMedia() {
     stopScreenShare()
+    vbg?.destroy()
+    vbg = null
+    rawCamStream?.getTracks().forEach((t) => t.stop())
+    rawCamStream = null
     cameraStream?.getTracks().forEach((t) => t.stop())
     cameraStream = null
     localCamera.value = null
@@ -860,6 +920,7 @@ export function useMeetingRoom() {
     cameraOn,
     localCamera,
     remoteCameras,
+    bgMode,
     speaking,
     chat,
     reactions,
@@ -877,6 +938,7 @@ export function useMeetingRoom() {
     toggleScreenShare,
     toggleCamera,
     flipCamera,
+    setBackground,
     toggleNoise,
     sendChat,
     sendReaction,
