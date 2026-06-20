@@ -5,10 +5,19 @@
 //
 // Pipeline (all main-thread — Web Workers + OffscreenCanvas WebGL are
 // unreliable on iOS Safari): rawStream → hidden <video> → MediaPipe
-// ImageSegmenter person mask → composite (cheap-blurred background + sharp
-// masked person) onto an opaque <canvas> → canvas.captureStream(). Both the
-// source <video> and the canvas are kept attached to the DOM (offscreen, not
-// display:none) because iOS Safari won't emit captureStream frames otherwise.
+// ImageSegmenter person mask → composite onto an opaque <canvas> →
+// canvas.captureStream(). Both the source <video> and the canvas stay attached
+// to the DOM (offscreen, not display:none) because iOS Safari won't emit
+// captureStream frames otherwise.
+//
+// Quality (what separates this from a toy blur):
+//   • Background: downsample + true Gaussian (ctx.filter blur), not a boxy
+//     upscale — smooth, not pixelated. Falls back to heavy downscale where
+//     ctx.filter is unsupported (older iOS).
+//   • Edge: the raw person mask is firmed with a smoothstep curve and feathered
+//     with an edge blur, so no gray halo / jagged cutout.
+//   • Stability: each frame's mask is temporally blended (EMA) with the last,
+//     which removes the shimmering edge that gives cheap blur away.
 //
 // The MediaPipe runtime + WASM is dynamic-imported the first time a background
 // is enabled, so users who never use it pay nothing at app load.
@@ -44,6 +53,18 @@ function offscreen(el: HTMLElement) {
     'position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;pointer-events:none;'
 }
 
+// Does this browser support canvas 2D ctx.filter (Gaussian blur)? Chrome/FF
+// yes; Safari only from 17. Used to pick the blur path + edge feather.
+function supportsCanvasFilter(): boolean {
+  try {
+    const c = document.createElement('canvas').getContext('2d') as any
+    c.filter = 'blur(2px)'
+    return c.filter === 'blur(2px)'
+  } catch {
+    return false
+  }
+}
+
 export async function createVideoBackground(
   rawStream: MediaStream,
   startMode: BgMode,
@@ -62,6 +83,7 @@ export async function createVideoBackground(
     const settings = rawStream.getVideoTracks()[0]?.getSettings() ?? {}
     const W = settings.width ?? 640
     const H = settings.height ?? 480
+    const canFilter = supportsCanvasFilter()
 
     // Source video — must be DOM-attached (not display:none) for iOS capture.
     const video = document.createElement('video')
@@ -73,7 +95,7 @@ export async function createVideoBackground(
     document.body.appendChild(video)
     await video.play().catch(() => {})
 
-    // Opaque output canvas (alpha must be off; iOS mishandles transparency).
+    // Opaque output canvas (alpha off; iOS mishandles transparency on capture).
     const canvas = document.createElement('canvas')
     canvas.width = W
     canvas.height = H
@@ -81,7 +103,7 @@ export async function createVideoBackground(
     document.body.appendChild(canvas)
     const ctx = canvas.getContext('2d', { alpha: false })!
 
-    // Scratch canvases: person cut-out, mask alpha, and a tiny blur buffer.
+    // Scratch: person cut-out + mask alpha + downsample buffer for the bg blur.
     const person = document.createElement('canvas')
     person.width = W
     person.height = H
@@ -90,10 +112,9 @@ export async function createVideoBackground(
     const maskC = document.createElement('canvas')
     const mctx = maskC.getContext('2d', { alpha: true })!
 
-    // Cheap, universal background blur: draw the frame tiny then scale it back
-    // up (works on every browser incl. older iOS, unlike ctx.filter:blur).
-    const bw = Math.max(2, Math.round(W / 14))
-    const bh = Math.max(2, Math.round(H / 14))
+    const ds = canFilter ? 4 : 14 // light downsample when we can Gaussian; heavy otherwise
+    const bw = Math.max(2, Math.round(W / ds))
+    const bh = Math.max(2, Math.round(H / ds))
     const blurC = document.createElement('canvas')
     blurC.width = bw
     blurC.height = bh
@@ -105,35 +126,59 @@ export async function createVideoBackground(
     let last = 0
     let raf = 0
     let stopped = false
+    // Temporal EMA of the mask (removes edge shimmer).
+    let prevMask: Float32Array | null = null
 
     function paintBlurredBg() {
       bctx.drawImage(video, 0, 0, bw, bh)
       ctx.imageSmoothingEnabled = true
-      ctx.drawImage(blurC, 0, 0, bw, bh, 0, 0, W, H)
+      if (canFilter) {
+        ctx.filter = 'blur(6px)'
+        ctx.drawImage(blurC, 0, 0, bw, bh, 0, 0, W, H)
+        ctx.filter = 'none'
+      } else {
+        ctx.drawImage(blurC, 0, 0, bw, bh, 0, 0, W, H)
+      }
     }
 
     function paintPerson(mask: { width: number; height: number; getAsFloat32Array(): Float32Array }) {
       const mw = mask.width
       const mh = mask.height
       const data = mask.getAsFloat32Array()
+      if (!prevMask || prevMask.length !== data.length) prevMask = new Float32Array(data)
+
       maskC.width = mw
       maskC.height = mh
       const img = mctx.createImageData(mw, mh)
+      const lo = 0.35
+      const hi = 0.65
+      const span = hi - lo
       for (let i = 0; i < data.length; i++) {
-        const a = data[i]
-        img.data[i * 4] = 255
-        img.data[i * 4 + 1] = 255
-        img.data[i * 4 + 2] = 255
-        img.data[i * 4 + 3] = a >= 0.999 ? 255 : Math.round(a * 255) // soft edge
+        // Temporal smoothing, then a smoothstep to firm up person/background.
+        const v = prevMask[i] * 0.5 + data[i] * 0.5
+        prevMask[i] = v
+        const t = v <= lo ? 0 : v >= hi ? 1 : (v - lo) / span
+        const s = t * t * (3 - 2 * t)
+        const o = i * 4
+        img.data[o] = 255
+        img.data[o + 1] = 255
+        img.data[o + 2] = 255
+        img.data[o + 3] = (s * 255) | 0
       }
       mctx.putImageData(img, 0, 0)
-      // Sharp frame, then keep only the person via the mask (scaled, smoothed).
+
+      // Sharp frame, kept only where the (feathered) mask says "person".
+      pctx.filter = 'none'
+      pctx.globalCompositeOperation = 'source-over'
       pctx.clearRect(0, 0, W, H)
       pctx.drawImage(video, 0, 0, W, H)
       pctx.globalCompositeOperation = 'destination-in'
       pctx.imageSmoothingEnabled = true
+      if (canFilter) pctx.filter = 'blur(3px)' // feather the cutout edge
       pctx.drawImage(maskC, 0, 0, mw, mh, 0, 0, W, H)
+      pctx.filter = 'none'
       pctx.globalCompositeOperation = 'source-over'
+
       ctx.drawImage(person, 0, 0, W, H)
     }
 
@@ -162,8 +207,8 @@ export async function createVideoBackground(
     }
     raf = requestAnimationFrame(loop)
 
-    // Re-init the segmenter when returning to a backgrounded iOS tab (WebGL
-    // context is lost on background — segmentForVideo would throw otherwise).
+    // Returning to a backgrounded iOS tab loses the WebGL context — nudge the
+    // source so frames resume.
     const onVisible = () => {
       if (document.visibilityState === 'visible') void video.play().catch(() => {})
     }
@@ -175,9 +220,13 @@ export async function createVideoBackground(
       stream: out,
       track: out.getVideoTracks()[0],
       mode: () => mode,
-      setMode: (m) => (mode = m),
+      setMode: (m) => {
+        mode = m
+        if (m === 'none') prevMask = null
+      },
       setSource(s) {
         video.srcObject = s
+        prevMask = null
         void video.play().catch(() => {})
       },
       destroy() {
