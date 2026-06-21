@@ -82,6 +82,8 @@ export function useMeetingRoom() {
   const remoteCameras = ref<Record<string, MediaStream>>({})
   /** Mirror my own tile only for the front/selfie camera, not the rear. */
   const selfMirrored = ref(true)
+  /** URL of the active background image (preset data-URL or uploaded blob). */
+  const bgImageUrl = ref<string | null>(null)
   /** Background effect (blur). Persists so it carries across sessions. */
   const bgMode = ref<BgMode>(
     typeof window !== 'undefined' && window.localStorage.getItem('buzzybee.comms.bg') === 'blur'
@@ -113,6 +115,7 @@ export function useMeetingRoom() {
   // is what we actually send (raw or processed). vbg = the blur pipeline or null.
   let rawCamStream: MediaStream | null = null
   let vbg: VideoBackground | null = null
+  let bgImageEl: HTMLImageElement | null = null
   let cameraFacing: 'user' | 'environment' = 'user'
   // Concurrency guards for the async camera lifecycle — getUserMedia and the
   // blur-pipeline init are long awaits. The in-flight locks stop toggle-spam
@@ -707,14 +710,18 @@ export function useMeetingRoom() {
       if (gen !== camGen || !raw) return
       const rawTrack = raw.getVideoTracks()[0]
       if (!rawTrack) return
-      // Route through the blur pipeline if the user wants a background. On
-      // failure the pipeline returns null and we send the raw camera.
+      // A previously-uploaded image can't survive a reload → fall back to blur.
+      if (bgMode.value === 'image' && !bgImageEl) { bgMode.value = 'blur'; persistBg('blur') }
+      // Route through the background pipeline if wanted. On failure the pipeline
+      // returns null and we send the raw camera.
       let sendTrack = rawTrack
-      if (bgMode.value === 'blur') {
-        pipe = await createVideoBackground(raw, 'blur')
+      if (bgMode.value !== 'none') {
+        pipe = await createVideoBackground(raw, bgMode.value)
         if (gen !== camGen) return // cancelled during init → finally cleans up
-        if (pipe) sendTrack = pipe.track
-        else { bgMode.value = 'none'; persistBg('none') }
+        if (pipe) {
+          sendTrack = pipe.track
+          if (bgMode.value === 'image' && bgImageEl) pipe.setImage(bgImageEl)
+        } else { bgMode.value = 'none'; persistBg('none') }
       }
       // ── Commit (no awaits past here) ──
       rawCamStream = raw
@@ -794,31 +801,49 @@ export function useMeetingRoom() {
     bgMode.value = mode
     persistBg(mode)
     if (!cameraOn.value || !rawCamStream || !cameraStream) return // applies next enable
-    if (mode === 'blur' && !vbg) {
+    if (mode === 'none') {
+      if (vbg) {
+        const raw = rawCamStream.getVideoTracks()[0]
+        if (raw) swapCameraTrack(raw)
+        vbg.destroy()
+        vbg = null
+      }
+      return
+    }
+    if (!vbg) {
+      // Build the pipeline once; switching effects afterwards is just setMode.
       if (bgBusy) return
       bgBusy = true
       const gen = camGen
       try {
-        const pipe = await createVideoBackground(rawCamStream, 'blur')
+        const pipe = await createVideoBackground(rawCamStream, mode)
         // Cancelled, camera turned off, or toggled back to none meanwhile.
-        if (gen !== camGen || !cameraOn.value || bgMode.value !== 'blur' || !rawCamStream) {
+        if (gen !== camGen || !cameraOn.value || bgMode.value === 'none' || !rawCamStream) {
           pipe?.destroy()
           return
         }
         if (!pipe) { bgMode.value = 'none'; persistBg('none'); return }
         vbg = pipe
+        vbg.setMode(bgMode.value) // honour the latest mode if it changed mid-build
+        if (bgMode.value === 'image' && bgImageEl) vbg.setImage(bgImageEl)
         swapCameraTrack(vbg.track)
       } finally {
         bgBusy = false
       }
-    } else if (mode === 'none' && vbg) {
-      const raw = rawCamStream.getVideoTracks()[0]
-      if (raw) swapCameraTrack(raw)
-      vbg.destroy()
-      vbg = null
-    } else if (vbg) {
+    } else {
       vbg.setMode(mode)
+      if (mode === 'image' && bgImageEl) vbg.setImage(bgImageEl)
     }
+  }
+  // Load an image (preset data-URL or uploaded blob URL) and switch to image
+  // mode. The decoded image is kept; the caller owns the blob URL's lifetime.
+  async function setBackgroundImage(src: string) {
+    const img = new Image()
+    img.src = src
+    try { await img.decode() } catch { return }
+    bgImageEl = img
+    bgImageUrl.value = src
+    await setBackground('image')
   }
   // Flip front/back camera (mobile). With blur on, re-point the pipeline's
   // source (the sent processed track is unchanged). Without blur, swap the raw
@@ -916,6 +941,8 @@ export function useMeetingRoom() {
     stopScreenShare()
     vbg?.destroy()
     vbg = null
+    bgImageUrl.value = null
+    bgImageEl = null
     rawCamStream?.getTracks().forEach((t) => t.stop())
     rawCamStream = null
     cameraStream?.getTracks().forEach((t) => t.stop())
@@ -977,6 +1004,7 @@ export function useMeetingRoom() {
     remoteCameras,
     selfMirrored,
     bgMode,
+    bgImageUrl,
     speaking,
     chat,
     reactions,
@@ -995,6 +1023,7 @@ export function useMeetingRoom() {
     toggleCamera,
     flipCamera,
     setBackground,
+    setBackgroundImage,
     toggleNoise,
     sendChat,
     sendReaction,

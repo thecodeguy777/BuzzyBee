@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import {
-  Mic, MicOff, Video, VideoOff, SwitchCamera, Sparkles, MonitorUp, MonitorOff, PhoneOff, Wand2, Copy, Check, Crown, Users, Loader2,
+  Mic, MicOff, Video, VideoOff, SwitchCamera, Sparkles, ImagePlus, MonitorUp, MonitorOff, PhoneOff, Wand2, Copy, Check, Crown, Users, Loader2,
   Maximize2, X, Hand, Smile, MessageSquare, UserPlus, Send, Clock,
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
@@ -289,6 +289,53 @@ function camStream(p: Participant): MediaStream | null {
   if (p.userId === room.myId.value) return room.cameraOn.value ? room.localCamera.value : null
   return room.remoteCameras.value[p.userId] ?? null
 }
+
+// ── Background picker (none / blur / preset image / upload) ────────────────────
+const bgOpen = ref(false)
+const bgFileInput = ref<HTMLInputElement | null>(null)
+const customBgUrl = ref<string | null>(null)
+
+// Presets are gradient data-URLs generated on the fly — on-brand, no assets.
+const BG_PRESETS = [
+  { id: 'plum', label: 'Plum', stops: ['#2a1430', '#b266bb'] },
+  { id: 'slate', label: 'Slate', stops: ['#1f2937', '#475569'] },
+  { id: 'honey', label: 'Honey', stops: ['#3a2a10', '#e8b84d'] },
+]
+const presetUrls = ref<Record<string, string>>({})
+function makeGradient(stops: string[]): string {
+  const c = document.createElement('canvas')
+  c.width = 1280
+  c.height = 720
+  const x = c.getContext('2d')!
+  const g = x.createLinearGradient(0, 0, 1280, 720)
+  g.addColorStop(0, stops[0])
+  g.addColorStop(1, stops[1])
+  x.fillStyle = g
+  x.fillRect(0, 0, 1280, 720)
+  const v = x.createRadialGradient(640, 360, 180, 640, 360, 820)
+  v.addColorStop(0, 'rgba(0,0,0,0)')
+  v.addColorStop(1, 'rgba(0,0,0,0.4)')
+  x.fillStyle = v
+  x.fillRect(0, 0, 1280, 720)
+  return c.toDataURL('image/jpeg', 0.85)
+}
+onMounted(() => { for (const p of BG_PRESETS) presetUrls.value[p.id] = makeGradient(p.stops) })
+
+function pickBg(mode: 'none' | 'blur') { room.setBackground(mode); bgOpen.value = false }
+function pickImage(url: string | null) { if (url) void room.setBackgroundImage(url); bgOpen.value = false }
+function onBgFile(e: Event) {
+  const input = e.target as HTMLInputElement
+  const f = input.files?.[0]
+  input.value = '' // allow re-picking the same file
+  if (!f) return
+  if (customBgUrl.value) URL.revokeObjectURL(customBgUrl.value)
+  customBgUrl.value = URL.createObjectURL(f)
+  void room.setBackgroundImage(customBgUrl.value)
+  bgOpen.value = false
+}
+onBeforeUnmount(() => { if (customBgUrl.value) URL.revokeObjectURL(customBgUrl.value) })
+const isBgImg = (url: string | null | undefined) =>
+  room.bgMode.value === 'image' && !!url && room.bgImageUrl.value === url
 </script>
 
 <template>
@@ -643,15 +690,47 @@ function camStream(p: Participant): MediaStream | null {
           <SwitchCamera class="w-[22px] h-[22px]" :stroke-width="1.75" />
         </button>
 
-        <button
-          v-if="room.cameraOn.value"
-          class="mtg-ctrlbtn"
-          :class="room.bgMode.value === 'blur' ? 'active' : ''"
-          :title="room.bgMode.value === 'blur' ? 'Turn off background blur' : 'Blur my background'"
-          @click="room.setBackground(room.bgMode.value === 'blur' ? 'none' : 'blur')"
-        >
-          <Sparkles class="w-[22px] h-[22px]" :stroke-width="1.75" />
-        </button>
+        <!-- background picker: none / blur / preset images / upload -->
+        <div v-if="room.cameraOn.value" class="relative">
+          <button class="mtg-ctrlbtn" :class="room.bgMode.value !== 'none' ? 'active' : ''" title="Background" @click="bgOpen = !bgOpen">
+            <Sparkles class="w-[22px] h-[22px]" :stroke-width="1.75" />
+          </button>
+          <div
+            v-if="bgOpen"
+            class="absolute bottom-[calc(100%+10px)] left-1/2 -translate-x-1/2 grid grid-cols-3 gap-2 p-2.5 rounded-[14px] border shadow-2xl"
+            style="background: var(--stage-2); border-color: var(--mtg-border-2); width: 216px"
+          >
+            <button class="mtg-bgtile" :class="room.bgMode.value === 'none' ? 'sel' : ''" @click="pickBg('none')">
+              <VideoOff class="w-[18px] h-[18px]" :stroke-width="1.75" /><span>None</span>
+            </button>
+            <button class="mtg-bgtile" :class="room.bgMode.value === 'blur' ? 'sel' : ''" @click="pickBg('blur')">
+              <Sparkles class="w-[18px] h-[18px]" :stroke-width="1.75" /><span>Blur</span>
+            </button>
+            <button
+              v-for="p in BG_PRESETS"
+              :key="p.id"
+              class="mtg-bgtile !p-0 overflow-hidden"
+              :class="isBgImg(presetUrls[p.id]) ? 'sel' : ''"
+              :title="p.label"
+              @click="pickImage(presetUrls[p.id])"
+            >
+              <img v-if="presetUrls[p.id]" :src="presetUrls[p.id]" class="w-full h-full object-cover" :alt="p.label" />
+            </button>
+            <button
+              v-if="customBgUrl"
+              class="mtg-bgtile !p-0 overflow-hidden"
+              :class="isBgImg(customBgUrl) ? 'sel' : ''"
+              title="Your image"
+              @click="pickImage(customBgUrl)"
+            >
+              <img :src="customBgUrl" class="w-full h-full object-cover" alt="Your background" />
+            </button>
+            <button class="mtg-bgtile" title="Upload an image" @click="bgFileInput?.click()">
+              <ImagePlus class="w-[18px] h-[18px]" :stroke-width="1.75" /><span>Upload</span>
+            </button>
+          </div>
+          <input ref="bgFileInput" type="file" accept="image/*" class="hidden" @change="onBgFile" />
+        </div>
 
         <button v-if="canShareScreen" class="mtg-ctrlbtn" :class="room.sharingScreen.value ? 'active' : ''" :title="room.sharingScreen.value ? 'Stop presenting' : 'Present now'" @click="room.toggleScreenShare()">
           <component :is="room.sharingScreen.value ? MonitorOff : MonitorUp" class="w-[23px] h-[23px]" :stroke-width="1.75" />
@@ -773,6 +852,21 @@ function camStream(p: Participant): MediaStream | null {
 @media (max-width: 640px) {
   .mtg-ctrlbtn { width: 46px; height: 46px; }
 }
+.mtg-bgtile {
+  aspect-ratio: 1;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--mtg-fg);
+  font-size: 10px;
+  font-weight: 600;
+}
+.mtg-bgtile:hover { background: rgba(255, 255, 255, 0.16); }
+.mtg-bgtile.sel { outline: 2px solid #8a3a93; outline-offset: -2px; }
 .mtg-ctrlbtn.danger { background: #e23b54; }
 .mtg-ctrlbtn.danger:hover { background: #cf2f47; }
 .mtg-ctrlbtn.muted { background: #e23b54; }
