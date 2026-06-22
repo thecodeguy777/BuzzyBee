@@ -5,13 +5,25 @@
 //
 // Engine: a WebGL2 fragment-shader pipeline (ported from the webcam-bg-removal
 // v2 experiment) — separable Gaussian blur, temporal-EMA matte (ping-pong),
-// soft-edge alpha, edge feather, and LIGHT WRAP (bleed the background's light
-// onto the subject's rim so they sit *in* the scene, not pasted on). MediaPipe
-// ImageSegmenter produces the person mask; everything else runs on the GPU.
+// soft-edge alpha with a mask cutoff, a GUIDED FILTER (He et al.) that snaps the
+// matte onto real image edges (hair/fingers) using camera luminance as a guide,
+// optional LIGHT WRAP, and a zoom/framing crop. MediaPipe ImageSegmenter
+// produces the person mask; everything else runs on the GPU.
+//
+// Hardcoded to the "comfortable" config dialed in the sandbox (2026-06-22):
+// blur 14, guided refine 10 / snap 0.6, feather 2, soft 0.10, cutoff 0.50,
+// light wrap off, gentle temporal smoothing 0.2. The guided filter needs
+// half-float render targets (most desktops); where unavailable (often iOS) it
+// falls back to plain feather automatically.
+//
+// Model is ADAPTIVE: the Quality multiclass selfie model (real hair/skin class,
+// ~16 MB) on desktops with headroom; the Fast 250 KB selfie model on phones/iOS
+// (and as the universal fallback). Segmentation runs on the MAIN THREAD — the
+// MediaPipe worker path hangs on iOS Safari, so we don't use a worker.
 //
 // Output is canvas.captureStream(); the source <video> and the WebGL <canvas>
 // stay DOM-attached (offscreen, not display:none) so iOS Safari emits frames.
-// We render UN-mirrored (remote peers must see the true orientation; the local
+// We render UN-mirrored (remote peers must see true orientation; the local
 // self-preview mirrors via CSS), with a Y-flip so the captured frame is upright.
 //
 // The MediaPipe runtime + WASM is dynamic-imported the first time a background
@@ -32,7 +44,11 @@ export interface VideoBackground {
 }
 
 const WASM_BASE = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm'
-const MODEL_URL = '/mediapipe/selfie_segmenter.tflite'
+// Fast = self-hosted 250 KB single-class selfie segmenter (person confidence).
+// Quality = Google-hosted multiclass (~16 MB); channel 0 is BACKGROUND → invert.
+const MODEL_FAST = '/mediapipe/selfie_segmenter.tflite'
+const MODEL_QUALITY =
+  'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite'
 
 function isIOS(): boolean {
   if (typeof navigator === 'undefined') return false
@@ -48,7 +64,6 @@ function offscreen(el: HTMLElement) {
 }
 
 // ── Shaders ──────────────────────────────────────────────────────────────────
-// Full-screen triangle from gl_VertexID — no vertex buffers.
 const VS = `#version 300 es
 out vec2 vUv;
 void main(){
@@ -84,21 +99,53 @@ void main(){
   if (uInvert > 0.5) p = 1.0 - p;
   o = vec4(mix(p, texture(uPrev, vUv).r, uSmooth), 0.0, 0.0, 1.0);
 }`
-// Soft-edge matte -> alpha.
+// Soft-edge matte -> coarse alpha (smoothstep around the cutoff/threshold).
 const FS_EDGE = HEAD + `
-uniform sampler2D uMatte; uniform float uSoft;
+uniform sampler2D uMatte; uniform float uSoft; uniform float uThreshold;
 void main(){
   float m = texture(uMatte, vUv).r;
-  float lo = 0.5 - uSoft, hi = 0.5 + uSoft;
-  o = vec4((hi <= lo) ? step(0.5, m) : smoothstep(lo, hi, m), 0.0, 0.0, 1.0);
+  float lo = uThreshold - uSoft, hi = uThreshold + uSoft;
+  o = vec4((hi <= lo) ? step(uThreshold, m) : smoothstep(lo, hi, m), 0.0, 0.0, 1.0);
 }`
 const FS_COPY = HEAD + `
 uniform sampler2D uSrc;
 void main(){ o = texture(uSrc, vUv); }`
-// Show a source to screen with Y-flip (+ optional mirror). Used for 'none'.
+// Center crop / zoom: sample a sub-rectangle of the source.
+const FS_CROP = HEAD + `
+uniform sampler2D uSrc; uniform vec2 uCropOrigin; uniform vec2 uCropSize;
+void main(){ o = texture(uSrc, uCropOrigin + vUv * uCropSize); }`
+// Show a source with Y-flip (+ optional mirror). Used for 'none'.
 const FS_SHOW = HEAD + `
 uniform sampler2D uSrc; uniform float uMirror;
 void main(){ o = texture(uSrc, vec2(uMirror > 0.5 ? 1.0 - vUv.x : vUv.x, 1.0 - vUv.y)); }`
+// ── Guided filter (He et al.): refine alpha p using camera luminance I as guide ──
+// Pass 1: pack (I, p, I*I, I*p) so one separable blur yields all four means.
+const FS_GF_PACK = HEAD + `
+uniform sampler2D uVideo; uniform sampler2D uAlpha;
+void main(){
+  float I = dot(texture(uVideo, vUv).rgb, vec3(0.299, 0.587, 0.114));
+  float p = texture(uAlpha, vUv).r;
+  o = vec4(I, p, I * I, I * p);
+}`
+// Pass 2 (after blurring the pack): linear coefficients a, b.
+const FS_GF_COEFF = HEAD + `
+uniform sampler2D uMeans; uniform float uEps;
+void main(){
+  vec4 m = texture(uMeans, vUv);
+  float varI  = max(m.b - m.r * m.r, 0.0);
+  float covIp = m.a - m.r * m.g;
+  float a = covIp / (varI + uEps);
+  float b = m.g - a * m.r;
+  o = vec4(a, b, 0.0, 0.0);
+}`
+// Pass 3 (after blurring a,b): q = mean_a * I + mean_b -> refined alpha.
+const FS_GF_APPLY = HEAD + `
+uniform sampler2D uAB; uniform sampler2D uVideo;
+void main(){
+  float I = dot(texture(uVideo, vUv).rgb, vec3(0.299, 0.587, 0.114));
+  vec2 ab = texture(uAB, vUv).rg;
+  o = vec4(clamp(ab.x * I + ab.y, 0.0, 1.0), 0.0, 0.0, 1.0);
+}`
 // Final composite: light wrap + matte cut + Y-flip (+ optional mirror).
 const FS_COMP = HEAD + `
 uniform sampler2D uVideo; uniform sampler2D uBg; uniform sampler2D uWrapBg;
@@ -133,16 +180,28 @@ export async function createVideoBackground(
   let onLost: ((e: Event) => void) | null = null
   let onRestored: (() => void) | null = null
 
-  const settings = { mode: startMode, blur: 14, color: '#1e8e3e', feather: 3, soft: 0.1, smooth: 0.55, invert: false, wrap: 0.5, wrapw: 12 }
   const ios = isIOS()
+  const coarse = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches
+  // Quality (multiclass, ~16 MB) only where there's headroom; Fast on phones/iOS.
+  const modelKind: 'fast' | 'quality' = !ios && !coarse ? 'quality' : 'fast'
   const mirror = 0 // sent stream is NOT mirrored; self-preview mirrors via CSS
 
-  let progBlur: WebGLProgram, progMatte: WebGLProgram, progEdge: WebGLProgram
-  let progCopy: WebGLProgram, progShow: WebGLProgram, progComp: WebGLProgram, emptyVAO: WebGLVertexArrayObject
+  // Hardcoded comfortable config (see file header).
+  const settings = {
+    mode: startMode, blur: 14, color: '#1e8e3e',
+    refine: 10, snap: 0.6, feather: 2, soft: 0.10, threshold: 0.5,
+    wrap: 0, wrapw: 0, smooth: 0.2, invert: false, zoom: 1,
+  }
+
+  let progBlur: WebGLProgram, progMatte: WebGLProgram, progEdge: WebGLProgram, progCopy: WebGLProgram
+  let progCrop: WebGLProgram, progShow: WebGLProgram, progComp: WebGLProgram
+  let progGfPack: WebGLProgram, progGfCoeff: WebGLProgram, progGfApply: WebGLProgram
+  let emptyVAO: WebGLVertexArrayObject
   const T: Record<string, Target> = {}
-  let videoTex: Tex, maskTex: Tex
+  let srcTex: Tex, videoTex: Target, maskTex: Tex
   let mattePrev: Target, matteCur: Target
   let W = 0, H = 0, lastVideoTime = -1, contextLost = false
+  let floatOK = false
   let autoPolarity = true, polFrames = 0, polCenter = 0, polCorner = 0
   let pendingBgImg: CanvasImageSource | null = null, bgReady = false, lastBgImg: CanvasImageSource | null = null
   const uCache = new Map<WebGLProgram, Map<string, WebGLUniformLocation | null>>()
@@ -164,8 +223,9 @@ export async function createVideoBackground(
     return p
   }
   function initPrograms() {
-    progBlur = program(FS_BLUR); progMatte = program(FS_MATTE); progEdge = program(FS_EDGE)
-    progCopy = program(FS_COPY); progShow = program(FS_SHOW); progComp = program(FS_COMP)
+    progBlur = program(FS_BLUR); progMatte = program(FS_MATTE); progEdge = program(FS_EDGE); progCopy = program(FS_COPY)
+    progCrop = program(FS_CROP); progShow = program(FS_SHOW); progComp = program(FS_COMP)
+    progGfPack = program(FS_GF_PACK); progGfCoeff = program(FS_GF_COEFF); progGfApply = program(FS_GF_APPLY)
     emptyVAO = gl.createVertexArray()!
   }
   function uloc(p: WebGLProgram, name: string) {
@@ -235,14 +295,23 @@ export async function createVideoBackground(
     T.alpha = mkTarget(w, h, ...R8, gl.LINEAR); T.alphaW = mkTarget(w, h, ...R8, gl.LINEAR)
     T.bg = mkTarget(w, h, ...RGBA, gl.LINEAR); T.tmpRGBA = mkTarget(w, h, ...RGBA, gl.LINEAR)
     T.wrapBg = mkTarget(w, h, ...RGBA, gl.LINEAR); T.bgImg = mkTarget(w, h, ...RGBA, gl.LINEAR)
+    if (floatOK) { // guided-filter scratch (needs signed/HDR range)
+      const F16: [number, number, number] = [gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT]
+      T.gfA = mkTarget(w, h, ...F16, gl.LINEAR); T.gfMeans = mkTarget(w, h, ...F16, gl.LINEAR); T.gfTmp = mkTarget(w, h, ...F16, gl.LINEAR)
+    }
     clearTarget(T.matteA, 0, 0, 0); clearTarget(T.matteB, 0, 0, 0)
     mattePrev = T.matteB; matteCur = T.matteA
   }
   function resize(w: number, h: number) {
     W = w; H = h
     canvas!.width = w; canvas!.height = h
-    if (!contextLost) { if (videoTex) gl.deleteTexture(videoTex.tex); if (maskTex) gl.deleteTexture(maskTex.tex) }
-    videoTex = mkTex(gl.LINEAR)
+    if (!contextLost) {
+      if (videoTex) { gl.deleteTexture(videoTex.tex); gl.deleteFramebuffer(videoTex.fbo) }
+      if (srcTex) gl.deleteTexture(srcTex.tex)
+      if (maskTex) gl.deleteTexture(maskTex.tex)
+    }
+    srcTex = mkTex(gl.LINEAR)
+    videoTex = mkTarget(w, h, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, gl.LINEAR) // crop pass renders here
     maskTex = mkTex(gl.NEAREST) // R32F not linearly filterable without extensions
     createTargets(w, h)
     autoPolarity = true; polFrames = 0; polCenter = 0; polCorner = 0
@@ -271,21 +340,30 @@ export async function createVideoBackground(
     for (let y = ay0; y < ay1; y += 4) for (let x = ax0; x < ax1; x += 4) { s += arr[y * w + x]; c++ }
     return c ? s / c : 0
   }
+  // Upload the live frame, then crop it (zoom) into videoTex — the working frame.
+  function uploadVideoTex() {
+    gl.bindTexture(gl.TEXTURE_2D, srcTex.tex)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, video!)
+    const cs = 1 / settings.zoom, co = (1 - cs) / 2
+    run(progCrop, videoTex, { uCropOrigin: [co, co], uCropSize: [cs, cs] }, [{ name: 'uSrc', tex: srcTex }])
+  }
   function onResult(result: any) {
     if (stopped || contextLost) return
     const mask = result.confidenceMasks?.[0]
     if (!mask) return
     const data = mask.getAsFloat32Array() as Float32Array
     const mw = mask.width, mh = mask.height
+    // Multiclass: channel 0 is background → person probability.
+    if (modelKind === 'quality') for (let i = 0; i < data.length; i++) data[i] = 1 - data[i]
     if (autoPolarity) {
       polCenter += sampleAvg(data, mw, mh, 0.4, 0.6, 0.35, 0.65)
       polCorner += (sampleAvg(data, mw, mh, 0, 0.15, 0, 0.12) + sampleAvg(data, mw, mh, 0.85, 1, 0, 0.12)) / 2
-      if (++polFrames >= 12) { autoPolarity = false; if (polCorner > polCenter) settings.invert = !settings.invert }
+      const need = modelKind === 'quality' ? 24 : 12, margin = modelKind === 'quality' ? 0.2 : 0.05
+      if (++polFrames >= need) { autoPolarity = false; if (polCorner / need > polCenter / need + margin) settings.invert = !settings.invert }
     }
     gl.bindTexture(gl.TEXTURE_2D, maskTex.tex)
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, mw, mh, 0, gl.RED, gl.FLOAT, data)
-    gl.bindTexture(gl.TEXTURE_2D, videoTex.tex)
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, video!)
+    uploadVideoTex()
     render()
     result.confidenceMasks?.forEach((m: any) => m.close())
     result.categoryMask?.close()
@@ -295,11 +373,27 @@ export async function createVideoBackground(
     if (settings.mode === 'none') { run(progShow, null, { uMirror: mirror }, [{ name: 'uSrc', tex: videoTex }]); return }
     // 1) temporal smoothing (ping-pong)
     run(progMatte, matteCur, { uSmooth: settings.smooth, uInvert: settings.invert ? 1 : 0 }, [{ name: 'uMask', tex: maskTex }, { name: 'uPrev', tex: mattePrev }])
-    // 2) soft edge -> alpha
-    run(progEdge, T.alpha0, { uSoft: settings.soft }, [{ name: 'uMatte', tex: matteCur }])
-    // 3) feather the cut-out alpha (separable)
-    run(progBlur, T.tmpR, { uTexel: texel, uDir: [1, 0], uRadius: settings.feather }, [{ name: 'uSrc', tex: T.alpha0 }])
-    run(progBlur, T.alpha, { uTexel: texel, uDir: [0, 1], uRadius: settings.feather }, [{ name: 'uSrc', tex: T.tmpR }])
+    // 2) soft edge -> coarse alpha
+    run(progEdge, T.alpha0, { uSoft: settings.soft, uThreshold: settings.threshold }, [{ name: 'uMatte', tex: matteCur }])
+    // 3) refine — guided filter (edge-aware) if supported, else plain feather
+    if (floatOK && settings.refine > 0) {
+      const eps = Math.max(Math.pow(10, -1 - 3 * settings.snap), 1e-3)
+      const r = settings.refine
+      run(progGfPack, T.gfA, null, [{ name: 'uVideo', tex: videoTex }, { name: 'uAlpha', tex: T.alpha0 }])
+      run(progBlur, T.gfTmp, { uTexel: texel, uDir: [1, 0], uRadius: r }, [{ name: 'uSrc', tex: T.gfA }])
+      run(progBlur, T.gfMeans, { uTexel: texel, uDir: [0, 1], uRadius: r }, [{ name: 'uSrc', tex: T.gfTmp }])
+      run(progGfCoeff, T.gfA, { uEps: eps }, [{ name: 'uMeans', tex: T.gfMeans }])
+      run(progBlur, T.gfTmp, { uTexel: texel, uDir: [1, 0], uRadius: r }, [{ name: 'uSrc', tex: T.gfA }])
+      run(progBlur, T.gfMeans, { uTexel: texel, uDir: [0, 1], uRadius: r }, [{ name: 'uSrc', tex: T.gfTmp }])
+      run(progGfApply, T.alpha, null, [{ name: 'uAB', tex: T.gfMeans }, { name: 'uVideo', tex: videoTex }])
+      if (settings.feather > 0) {
+        run(progBlur, T.tmpR, { uTexel: texel, uDir: [1, 0], uRadius: settings.feather }, [{ name: 'uSrc', tex: T.alpha }])
+        run(progBlur, T.alpha, { uTexel: texel, uDir: [0, 1], uRadius: settings.feather }, [{ name: 'uSrc', tex: T.tmpR }])
+      }
+    } else {
+      run(progBlur, T.tmpR, { uTexel: texel, uDir: [1, 0], uRadius: settings.feather }, [{ name: 'uSrc', tex: T.alpha0 }])
+      run(progBlur, T.alpha, { uTexel: texel, uDir: [0, 1], uRadius: settings.feather }, [{ name: 'uSrc', tex: T.tmpR }])
+    }
     // 4) wider matte blur -> light-wrap band
     run(progBlur, T.tmpR, { uTexel: texel, uDir: [1, 0], uRadius: settings.wrapw }, [{ name: 'uSrc', tex: T.alpha }])
     run(progBlur, T.alphaW, { uTexel: texel, uDir: [0, 1], uRadius: settings.wrapw }, [{ name: 'uSrc', tex: T.tmpR }])
@@ -360,13 +454,16 @@ export async function createVideoBackground(
     gl = ctx
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false)
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false)
+    // Half-float render targets enable the guided filter; without them we fall
+    // back to plain feather (common on iOS).
+    floatOK = !!gl.getExtension('EXT_color_buffer_float') && !!gl.getExtension('OES_texture_half_float_linear')
     initPrograms()
 
     // Segmenter (iOS: GPU delegate masks are buggy → CPU).
     const { FilesetResolver, ImageSegmenter } = await import('@mediapipe/tasks-vision')
     const fileset = await FilesetResolver.forVisionTasks(WASM_BASE)
     const opts: any = {
-      baseOptions: { modelAssetPath: MODEL_URL, delegate: ios ? 'CPU' : 'GPU' },
+      baseOptions: { modelAssetPath: modelKind === 'quality' ? MODEL_QUALITY : MODEL_FAST, delegate: ios ? 'CPU' : 'GPU' },
       runningMode: 'VIDEO', outputConfidenceMasks: true, outputCategoryMask: false,
     }
     try {
