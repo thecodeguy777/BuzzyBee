@@ -24,7 +24,9 @@ import SiteFooter from '@/components/landing/SiteFooter.vue'
 </script>
 
 <template>
-  <div class="landing-surface min-h-screen bg-base-100 text-base-content">
+  <!-- Marketing surface is always LIGHT — pin its own DaisyUI theme so it
+       doesn't inherit a logged-in user's global data-theme="dark". -->
+  <div class="landing-surface min-h-screen bg-base-100 text-base-content" data-theme="light">
     <LandingNav flush-dark />
     <HeroJourneySection />
     <!-- People first: lead with who you hire, then the software they work in -->
