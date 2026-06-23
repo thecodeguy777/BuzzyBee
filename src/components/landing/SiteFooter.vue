@@ -46,7 +46,7 @@ const columns = [
           <h3 class="text-[11px] font-medium uppercase tracking-wider text-base-content/40 mb-3">{{ col.title }}</h3>
           <ul class="space-y-2">
             <li v-for="link in col.links" :key="link.label">
-              <a :href="link.href" class="text-xs text-base-content/60 hover:text-primary transition-colors">{{ link.label }}</a>
+              <a :href="link.href" class="block py-1.5 text-xs text-base-content/60 hover:text-primary transition-colors">{{ link.label }}</a>
             </li>
           </ul>
         </div>
@@ -59,7 +59,7 @@ const columns = [
           <img :src="hivemindMark" alt="HiveMind" class="w-5 h-auto opacity-80" />
           <span>&copy; {{ year }} HiveMind. All rights reserved.</span>
         </div>
-        <a href="#contact" class="hover:text-primary transition-colors">Book a discovery call &rarr;</a>
+        <a href="#contact" class="inline-block py-1 hover:text-primary transition-colors">Book a discovery call &rarr;</a>
       </div>
     </div>
   </footer>

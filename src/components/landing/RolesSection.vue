@@ -83,7 +83,7 @@ const filtered = computed(() =>
             v-for="c in cats"
             :key="c.key"
             type="button"
-            class="text-[13px] font-medium rounded-full px-4 py-2 border transition-all duration-150"
+            class="text-[13px] font-medium rounded-full px-4 py-2.5 border transition-all duration-150"
             :class="activeCat === c.key
               ? 'bg-primary border-primary text-primary-content shadow-md'
               : 'bg-base-100 border-base-300 text-base-content/70 hover:border-primary hover:text-primary'"
@@ -109,7 +109,7 @@ const filtered = computed(() =>
           <p class="mt-1.5 text-[13px] leading-relaxed text-base-content/60">{{ r.desc }}</p>
 
           <!-- Hover reveal: skills + link -->
-          <div class="grid grid-rows-[0fr] group-hover:grid-rows-[1fr] opacity-0 group-hover:opacity-100 transition-[grid-template-rows,opacity] duration-300">
+          <div class="grid grid-rows-[0fr] group-hover:grid-rows-[1fr] opacity-0 group-hover:opacity-100 max-sm:grid-rows-[1fr] max-sm:opacity-100 transition-[grid-template-rows,opacity] duration-300">
             <div class="overflow-hidden min-h-0">
               <div class="flex flex-wrap gap-1.5 mt-3">
                 <span

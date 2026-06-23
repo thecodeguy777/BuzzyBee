@@ -112,14 +112,14 @@ const stepActive = (i: number) => sp.value > (i + 0.35) / steps.length
     ref="sectionEl"
     id="match"
     class="relative bg-base-200"
-    :class="prefersReduced ? '' : 'h-[300vh]'"
+    :class="prefersReduced ? '' : 'h-[300svh]'"
   >
-    <div class="sticky top-0 min-h-screen flex items-center overflow-hidden border-t border-base-300 bg-base-200">
+    <div class="sticky top-0 min-h-[100svh] flex items-center overflow-hidden border-t border-base-300 bg-base-200">
       <div class="absolute inset-0 pointer-events-none">
         <AmbientGradient :opacity="0.14" tone="mixed" />
       </div>
 
-      <div class="relative w-full max-w-6xl mx-auto px-6 py-20 grid lg:grid-cols-2 gap-12 items-center">
+      <div class="relative w-full max-w-6xl mx-auto px-6 py-12 lg:py-20 grid lg:grid-cols-2 gap-12 items-center">
         <!-- Left: copy + "what you skip" checklist -->
         <div>
           <div class="flex items-center gap-3 mb-3">
@@ -166,7 +166,7 @@ const stepActive = (i: number) => sp.value > (i + 0.35) / steps.length
         </div>
 
         <!-- Right: the card stack -->
-        <div class="relative h-[380px] sm:h-[420px]">
+        <div class="relative h-[300px] sm:h-[420px]">
           <!-- Match card (behind the pile) -->
           <div class="absolute inset-0 flex items-center justify-center" style="z-index: 1">
             <div class="relative w-[300px] max-w-full rounded-2xl border-2 border-primary bg-base-100 shadow-2xl shadow-primary/25 p-5 will-change-transform" :style="matchStyle">

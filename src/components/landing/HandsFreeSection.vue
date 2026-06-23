@@ -185,8 +185,8 @@ const phase = computed(() => (cp.value < 0.45 ? 'Before' : 'After'))
               </div>
             </div>
 
-            <!-- Stat card (bottom-left) -->
-            <div class="absolute left-6 bottom-2 w-40 max-w-[60%] rounded-xl border border-base-300 bg-base-100 shadow-xl p-4" :style="settle(-22, 26, 5)">
+            <!-- Stat card (bottom-left) — hidden on phones to declutter the collage -->
+            <div class="hidden sm:block absolute left-6 bottom-2 w-40 max-w-[60%] rounded-xl border border-base-300 bg-base-100 shadow-xl p-4" :style="settle(-22, 26, 5)">
               <div class="flex items-center gap-1.5 text-green-600">
                 <TrendingUp class="w-4 h-4" />
                 <span class="text-2xl font-bold tracking-tight">+32%</span>
@@ -194,8 +194,8 @@ const phase = computed(() => (cp.value < 0.45 ? 'Before' : 'After'))
               <div class="text-[11px] text-base-content/50 mt-1">deals closed this month</div>
             </div>
 
-            <!-- Calendar card (bottom-right) -->
-            <div class="absolute right-4 bottom-8 w-44 max-w-[62%] rounded-xl border border-base-300 bg-base-100 shadow-xl overflow-hidden" :style="settle(26, 20, -5)">
+            <!-- Calendar card (bottom-right) — hidden on phones to declutter the collage -->
+            <div class="hidden sm:block absolute right-4 bottom-8 w-44 max-w-[62%] rounded-xl border border-base-300 bg-base-100 shadow-xl overflow-hidden" :style="settle(26, 20, -5)">
               <div class="flex items-center gap-2 px-3 py-2 bg-primary text-primary-content">
                 <CalendarDays class="w-4 h-4" />
                 <span class="text-[11px] font-semibold">Today</span>

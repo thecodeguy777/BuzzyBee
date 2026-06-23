@@ -68,7 +68,7 @@ const progress = ref(0) // 0..1 across the whole section
 const reduced = ref(false)
 
 const sectionStyle = computed(() => ({
-  height: reduced.value ? 'auto' : `calc(100vh + ${(N - 1) * SCROLL_VH}vh)`,
+  height: reduced.value ? 'auto' : `calc(100svh + ${(N - 1) * SCROLL_VH}svh)`,
 }))
 
 const clamp = (v: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v))
@@ -478,7 +478,7 @@ const sparkStyle = computed(() => ({
   --pri: #b266bb; --acc: #8a3a93; --amber: #e3a24a; --green: #6cc788;
   --blue: #8fb0f7; --coral: #ef8497; --hex: url(#hc-hex-clip);
 }
-.ps-stage { position: sticky; top: 0; height: 100vh; overflow: hidden; display: flex; align-items: center; padding: 5vh 0; }
+.ps-stage { position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden; display: flex; align-items: center; padding: 5vh 0; }
 .ps-aura { position: absolute; inset: 0; pointer-events: none; }
 .ps-aura span { position: absolute; border-radius: 9999px; filter: blur(100px); opacity: 0.4; }
 .ps-aura span:nth-child(1) { width: 42vw; height: 42vw; left: -10vw; top: -8vw; background: #5b2bb0; }
@@ -734,6 +734,31 @@ const sparkStyle = computed(() => ({
 .ps-stagechip .ps-d { width: 5px; height: 5px; }
 .ps-burst { position: absolute; inset: 0; border-radius: 11px; border: 1.5px solid rgba(34,163,90,0.85); pointer-events: none; animation: ps-burst 0.7s cubic-bezier(0.2,0.7,0.3,1) both; }
 @keyframes ps-burst { 0% { opacity: 0.9; transform: scale(1); } 100% { opacity: 0; transform: scale(1.14); } }
+
+/* ── mobile: the desktop feature-rail + app window can't share a phone screen.
+   Hide the feature-control list, compact the header, and make the app window the
+   hero — scrolling still tours the panels (Tasks → Chat → CRM → Time → Command).
+   The window itself is also adapted: no icon rail, no chat rail, swipeable
+   boards instead of 4 crushed columns. ── */
+@media (max-width: 640px) {
+  .ps-stage { padding: 3vh 0; }
+  .ps-grid { gap: 0.85rem; padding: 0 1.25rem; }
+  .ps-feats { display: none; }           /* the desktop control list — drop it on phones */
+  .ps-eyebrow { font-size: 0.68rem; }
+  .ps-h2 { font-size: clamp(1.5rem, 6vw, 1.95rem); }
+  .ps-lede { font-size: 0.86rem; margin-top: 0.5rem; }
+  .ps-cta { margin-top: 0.9rem; }
+  .ps-window { height: min(54svh, 440px); }
+  .ps-side { display: none; }            /* drop the icon rail; give the app full width */
+  .ps-chrail { display: none; }          /* chat: messages get the whole panel */
+  .ps-top-search, .ps-crumb { display: none; } /* declutter the topbar */
+  .ps-pad { padding: 0.7rem 0.8rem; }
+  .ps-board { overflow-x: auto; -webkit-overflow-scrolling: touch; gap: 0.5rem; padding-bottom: 4px; }
+  .ps-col { flex: 0 0 150px; }           /* readable swipeable columns, not 4 crushed ones */
+  .ps-hive-row { flex-wrap: wrap; gap: 0.5rem; }
+  .ps-person { width: 56px; }
+  .ps-drag { display: none; }            /* the drag flourish plays off-screen on mobile */
+}
 
 /* reduced motion: static stack */
 .ps.is-reduced { height: auto !important; }

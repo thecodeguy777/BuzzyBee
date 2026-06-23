@@ -6,7 +6,6 @@
 import LandingNav from '@/components/landing/LandingNav.vue'
 import HeroJourneySection from '@/components/landing/HeroJourneySection.vue'
 import ProfessionalsShowcase from '@/components/landing/ProfessionalsShowcase.vue'
-import SoftwareTaxSection from '@/components/landing/SoftwareTaxSection.vue'
 import PlatformSection from '@/components/landing/PlatformSection.vue'
 import ArsenalHoneycombSection from '@/components/landing/ArsenalHoneycombSection.vue'
 import ThreadOfWorkSection from '@/components/landing/ThreadOfWorkSection.vue'
@@ -32,9 +31,8 @@ import SiteFooter from '@/components/landing/SiteFooter.vue'
     <ProfessionalsShowcase />
     <MeetVASection />
     <VettedTalentSection />
-    <!-- The roles catalog: who/quality above → what roles you can staff → software tax -->
+    <!-- The roles catalog: who/quality above → what roles you can staff -->
     <RolesSection />
-    <SoftwareTaxSection />
     <PlatformSection />
     <ArsenalHoneycombSection />
     <ThreadOfWorkSection />

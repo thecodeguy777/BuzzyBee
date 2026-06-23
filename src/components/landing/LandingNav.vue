@@ -46,7 +46,7 @@ onUnmounted(() => {
 
 const LINKS = [
   { href: '#professionals', label: 'The People' },
-  { href: '#software-tax', label: 'Why HiveMind' },
+  { href: '#talent', label: 'Why HiveMind' },
   { href: '#platform', label: 'Platform' },
   { href: '#how', label: 'How It Works' }
 ]
@@ -82,7 +82,7 @@ const ctaHref = formToken ? `/f/${formToken}` : 'mailto:hello@hivemind.co'
           </svg>
         </a>
         <button
-          class="ln-burger md:hidden w-8 h-8 flex items-center justify-center rounded-full"
+          class="ln-burger md:hidden w-11 h-11 flex items-center justify-center rounded-full"
           :aria-expanded="mobileOpen"
           aria-controls="ln-mobile-menu"
           aria-label="Toggle menu"

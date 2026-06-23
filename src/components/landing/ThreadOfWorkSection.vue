@@ -104,7 +104,7 @@ const nodeLit = (i: number) => sp(i) > 0.08
 </script>
 
 <template>
-  <section ref="wrap" class="thread relative border-t border-white/5" :style="{ height: '480vh' }">
+  <section ref="wrap" class="thread relative border-t border-white/5" :style="{ height: '480svh' }">
     <!-- Rounded-hexagon clip (objectBoundingBox → scales to any hex size) -->
     <svg width="0" height="0" class="absolute" aria-hidden="true">
       <defs>
@@ -113,7 +113,7 @@ const nodeLit = (i: number) => sp(i) > 0.08
         </clipPath>
       </defs>
     </svg>
-    <div class="sticky top-0 h-screen overflow-hidden flex flex-col">
+    <div class="sticky top-0 h-[100svh] overflow-hidden flex flex-col">
       <!-- atmosphere -->
       <div class="absolute inset-0 pointer-events-none">
         <div class="thr-glow" :style="{ opacity: 0.5 + progress * 0.5 }" />
@@ -197,7 +197,7 @@ const nodeLit = (i: number) => sp(i) > 0.08
               <span class="font-mono text-[10px] font-semibold text-white/35">TASK-214</span>
               <span class="flex-1 text-[13px] font-semibold text-white/90 truncate">Chase Henderson proposal</span>
               <span class="thr-hex !w-[18px] !h-[18px] !text-[8px] bg-gradient-to-br from-[#a85be0] to-[#6a4cdd] !text-white">M</span>
-              <span class="text-[9.5px] font-semibold px-1.5 py-0.5 rounded bg-white/8 text-white/55">created from chat</span>
+              <span class="text-[9.5px] font-semibold px-1.5 py-0.5 rounded bg-white/8 text-white/55 hidden sm:inline">created from chat</span>
             </div>
           </div>
 

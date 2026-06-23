@@ -18,7 +18,7 @@ const progress = ref(0)
 const reduced = ref(false)
 
 const sectionStyle = computed(() => ({
-  height: reduced.value ? 'auto' : `calc(100vh + ${(BEATS - 1) * SCROLL_VH}vh)`,
+  height: reduced.value ? 'auto' : `calc(100svh + ${(BEATS - 1) * SCROLL_VH}svh)`,
 }))
 
 const clamp = (v: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v))
@@ -297,7 +297,7 @@ const beatClass = (i: number) => ({
 
 <style scoped>
 .hj { position: relative; background: #120a18; color: #f3ecfa; }
-.hj-stage { position: sticky; top: 0; height: 100vh; overflow: hidden; display: flex; align-items: center; justify-content: center; text-align: center; }
+.hj-stage { position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden; display: flex; align-items: center; justify-content: center; text-align: center; }
 
 .hj-aurora { position: absolute; inset: 0; pointer-events: none; transform: translate(calc(var(--mx, 0) * -12px), calc(var(--my, 0) * -12px)); transition: transform 0.3s ease-out; }
 .hj-blob { position: absolute; border-radius: 9999px; filter: blur(90px); opacity: 0.5; }
@@ -320,7 +320,7 @@ const beatClass = (i: number) => ({
 .hj-beat.is-past { opacity: 0; transform: translateY(-26px) scale(0.985); }
 
 .hj-eyebrow { font-size: 0.72rem; letter-spacing: 0.22em; text-transform: uppercase; color: #c79bef; font-weight: 600; }
-.hj-headline { font-family: 'Clash Display','Hanken Grotesk',system-ui,sans-serif; font-weight: 600; font-size: clamp(2.6rem,7vw,5.4rem); line-height: 0.98; letter-spacing: -0.02em; display: flex; flex-direction: column; }
+.hj-headline { font-family: 'Clash Display','Hanken Grotesk',system-ui,sans-serif; font-weight: 600; font-size: clamp(2rem,8.5vw,5.4rem); line-height: 0.98; letter-spacing: -0.02em; display: flex; flex-direction: column; }
 .hj-headline--sm { font-size: clamp(2rem,5.5vw,4rem); }
 .hj-beat--open .hj-headline { text-transform: uppercase; letter-spacing: -0.015em; }
 .hj-accent { background: linear-gradient(100deg,#b25cff,#e4c9ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
@@ -472,5 +472,9 @@ const beatClass = (i: number) => ({
 .hj.is-reduced .hj-cue, .hj.is-reduced .hj-comb { display: none; }
 .hj.is-reduced .hj-hive, .hj.is-reduced .hj-glow, .hj.is-reduced .hj-chips { display: none; }
 .hj.is-reduced .hj-aurora { position: fixed; }
+@media (max-width: 480px) {
+  .hj-chips { display: none; } /* decorative chips clip/clutter at phone width */
+  .hj-beat { gap: 1.1rem; }
+}
 @media (prefers-reduced-motion: reduce) { .hj-blob, .hj-hex, .hj-cue-icon, .hj-cell, .hj-chip-in { animation: none; } }
 </style>

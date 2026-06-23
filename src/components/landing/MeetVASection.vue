@@ -49,11 +49,11 @@ const stats = [
             Every plan includes a pre-vetted assistant &mdash; top 3% of applicants &mdash; who already lives inside the platform. Pre-interviewed by AI, reviewed by a human recruiter, managed by a project manager.
           </p>
 
-          <div class="mt-8 grid grid-cols-3 gap-3">
+          <div class="mt-8 grid grid-cols-3 gap-2 sm:gap-3">
             <div
               v-for="s in stats"
               :key="s.label"
-              class="border border-base-300 rounded-lg p-4 bg-base-100 text-center"
+              class="border border-base-300 rounded-lg p-3 sm:p-4 bg-base-100 text-center"
             >
               <div class="text-xl font-bold tracking-tight bg-gradient-to-r from-primary to-plum bg-clip-text text-transparent">{{ s.stat }}</div>
               <div class="text-[11px] uppercase tracking-wider text-base-content/50 mt-1">{{ s.label }}</div>
