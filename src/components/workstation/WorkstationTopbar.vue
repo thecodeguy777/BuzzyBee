@@ -8,7 +8,7 @@ import { useTeamStore } from '@/stores/team'
 import { useTimeStore } from '@/stores/time'
 import { useOnlinePresence, reportPath } from '@/composables/useOnlinePresence'
 import { displayName } from '@/lib/format'
-import ClientSwitcher from '@/components/workstation/ClientSwitcher.vue'
+import { useClientsStore } from '@/stores/clients'
 import GlobalSearch from '@/components/workstation/GlobalSearch.vue'
 import ThemeToggle from '@/components/workstation/ThemeToggle.vue'
 import RefreshButton from '@/components/workstation/RefreshButton.vue'
@@ -18,6 +18,7 @@ import OnlineNowChip from '@/components/workstation/OnlineNowChip.vue'
 import { useTour } from '@/composables/useTour'
 
 const auth = useAuthStore()
+const clients = useClientsStore()
 const route = useRoute()
 const channels = useChannelsStore()
 const team = useTeamStore()
@@ -54,7 +55,10 @@ const channelLabel = computed(() => {
   <header
     class="h-14 shrink-0 bg-base-100 border-b border-base-300 flex items-center px-2 sm:px-5 gap-1 sm:gap-2"
   >
-    <ClientSwitcher />
+    <!-- current client (switching now lives in the sidebar) -->
+    <span class="text-sm font-semibold text-base-content truncate max-w-[8rem] sm:max-w-[12rem] shrink-0">
+      {{ clients.currentClient?.name ?? 'No client selected' }}
+    </span>
 
     <!-- breadcrumb: ▸ #channel (comms only, needs the room) -->
     <template v-if="showChannelCrumb">

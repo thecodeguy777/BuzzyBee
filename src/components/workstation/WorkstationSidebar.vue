@@ -142,13 +142,13 @@ const fmtBadge = (n: number) => (n > 99 ? '99+' : String(n))
       @focusin="onFocusIn"
       @focusout="onFocusOut"
       :style="{
-        background: 'linear-gradient(180deg, #1e2a6e 0%, #211a52 50%, #14102f 100%)',
-        '--color-base-100': '#1a1645',
-        '--color-base-200': 'rgba(255,255,255,0.08)',
-        '--color-base-300': 'rgba(255,255,255,0.14)',
+        background: 'linear-gradient(180deg, #2c1248 0%, #25103d 100%)',
+        '--color-base-100': '#1f0d35',
+        '--color-base-200': 'rgba(255,255,255,0.07)',
+        '--color-base-300': 'rgba(255,255,255,0.13)',
         '--color-base-content': 'rgba(255,255,255,0.88)',
-        '--color-primary': '#a5b4fc',
-        '--color-primary-content': '#161335',
+        '--color-primary': '#d3a3d8',
+        '--color-primary-content': '#2c1248',
         color: 'rgba(255,255,255,0.88)'
       }"
       :class="[
