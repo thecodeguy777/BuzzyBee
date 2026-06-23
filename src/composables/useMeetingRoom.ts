@@ -192,6 +192,11 @@ export function useMeetingRoom() {
   // announcement (broadcast vs SDP have no ordering guarantee).
   const mediaState = new Map<string, { cam: string | null; screen: string | null }>()
   const pendingVideo = new Map<string, { userId: string; stream: MediaStream }>()
+  // Liveness measured on OUR clock (clock-skew immune): when a peer's reported
+  // `since` advances we stamp lastSeen = our Date.now(); if it hasn't advanced
+  // within STALE_MS they're a ghost. NEVER compare a remote `since` to our clock.
+  const lastSeen = new Map<string, number>()
+  const lastSince = new Map<string, number>()
 
   const admittedPeople = computed(() => online.value.filter((p) => p.admitted))
   const waiting = computed(() => online.value.filter((p) => !p.admitted && p.userId !== myId.value))
@@ -331,12 +336,22 @@ export function useMeetingRoom() {
         if (!cur || (m.since ?? 0) >= (cur.since ?? 0)) seen.set(m.userId, m)
       }
     }
-    // Drop ghosts: a dropped socket keeps a stale presence meta until the server
-    // times it out — prune by heartbeat freshness (but never prune ourselves).
+    // Liveness on OUR clock (clock-skew immune): the remote `since` is only a
+    // change-detector — when it advances we stamp our local time. A peer we
+    // haven't seen advance within STALE_MS is a ghost (dropped socket) and gets
+    // pruned. We never compare a remote timestamp to our own clock. Never prune
+    // ourselves.
     const now = Date.now()
+    for (const p of seen.values()) {
+      if ((p.since ?? 0) > (lastSince.get(p.userId) ?? -1)) {
+        lastSince.set(p.userId, p.since ?? 0)
+        lastSeen.set(p.userId, now)
+      }
+    }
     online.value = [...seen.values()].filter(
-      (p) => p.userId === myId.value || now - (p.since ?? 0) <= STALE_MS,
+      (p) => p.userId === myId.value || now - (lastSeen.get(p.userId) ?? now) <= STALE_MS,
     )
+    for (const id of [...lastSeen.keys()]) if (!seen.has(id)) { lastSeen.delete(id); lastSince.delete(id) }
     const sharers = new Set(online.value.filter((p) => p.sharing).map((p) => p.userId))
     for (const uid of Object.keys(remoteScreens.value)) if (!sharers.has(uid)) removeRemoteScreen(uid)
     const cammers = new Set(online.value.filter((p) => p.cam).map((p) => p.userId))
@@ -1101,6 +1116,8 @@ export function useMeetingRoom() {
     prevAdmittedIds = new Set()
     prevWaitingIds = new Set()
     prevHandIds = new Set()
+    lastSeen.clear()
+    lastSince.clear()
     teardownMedia()
     if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = undefined }
     if (onPageHide && typeof window !== 'undefined') {
