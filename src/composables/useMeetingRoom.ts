@@ -35,6 +35,11 @@ export interface Participant {
   /** Camera on — mirrors `sharing`; lets presence reconcile remote cameras. */
   cam?: boolean
   hand?: boolean
+  /** Mic / camera permission blocked (denied) — surfaces a "!" on their tile. */
+  micBlocked?: boolean
+  camBlocked?: boolean
+  /** Per-page-load session token — a change means the peer rejoined. */
+  epoch?: string
   since?: number
 }
 
@@ -53,14 +58,23 @@ export interface FlyingReaction {
 }
 
 function guestId(): string {
+  // localStorage (not sessionStorage) so a guest keeps the SAME id across tab
+  // close/reopen + refresh. Same id → presence dedups old+new into one tile
+  // (no ghost) and peers renegotiate the same key instead of stacking a second
+  // dead connection. Matches how logged-in members already use a stable user.id.
   const KEY = 'buzzybee.meet.guest-id'
-  let id = typeof window !== 'undefined' ? window.sessionStorage.getItem(KEY) : null
+  let id = typeof window !== 'undefined' ? window.localStorage.getItem(KEY) : null
   if (!id) {
     id = (crypto.randomUUID?.() ?? `guest-${Math.random().toString(36).slice(2)}-${Date.now()}`)
-    window.sessionStorage.setItem(KEY, id)
+    try { window.localStorage.setItem(KEY, id) } catch { /* ignore */ }
   }
   return id
 }
+
+// Heartbeat cadence + how long since the last beat before a participant is
+// treated as gone (ghost reaping, independent of Supabase's presence timeout).
+const HEARTBEAT_MS = 4000
+const STALE_MS = 12000
 
 export function useMeetingRoom() {
   const auth = useAuthStore()
@@ -85,6 +99,8 @@ export function useMeetingRoom() {
   const selfMirrored = ref(true)
   /** URL of the active background image (preset data-URL or uploaded blob). */
   const bgImageUrl = ref<string | null>(null)
+  /** True while the segmentation pipeline is loading (the blur/bg apply delay). */
+  const bgLoading = ref(false)
   /** Background effect (blur). Persists so it carries across sessions. */
   const bgMode = ref<BgMode>(
     typeof window !== 'undefined' && window.localStorage.getItem('buzzybee.comms.bg') === 'blur'
@@ -106,6 +122,11 @@ export function useMeetingRoom() {
   const myName = ref('')
   const myRole = ref<Role>('guest')
   const amAdmitted = ref(false)
+  // Stable per-page-load session token. A reload / rejoin gets a fresh epoch, so
+  // peers know to discard the stale connection and rebuild (see reconcilePeers).
+  // Generated ONCE per composable instance — never per trackPresence call.
+  const myEpoch =
+    typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)
 
   const ICE = iceServers()
   let localStream: MediaStream | null = null
@@ -130,6 +151,9 @@ export function useMeetingRoom() {
   // Honoured once the call goes live — lets the green-room "join with camera on"
   // choice carry through (incl. guests who wait in the lobby first).
   let startCameraOnLive = false
+  // Broadcast our own mic/cam permission trouble so others see a "!" on our tile.
+  let myMicBlocked = false
+  let myCamBlocked = false
   let audioCtx: AudioContext | null = null
   let speakingRaf = 0
   const analysers = new Map<string, AnalyserNode>()
@@ -145,6 +169,8 @@ export function useMeetingRoom() {
     audioEl?: HTMLAudioElement
     screenSender?: RTCRtpSender
     camSender?: RTCRtpSender
+    /** Sender's session token — a change means they rejoined; recycle the pc. */
+    epoch?: string
     /** ICE candidates that raced ahead of the remote description — flushed after it lands. */
     pendingIce: RTCIceCandidateInit[]
     /** True once presence has confirmed this user admitted (see reconcilePeers). */
@@ -155,6 +181,8 @@ export function useMeetingRoom() {
   }
   const peers = new Map<string, PeerEntry>()
   let channel: RealtimeChannel | null = null
+  let onPageHide: (() => void) | null = null
+  let heartbeatTimer: ReturnType<typeof setInterval> | undefined
 
   // Camera-vs-screen disambiguation. A bare WebRTC video track is unlabelled —
   // the receiver can't tell a face from a shared screen. So each sender
@@ -249,6 +277,17 @@ export function useMeetingRoom() {
       if (s === 'SUBSCRIBED') trackPresence()
     })
     channel = ch
+    // Abrupt tab close / hide doesn't run onUnmounted, so the presence ghost
+    // would linger until the server times it out. Fire-and-forget untrack on
+    // pagehide (mobile-safe, unlike beforeunload) — do NOT await removeChannel.
+    if (typeof window !== 'undefined') {
+      onPageHide = () => { try { void channel?.untrack() } catch { /* ignore */ } }
+      window.addEventListener('pagehide', onPageHide)
+    }
+    // Heartbeat: refresh our timestamp + re-evaluate everyone's freshness so a
+    // participant whose socket died (closed browser / crash) is pruned within
+    // ~STALE_MS even if Supabase is slow to fire 'leave' and pagehide never ran.
+    heartbeatTimer = setInterval(() => { trackPresence(); onPresence() }, HEARTBEAT_MS)
   }
 
   function trackPresence() {
@@ -262,8 +301,21 @@ export function useMeetingRoom() {
       sharing: sharingScreen.value,
       cam: cameraOn.value,
       hand: handRaised.value,
-      since: undefined,
+      micBlocked: myMicBlocked,
+      camBlocked: myCamBlocked,
+      epoch: myEpoch,
+      since: Date.now(), // heartbeat timestamp — powers freshness dedup + ghost reaping
     } satisfies Participant)
+  }
+  // Fed by the component's useMediaPermissions watcher. 'denied' = actively
+  // blocked (not just an un-enabled optional camera), so it's worth flagging.
+  function setPermissionState(mic: string, cam: string) {
+    const micB = mic === 'denied'
+    const camB = cam === 'denied'
+    if (micB === myMicBlocked && camB === myCamBlocked) return
+    myMicBlocked = micB
+    myCamBlocked = camB
+    if (channel) trackPresence()
   }
 
   function onPresence() {
@@ -271,9 +323,20 @@ export function useMeetingRoom() {
     const state = channel.presenceState<Participant>()
     const seen = new Map<string, Participant>()
     for (const metas of Object.values(state)) {
-      for (const m of metas as unknown as Participant[]) if (m?.userId) seen.set(m.userId, m)
+      for (const m of metas as unknown as Participant[]) {
+        if (!m?.userId) continue
+        const cur = seen.get(m.userId)
+        // Keep the freshest presence per user (highest join time) so a same-id
+        // rejoin resolves to the new session's epoch, not a lingering ghost meta.
+        if (!cur || (m.since ?? 0) >= (cur.since ?? 0)) seen.set(m.userId, m)
+      }
     }
-    online.value = [...seen.values()]
+    // Drop ghosts: a dropped socket keeps a stale presence meta until the server
+    // times it out — prune by heartbeat freshness (but never prune ourselves).
+    const now = Date.now()
+    online.value = [...seen.values()].filter(
+      (p) => p.userId === myId.value || now - (p.since ?? 0) <= STALE_MS,
+    )
     const sharers = new Set(online.value.filter((p) => p.sharing).map((p) => p.userId))
     for (const uid of Object.keys(remoteScreens.value)) if (!sharers.has(uid)) removeRemoteScreen(uid)
     const cammers = new Set(online.value.filter((p) => p.cam).map((p) => p.userId))
@@ -514,11 +577,22 @@ export function useMeetingRoom() {
   }
   function reconcilePeers() {
     if (!amAdmitted.value) return
+    const epochs = new Map(admittedPeople.value.map((p) => [p.userId, p.epoch]))
     const wanted = new Set(admittedPeople.value.map((p) => p.userId).filter((u) => u !== myId.value))
     let addedPeer = false
     for (const uid of wanted) {
+      const ex = peers.get(uid)
+      const ep = epochs.get(uid)
+      // Recycle a stale connection so getPeer doesn't reuse a dead pc: the peer
+      // rejoined (epoch changed) or the connection already died. This is what
+      // makes a rejoin reconnect instantly instead of waiting out the ICE timeout.
+      if (ex && ((ep && ex.epoch && ep !== ex.epoch) || ex.pc.connectionState === 'failed' || ex.pc.connectionState === 'closed')) {
+        closePeer(uid)
+      }
       if (!peers.has(uid)) addedPeer = true
-      getPeer(uid).confirmed = true
+      const e = getPeer(uid)
+      e.confirmed = true
+      e.epoch = ep
     }
     // A new peer needs to learn which of my video streams is cam vs screen.
     if (addedPeer && (cameraOn.value || sharingScreen.value)) announceMedia()
@@ -756,6 +830,7 @@ export function useMeetingRoom() {
       // returns null and we send the raw camera.
       let sendTrack = rawTrack
       if (bgMode.value !== 'none') {
+        bgLoading.value = true
         pipe = await createVideoBackground(raw, bgMode.value)
         if (gen !== camGen) return // cancelled during init → finally cleans up
         if (pipe) {
@@ -787,6 +862,7 @@ export function useMeetingRoom() {
         pipe?.destroy()
         raw?.getTracks().forEach((t) => t.stop())
       }
+      bgLoading.value = false
       camBusy = false
     }
   }
@@ -854,6 +930,7 @@ export function useMeetingRoom() {
       // Build the pipeline once; switching effects afterwards is just setMode.
       if (bgBusy) return
       bgBusy = true
+      bgLoading.value = true
       const gen = camGen
       try {
         const pipe = await createVideoBackground(rawCamStream, mode)
@@ -869,6 +946,7 @@ export function useMeetingRoom() {
         swapCameraTrack(vbg.track)
       } finally {
         bgBusy = false
+        bgLoading.value = false
       }
     } else {
       vbg.setMode(mode)
@@ -1024,6 +1102,11 @@ export function useMeetingRoom() {
     prevWaitingIds = new Set()
     prevHandIds = new Set()
     teardownMedia()
+    if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = undefined }
+    if (onPageHide && typeof window !== 'undefined') {
+      window.removeEventListener('pagehide', onPageHide)
+      onPageHide = null
+    }
     if (channel) {
       try {
         await channel.untrack()
@@ -1056,6 +1139,7 @@ export function useMeetingRoom() {
     selfMirrored,
     bgMode,
     bgImageUrl,
+    bgLoading,
     speaking,
     chat,
     reactions,
@@ -1067,6 +1151,7 @@ export function useMeetingRoom() {
     join,
     admit,
     deny,
+    setPermissionState,
     endMeeting,
     leave,
     toggleMute,

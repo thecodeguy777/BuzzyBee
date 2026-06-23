@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import {
-  Mic, MicOff, Video, VideoOff, SwitchCamera, Sparkles, ImagePlus, MonitorUp, MonitorOff, PhoneOff, Wand2, Bell, BellOff, Copy, Check, Crown, Users, Loader2,
-  Maximize2, X, Hand, Smile, MessageSquare, UserPlus, Send, Clock,
+  Mic, MicOff, Video, VideoOff, SwitchCamera, Sparkles, ImagePlus, MonitorUp, MonitorOff, PhoneOff, Wand2, Bell, BellOff, AlertTriangle, Copy, Check, Crown, Users, Loader2,
+  Maximize2, X, Hand, Smile, MessageSquare, UserPlus, Send, Clock, Lock, ArrowRight,
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
 import MeetingVideo from '@/components/shared/MeetingVideo.vue'
+import HexSpinner from '@/components/shared/HexSpinner.vue'
 import hivemindMark from '@/assets/landing/hivemind-mark-dark.svg'
 import { useAuthStore } from '@/stores/auth'
 import { useMeetingRoom, type Participant } from '@/composables/useMeetingRoom'
@@ -26,6 +27,8 @@ const room = useMeetingRoom()
 // people to unblock them before they try to join.
 const perms = useMediaPermissions()
 const permsBlocked = computed(() => perms.mic.value === 'denied' || perms.cam.value === 'denied')
+// Broadcast our own mic/cam permission trouble so peers get a "!" on our tile.
+watch([() => perms.mic.value, () => perms.cam.value], ([mic, cam]) => room.setPermissionState(mic, cam), { immediate: true })
 
 // ── Responsive / device ───────────────────────────────────────────────────────
 const vw = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
@@ -290,6 +293,29 @@ function camStream(p: Participant): MediaStream | null {
   return room.remoteCameras.value[p.userId] ?? null
 }
 
+// Permission warning for a participant (mic/cam blocked) → "!" badge + tooltip.
+function permWarn(p: Participant): string | null {
+  if (p.micBlocked && p.camBlocked) return 'Mic & camera blocked'
+  if (p.micBlocked) return 'Microphone blocked'
+  if (p.camBlocked) return 'Camera blocked'
+  return null
+}
+
+// ── Join-modal mic meter (design: Join Meeting.html) ──
+// Bars rise with the real preview level (micLevel), shaped by a centered hump
+// so it reads like a VU meter reacting to your voice.
+const meterBars = Array.from({ length: 16 })
+const meterWeights = meterBars.map((_, i) => 0.55 + 0.45 * Math.sin((i / (meterBars.length - 1)) * Math.PI))
+function barHeight(i: number): number {
+  if (!micPreviewOn.value) return 34
+  return Math.round(20 + Math.min(1, micLevel.value) * 80 * meterWeights[i])
+}
+function barColor(i: number): string {
+  if (!micPreviewOn.value) return 'rgba(255,255,255,.1)'
+  const lvl = Math.min(1, micLevel.value) * meterWeights[i]
+  return lvl > 0.7 ? '#b066c0' : lvl > 0.4 ? '#8a3a93' : 'rgba(176,102,192,.5)'
+}
+
 // ── Background picker (none / blur / preset image / upload) ────────────────────
 const bgOpen = ref(false)
 const bgFileInput = ref<HTMLInputElement | null>(null)
@@ -343,90 +369,95 @@ const isBgImg = (url: string | null | undefined) =>
        horizontally) and dvh (vh overflows under mobile URL bars). The whole
        surface — portal included — lives on the dark stage. -->
   <div class="mtg h-screen h-[100dvh] w-full overflow-hidden flex flex-col">
-    <!-- ── Guest portal: name + mic check ── -->
+    <!-- ── Guest join modal (Claude Design: Join Meeting.html) ── -->
     <div v-if="needsName" class="flex-1 overflow-y-auto flex p-4">
-      <div class="mtg-card w-full max-w-md m-auto">
-        <div class="flex items-center gap-2 mb-6">
-          <img :src="hivemindMark" alt="" class="w-5 h-auto" />
-          <span class="font-display text-sm font-semibold tracking-wide" style="color: var(--mtg-fg-2)">HiveMind Meet</span>
-        </div>
-        <p class="text-[0.7rem] font-bold uppercase tracking-widest mb-1.5" style="color: #d3a3d8">You're invited to</p>
-        <h1 class="font-display text-2xl font-bold mb-4">{{ roomTitle }}</h1>
+      <div class="jm-shell">
+        <!-- LEFT: live preview -->
+        <div class="jm-preview">
+          <div class="jm-brand">
+            <img :src="hivemindMark" alt="" class="jm-logo" />
+            <span class="jm-bn">HiveMind<span> Meet</span></span>
+          </div>
 
-        <!-- self-view preview: check framing before joining -->
-        <div class="relative rounded-xl overflow-hidden mb-4 aspect-video" style="background: var(--tile); border: 1px solid var(--mtg-border)">
-          <MeetingVideo
-            v-if="camPreviewOn && camPreviewStream"
-            :stream="camPreviewStream"
-            :mirror="true"
-            class="absolute inset-0"
-          />
-          <div v-else class="absolute inset-0 grid place-items-center text-center">
-            <div>
-              <HexAvatar :name="guestName || 'You'" :size="52" />
-              <div class="text-[11.5px] font-semibold mt-2" style="color: var(--mtg-fg-3)">Camera is off</div>
+          <div class="jm-stage">
+            <MeetingVideo
+              v-if="camPreviewOn && camPreviewStream"
+              :stream="camPreviewStream"
+              :mirror="true"
+              class="absolute inset-0"
+            />
+            <div v-else class="jm-camoff">
+              <HexAvatar :name="guestName || 'You'" :size="112" />
+              <div class="jm-camoff-msg">Camera is off</div>
             </div>
           </div>
-          <button
-            type="button"
-            class="mtg-ctrlbtn !w-11 !h-11 absolute left-1/2 -translate-x-1/2 bottom-2.5"
-            :class="camPreviewOn ? 'active' : ''"
-            :title="camPreviewOn ? 'Turn camera off' : 'Turn camera on'"
-            @click="toggleCamPreview"
-          >
-            <component :is="camPreviewOn ? Video : VideoOff" class="w-[18px] h-[18px]" :stroke-width="1.75" />
-          </button>
+          <span v-if="camPreviewOn" class="jm-mirror">Your camera is mirrored to you only</span>
+
+          <div class="jm-selfchip" :class="micPreviewOn ? '' : 'muted'">
+            <span class="jm-minimic">
+              <component :is="micPreviewOn ? Mic : MicOff" class="w-[15px] h-[15px]" :stroke-width="2" />
+            </span>
+            <span>{{ guestName.trim().split(' ')[0] || 'You' }}</span>
+          </div>
+
+          <div class="jm-pvctrls">
+            <button type="button" class="jm-pvbtn" :class="micPreviewOn ? '' : 'off'" :title="micPreviewOn ? 'Stop mic test' : 'Test your mic'" @click="toggleMicPreview">
+              <component :is="micPreviewOn ? Mic : MicOff" class="w-[21px] h-[21px]" :stroke-width="2" />
+            </button>
+            <button type="button" class="jm-pvbtn" :class="camPreviewOn ? '' : 'off'" :title="camPreviewOn ? 'Turn camera off' : 'Turn camera on'" @click="toggleCamPreview">
+              <component :is="camPreviewOn ? Video : VideoOff" class="w-[21px] h-[21px]" :stroke-width="2" />
+            </button>
+          </div>
         </div>
 
-        <label class="block mb-4">
-          <span class="block text-xs font-semibold mb-1.5" style="color: var(--mtg-fg-2)">Your name</span>
-          <input
-            v-model="guestName"
-            autofocus
-            placeholder="Maria Santos"
-            class="mtg-input"
-            @keydown.enter="joinAsGuest"
-          />
-        </label>
+        <!-- RIGHT: setup -->
+        <div class="jm-setup">
+          <div class="jm-kicker">You're invited to</div>
+          <h1 class="jm-title">{{ roomTitle }}</h1>
 
-        <!-- mic check -->
-        <div class="rounded-xl border px-3.5 py-3 mb-5" style="border-color: var(--mtg-border); background: var(--tile)">
-          <div class="flex items-center gap-3">
-            <button
-              type="button"
-              class="mtg-ctrlbtn !w-10 !h-10"
-              :class="micPreviewOn ? 'active' : ''"
-              :title="micPreviewOn ? 'Stop mic check' : 'Test your mic'"
-              @click="toggleMicPreview"
-            >
-              <Mic class="w-[18px] h-[18px]" :stroke-width="1.75" />
-            </button>
+          <div class="jm-field">
+            <label class="jm-flabel" for="jm-name">Your name</label>
+            <input
+              id="jm-name"
+              v-model="guestName"
+              autofocus
+              autocomplete="name"
+              placeholder="Maria Santos"
+              class="jm-input"
+              @keydown.enter="joinAsGuest"
+            />
+          </div>
+
+          <!-- mic test — the meter is driven by the real preview level -->
+          <div class="jm-mic" :class="micPreviewOn ? '' : 'muted'">
+            <div class="jm-mic-ic"><Mic class="w-[19px] h-[19px]" :stroke-width="2" /></div>
             <div class="flex-1 min-w-0">
-              <div class="text-[13px] font-semibold">{{ micPreviewOn ? 'Say something…' : 'Test your mic' }}</div>
-              <div class="mt-1.5 h-1.5 rounded-full overflow-hidden" style="background: rgba(255, 255, 255, 0.08)">
-                <div
-                  class="h-full rounded-full transition-[width] duration-75"
-                  :style="{ width: micLevel * 100 + '%', background: micLevel > 0.05 ? '#2bb673' : 'transparent' }"
-                />
+              <div class="jm-mic-top">
+                <span class="jm-mic-t">{{ micError ? 'Mic is blocked' : 'Test your mic' }}</span>
+                <span class="jm-mic-s">{{ micPreviewOn ? 'Say something…' : 'Tap the mic to test' }}</span>
+              </div>
+              <div class="jm-meter">
+                <span v-for="(_, i) in meterBars" :key="i" class="jm-bar" :style="{ height: barHeight(i) + '%', background: barColor(i) }" />
               </div>
             </div>
           </div>
-          <p v-if="micError" class="text-[11.5px] mt-2" style="color: #ff8a9b">
-            Mic access was blocked — allow it in your browser, or join muted and fix it after.
-          </p>
+          <p v-if="micError" class="jm-micerr">Mic access was blocked — allow it in your browser, or join muted and fix it after.</p>
+
+          <!-- blocked permissions → reset steps -->
+          <MediaPermissionNotice v-if="permsBlocked" :mic="perms.mic.value" :cam="perms.cam.value" class="mt-3" @recheck="perms.refresh" />
+
+          <div class="jm-spacer" />
+
+          <div v-if="!permsBlocked" class="jm-permit">
+            <Lock class="w-[15px] h-[15px]" :stroke-width="1.9" />
+            <span>Your camera &amp; mic stay off until you turn them on. Nothing is recorded before you join.</span>
+          </div>
+
+          <button class="jm-join" :disabled="!guestName.trim()" @click="joinAsGuest">
+            Join now
+            <ArrowRight class="w-[18px] h-[18px]" :stroke-width="2.4" />
+          </button>
         </div>
-
-        <!-- permission readiness, checked on load -->
-        <MediaPermissionNotice
-          :mic="perms.mic.value"
-          :cam="perms.cam.value"
-          class="mb-5"
-          @recheck="perms.refresh"
-        />
-
-        <button class="mtg-join" :disabled="!guestName.trim()" @click="joinAsGuest">
-          Join meeting
-        </button>
       </div>
     </div>
 
@@ -541,27 +572,35 @@ const isBgImg = (url: string | null | undefined) =>
             </div>
           </div>
           <!-- filmstrip -->
-          <div class="flex gap-2.5 h-24 flex-none overflow-x-auto">
+          <TransitionGroup tag="div" name="tile" class="flex gap-2.5 h-24 flex-none overflow-x-auto">
             <div v-for="p in room.admittedPeople.value" :key="p.userId" class="w-[150px] flex-none">
               <div class="mtg-tile h-full" :class="room.speaking.value.has(p.userId) ? 'speaking' : ''">
-                <MeetingVideo v-if="camStream(p)" :stream="camStream(p)" :mirror="isYou(p) && room.selfMirrored.value" class="absolute inset-0" />
+                <MeetingVideo v-if="camStream(p)" :stream="camStream(p)" :mirror="isYou(p) && room.selfMirrored.value" class="absolute inset-0 mtg-fade-in" />
                 <HexAvatar v-else :name="p.name" :color-key="p.userId" :size="44" />
                 <span class="mtg-ring" />
                 <span class="mtg-chip left-2 bottom-2 !text-[11px]">
                   <MicOff v-if="p.muted" class="w-3 h-3" style="color: #ff8a9b" :stroke-width="2" />
                   {{ p.name }}{{ isYou(p) ? ' (you)' : '' }}
                 </span>
-                <span v-if="p.hand" class="mtg-chip right-2 top-2 !p-1" style="background: rgba(217, 165, 49, 0.92)">
+                <span v-if="p.hand" class="mtg-chip mtg-pop right-2 top-2 !p-1" style="background: rgba(217, 165, 49, 0.92)">
                   <Hand class="w-3 h-3" :stroke-width="2" />
                 </span>
+                <span v-if="permWarn(p)" class="mtg-chip mtg-pop left-2 top-2 !p-1" style="background: rgba(226, 59, 84, 0.92)" :title="permWarn(p) || ''">
+                  <AlertTriangle class="w-3 h-3" :stroke-width="2.4" />
+                </span>
+                <div v-if="isYou(p) && room.bgLoading.value" class="absolute inset-0 grid place-items-center mtg-fade-in" style="background: rgba(15, 12, 20, 0.55)">
+                  <HexSpinner :size="30" />
+                </div>
               </div>
             </div>
-          </div>
+          </TransitionGroup>
         </div>
 
         <!-- GRID layout — always fits the viewport; tiles shrink, never scroll -->
-        <div
+        <TransitionGroup
           v-else
+          tag="div"
+          name="tile"
           class="flex-1 min-w-0 min-h-0 grid gap-3 p-4"
           :style="{
             gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`,
@@ -570,7 +609,7 @@ const isBgImg = (url: string | null | undefined) =>
         >
           <div v-for="p in room.admittedPeople.value" :key="p.userId" class="min-h-0 min-w-0">
             <div class="mtg-tile w-full h-full" :class="room.speaking.value.has(p.userId) ? 'speaking' : ''">
-              <MeetingVideo v-if="camStream(p)" :stream="camStream(p)" :mirror="isYou(p) && room.selfMirrored.value" class="absolute inset-0" />
+              <MeetingVideo v-if="camStream(p)" :stream="camStream(p)" :mirror="isYou(p) && room.selfMirrored.value" class="absolute inset-0 mtg-fade-in" />
               <HexAvatar v-else :name="p.name" :color-key="p.userId" :size="72" />
               <span class="mtg-ring" />
               <span class="mtg-chip left-2.5 bottom-2.5">
@@ -578,14 +617,21 @@ const isBgImg = (url: string | null | undefined) =>
                 {{ p.name }}{{ isYou(p) ? ' (you)' : '' }}
                 <Crown v-if="p.role === 'host'" class="w-[13px] h-[13px]" style="color: #e6c85a" :stroke-width="2" />
               </span>
-              <span v-if="p.hand" class="mtg-chip right-2.5 top-2.5" style="background: rgba(217, 165, 49, 0.92)">
+              <span v-if="p.hand" class="mtg-chip mtg-pop right-2.5 top-2.5" style="background: rgba(217, 165, 49, 0.92)">
                 <Hand class="w-[15px] h-[15px]" :stroke-width="2" />
               </span>
+              <span v-if="permWarn(p)" class="mtg-chip mtg-pop left-2.5 top-2.5 !p-1.5" style="background: rgba(226, 59, 84, 0.92)" :title="permWarn(p) || ''">
+                <AlertTriangle class="w-[14px] h-[14px]" :stroke-width="2.4" />
+              </span>
+              <div v-if="isYou(p) && room.bgLoading.value" class="absolute inset-0 grid place-items-center mtg-fade-in" style="background: rgba(15, 12, 20, 0.55)">
+                <HexSpinner :size="46" />
+              </div>
             </div>
           </div>
-        </div>
+        </TransitionGroup>
 
         <!-- side panel -->
+        <Transition name="panel">
         <div v-if="panel" class="mtg-side">
           <div class="h-14 flex-none flex items-center gap-2 pl-[18px] pr-3.5 border-b" style="border-color: var(--mtg-border)">
             <span class="text-[15px] font-bold">
@@ -624,6 +670,7 @@ const isBgImg = (url: string | null | undefined) =>
                   <span v-if="p.role === 'host'" class="text-[11px] font-semibold" style="color: var(--mtg-fg-3)"> · Host</span>
                 </div>
               </div>
+              <AlertTriangle v-if="permWarn(p)" class="w-4 h-4" style="color: #ff8a9b" :stroke-width="2" :title="permWarn(p) || ''" />
               <Hand v-if="p.hand" class="w-4 h-4" style="color: #e6c85a" :stroke-width="2" />
               <component :is="p.muted ? MicOff : Mic" class="w-4 h-4" :style="{ color: p.muted ? '#ff8a9b' : 'var(--mtg-fg-2)' }" :stroke-width="1.75" />
             </div>
@@ -659,6 +706,7 @@ const isBgImg = (url: string | null | undefined) =>
             </div>
           </template>
         </div>
+        </Transition>
 
         <!-- flying reactions -->
         <div class="absolute inset-0 pointer-events-none overflow-hidden">
@@ -672,7 +720,7 @@ const isBgImg = (url: string | null | undefined) =>
       </div>
 
       <!-- control bar (wraps on narrow screens instead of overflowing) -->
-      <div class="mtg-controls flex-none flex flex-wrap items-center justify-center gap-2 sm:gap-3 px-2.5 sm:px-[18px] pt-3.5 relative">
+      <div class="mtg-controls mtg-rise flex-none flex flex-wrap items-center justify-center gap-2 sm:gap-3 px-2.5 sm:px-[18px] pt-3.5 relative">
         <div class="absolute left-[18px] bottom-5 hidden md:flex items-center gap-2 text-[12.5px] font-semibold" style="color: var(--mtg-fg-2)">
           <Clock class="w-[15px] h-[15px]" :stroke-width="1.75" />
           <span class="tabular-nums">{{ mmss }}</span>
@@ -951,6 +999,32 @@ const isBgImg = (url: string | null | undefined) =>
   animation: mtgFlyUp 2.6s ease-out forwards;
 }
 
+/* ── Premium motion ── (all gated behind reduced-motion) */
+@keyframes mtgPop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes mtgRise { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes mtgFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: no-preference) {
+  /* Pop with a touch of overshoot — hand-raise / warning badges. */
+  .mtg-pop { animation: mtgPop 0.34s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+  /* Control bar eases up when the stage appears. */
+  .mtg-rise { animation: mtgRise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  /* Camera video / loading overlay fade in. */
+  .mtg-fade-in { animation: mtgFadeIn 0.4s ease both; }
+
+  /* Tile grid/filmstrip: new joiners scale in, leavers scale out, and the
+     whole layout glides (FLIP) when it reflows. The premium centerpiece. */
+  .tile-enter-active { transition: opacity 0.4s ease, transform 0.45s cubic-bezier(0.22, 1, 0.36, 1); }
+  .tile-leave-active { transition: opacity 0.28s ease, transform 0.3s cubic-bezier(0.4, 0, 1, 1); }
+  .tile-enter-from, .tile-leave-to { opacity: 0; transform: scale(0.82); }
+  .tile-move { transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+
+  /* Side panel slides + fades. */
+  .panel-enter-active, .panel-leave-active { transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease; }
+  .panel-enter-from, .panel-leave-to { transform: translateX(18px); opacity: 0; }
+
+  .mtg-ctrlbtn { transition: background 0.14s, transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1); }
+}
+
 /* ── Portal (guest landing / lobby / end states) ── */
 .mtg-card {
   background: var(--stage-2);
@@ -997,5 +1071,93 @@ const isBgImg = (url: string | null | undefined) =>
 @keyframes mtgLobbyPulse {
   0%, 100% { transform: scale(1); opacity: 1; }
   50% { transform: scale(1.06); opacity: 0.85; }
+}
+
+/* ── Guest join modal (Claude Design: Join Meeting.html) ── */
+.jm-shell {
+  width: 100%;
+  max-width: 1040px;
+  margin: auto;
+  display: grid;
+  grid-template-columns: 1.32fr 1fr;
+  border-radius: 24px;
+  overflow: hidden;
+  background: var(--stage-2);
+  border: 1px solid var(--mtg-border);
+  box-shadow: 0 40px 90px -30px rgba(0, 0, 0, 0.7);
+}
+.jm-preview {
+  position: relative;
+  background: linear-gradient(165deg, #1a1622, #0e0b14);
+  min-height: 540px;
+  display: flex;
+  flex-direction: column;
+  padding: 22px;
+}
+.jm-brand { display: flex; align-items: center; gap: 10px; z-index: 3; }
+.jm-logo { width: 24px; height: auto; filter: drop-shadow(0 3px 6px rgba(120, 60, 140, 0.5)); }
+.jm-bn { font-size: 16px; font-weight: 800; letter-spacing: -0.3px; }
+.jm-bn span { color: #b066c0; }
+.jm-stage { flex: 1; position: relative; display: grid; place-items: center; margin: 14px 0 0; border-radius: 16px; overflow: hidden; }
+.jm-camoff { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.jm-camoff-msg { font-size: 14px; color: var(--mtg-fg-3); font-weight: 500; }
+.jm-mirror {
+  position: absolute; left: 18px; bottom: 84px; font-size: 11px; font-weight: 600; color: var(--mtg-fg-3);
+  background: rgba(0, 0, 0, 0.4); padding: 4px 9px; border-radius: 7px; backdrop-filter: blur(6px); z-index: 3;
+}
+.jm-selfchip {
+  position: absolute; left: 18px; bottom: 22px; display: inline-flex; align-items: center; gap: 8px;
+  padding: 7px 13px; border-radius: 10px; background: rgba(12, 9, 18, 0.6); backdrop-filter: blur(10px);
+  font-size: 13.5px; font-weight: 650; z-index: 3; border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.jm-minimic { display: grid; place-items: center; color: #2bb673; }
+.jm-selfchip.muted .jm-minimic { color: #ff7e93; }
+.jm-pvctrls { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); display: flex; gap: 12px; z-index: 3; }
+.jm-pvbtn {
+  width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center; color: #fff;
+  background: rgba(255, 255, 255, 0.12); backdrop-filter: blur(8px); transition: background 0.14s, transform 0.1s;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.jm-pvbtn:hover { background: rgba(255, 255, 255, 0.2); }
+.jm-pvbtn:active { transform: scale(0.93); }
+.jm-pvbtn.off { background: #e23b54; border-color: transparent; }
+.jm-pvbtn.off:hover { background: #cf2f47; }
+.jm-setup { padding: 32px 32px 28px; display: flex; flex-direction: column; }
+.jm-kicker { font-size: 11.5px; font-weight: 750; letter-spacing: 1.6px; text-transform: uppercase; color: #b066c0; }
+.jm-title { font-size: 26px; font-weight: 800; letter-spacing: -0.7px; margin-top: 9px; line-height: 1.12; }
+.jm-field { margin-top: 22px; }
+.jm-flabel { font-size: 12.5px; font-weight: 650; color: var(--mtg-fg-2); margin-bottom: 8px; display: block; }
+.jm-input {
+  width: 100%; height: 48px; padding: 0 14px; border-radius: 12px; background: var(--stage);
+  border: 1px solid var(--mtg-border); color: var(--mtg-fg); font-size: 15px; font-weight: 550; outline: none;
+  transition: border-color 0.14s, box-shadow 0.14s;
+}
+.jm-input::placeholder { color: var(--mtg-fg-3); }
+.jm-input:focus { border-color: #8a3a93; box-shadow: 0 0 0 3px rgba(138, 58, 147, 0.25); }
+.jm-mic { margin-top: 14px; display: flex; align-items: center; gap: 13px; padding: 12px 14px; border-radius: 13px; background: var(--tile); border: 1px solid var(--mtg-border); }
+.jm-mic-ic { width: 40px; height: 40px; border-radius: 11px; flex: none; display: grid; place-items: center; background: rgba(138, 58, 147, 0.16); color: #b066c0; }
+.jm-mic.muted .jm-mic-ic { background: rgba(226, 59, 84, 0.16); color: #ff7e93; }
+.jm-mic-top { display: flex; align-items: baseline; gap: 8px; }
+.jm-mic-t { font-size: 13.5px; font-weight: 700; }
+.jm-mic-s { font-size: 11.5px; color: var(--mtg-fg-3); margin-left: auto; }
+.jm-meter { display: flex; gap: 3px; margin-top: 9px; height: 14px; align-items: flex-end; }
+.jm-bar { flex: 1; border-radius: 2px; height: 34%; transition: height 0.1s ease, background 0.1s; }
+.jm-micerr { font-size: 11.5px; color: #ff8a9b; margin-top: 8px; line-height: 1.4; }
+.jm-spacer { flex: 1; min-height: 16px; }
+.jm-permit { display: flex; align-items: center; gap: 9px; font-size: 12px; color: var(--mtg-fg-3); margin-top: 16px; line-height: 1.45; }
+.jm-permit svg { flex: none; }
+.jm-join {
+  margin-top: 14px; height: 52px; border-radius: 14px; background: linear-gradient(140deg, #7a3bd0, #b066c0); color: #fff;
+  font-size: 16px; font-weight: 750; display: flex; align-items: center; justify-content: center; gap: 9px;
+  box-shadow: 0 12px 30px -8px rgba(138, 58, 147, 0.6); transition: transform 0.12s, box-shadow 0.18s, opacity 0.14s;
+}
+.jm-join:hover { transform: translateY(-1px); box-shadow: 0 16px 38px -10px rgba(138, 58, 147, 0.7); }
+.jm-join:active { transform: translateY(0); }
+.jm-join:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; }
+.jm-join svg { transition: transform 0.18s; }
+.jm-join:not(:disabled):hover svg { transform: translateX(3px); }
+@media (max-width: 860px) {
+  .jm-shell { grid-template-columns: 1fr; max-width: 460px; }
+  .jm-preview { min-height: 300px; }
 }
 </style>
