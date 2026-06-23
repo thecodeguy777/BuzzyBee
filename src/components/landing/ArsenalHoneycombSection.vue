@@ -81,7 +81,7 @@ const lit = (i: number) => hovered.value === i || (hovered.value === -1 && spotl
 </script>
 
 <template>
-  <section ref="root" class="arsenal relative overflow-hidden border-t border-base-300">
+  <section ref="root" class="arsenal relative overflow-hidden">
     <!-- Rounded-hexagon clip (objectBoundingBox → scales to any hex size) -->
     <svg width="0" height="0" class="absolute" aria-hidden="true">
       <defs>

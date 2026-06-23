@@ -43,7 +43,7 @@ const stats = [
             <span class="text-xs font-medium uppercase tracking-wider text-primary">Meet your VA</span>
           </div>
           <h2 class="font-display text-3xl md:text-4xl tracking-tight leading-tight text-base-content">
-            Software doesn't do the work. Your VA does.
+            A real person &mdash; vetted harder than most hires.
           </h2>
           <p class="mt-4 text-base text-base-content/60 leading-relaxed">
             Every plan includes a pre-vetted assistant &mdash; top 3% of applicants &mdash; who already lives inside the platform. Pre-interviewed by AI, reviewed by a human recruiter, managed by a project manager.

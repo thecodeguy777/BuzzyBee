@@ -13,7 +13,7 @@ const hiveSegments = [
 ]
 
 const usualPoints = [
-  '~$1,250/mo evaporates on tools + oversight before any work happens',
+  'Nearly half your budget evaporates on tools + oversight before any work happens',
   'You still assemble and maintain the stack yourself',
   'Six logins, six bills, six things that can break'
 ]
@@ -76,7 +76,7 @@ const hivePoints = [
             </li>
           </ul>
           <div class="mt-5">
-            <span class="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-primary/10 text-primary">~$1,250/mo redirected to actual output</span>
+            <span class="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-primary/10 text-primary">Your whole budget redirected to actual output</span>
           </div>
         </div>
       </div>

@@ -50,6 +50,13 @@ const LINKS = [
   { href: '#platform', label: 'Platform' },
   { href: '#how', label: 'How It Works' }
 ]
+
+// The primary CTA reuses the public Forms discovery flow (same seam as
+// FinalCtaSection / RolesSection) so "Get Started" reaches the form in one
+// click instead of scrolling to another button. Falls back to email until
+// VITE_DISCOVERY_FORM_TOKEN is set.
+const formToken = import.meta.env.VITE_DISCOVERY_FORM_TOKEN as string | undefined
+const ctaHref = formToken ? `/f/${formToken}` : 'mailto:hello@hivemind.co'
 </script>
 
 <template>
@@ -68,7 +75,7 @@ const LINKS = [
         <a href="/login" class="ln-login hidden sm:inline-flex items-center text-[13px] font-medium px-3.5 py-1.5 rounded-full">
           Log In
         </a>
-        <a href="#contact" class="ln-cta inline-flex items-center gap-1.5 text-[13px] font-semibold px-4 py-1.5 rounded-full">
+        <a :href="ctaHref" class="ln-cta inline-flex items-center gap-1.5 text-[13px] font-semibold px-4 py-1.5 rounded-full">
           Get Started
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M5 12h14M13 5l7 7-7 7" />
@@ -103,7 +110,7 @@ const LINKS = [
         </a>
         <a href="/login" class="ln-brand block py-2 text-sm font-medium" @click="mobileOpen = false">Log In</a>
         <a
-          href="#contact"
+          :href="ctaHref"
           class="ln-cta mt-2 inline-flex w-full items-center justify-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-full"
           @click="mobileOpen = false"
         >

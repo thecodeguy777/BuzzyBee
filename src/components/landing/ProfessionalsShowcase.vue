@@ -54,7 +54,7 @@ const pros = [
           <div class="w-8 h-0.5 rounded-full bg-gradient-to-l from-primary to-plum"></div>
         </div>
         <h2 class="font-display text-3xl md:text-4xl tracking-tight leading-tight text-base-content">
-          You're not buying software. You're hiring a professional.
+          They already know Dotloop, MLS, and Follow Up Boss.
         </h2>
         <p class="mt-4 text-base text-base-content/60 leading-relaxed">
           The platform is just how you see the work. The work itself is done by a real, trained person — one

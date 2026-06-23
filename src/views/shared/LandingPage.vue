@@ -12,15 +12,14 @@ import ArsenalHoneycombSection from '@/components/landing/ArsenalHoneycombSectio
 import ThreadOfWorkSection from '@/components/landing/ThreadOfWorkSection.vue'
 import MeetVASection from '@/components/landing/MeetVASection.vue'
 import VettedTalentSection from '@/components/landing/VettedTalentSection.vue'
+import RolesSection from '@/components/landing/RolesSection.vue'
 import TheMatchSection from '@/components/landing/TheMatchSection.vue'
-import HowItWorksSection from '@/components/landing/HowItWorksSection.vue'
 import HandsFreeSection from '@/components/landing/HandsFreeSection.vue'
 import IndustryStripSection from '@/components/landing/IndustryStripSection.vue'
 // Pricing + FAQ hidden for now — re-enable by uncommenting here and in <template>.
 // import PricingSection from '@/components/landing/PricingSection.vue'
 import TestimonialsSection from '@/components/landing/TestimonialsSection.vue'
 // import FaqSection from '@/components/landing/FaqSection.vue'
-import TransformationSection from '@/components/landing/TransformationSection.vue'
 import FinalCtaSection from '@/components/landing/FinalCtaSection.vue'
 import SiteFooter from '@/components/landing/SiteFooter.vue'
 </script>
@@ -33,18 +32,19 @@ import SiteFooter from '@/components/landing/SiteFooter.vue'
     <ProfessionalsShowcase />
     <MeetVASection />
     <VettedTalentSection />
+    <!-- The roles catalog: who/quality above → what roles you can staff → software tax -->
+    <RolesSection />
     <SoftwareTaxSection />
     <PlatformSection />
     <ArsenalHoneycombSection />
     <ThreadOfWorkSection />
+    <!-- Done for you: the card-stack match hook + the 7-day path (merged) -->
     <TheMatchSection />
-    <HowItWorksSection />
     <HandsFreeSection />
     <IndustryStripSection />
     <!-- <PricingSection /> hidden for now -->
     <TestimonialsSection />
     <!-- <FaqSection /> hidden for now -->
-    <TransformationSection />
     <FinalCtaSection />
     <SiteFooter />
   </div>

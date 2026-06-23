@@ -46,7 +46,7 @@ const pillars = [
   {
     icon: Zap,
     title: 'Highly effective people',
-    body: 'AI-augmented and trained on your playbook — senior-operator output from week one, 2–3× faster on busywork.'
+    body: 'Trained on your playbook, so they\'re productive from week one — no months-long ramp-up.'
   },
   {
     icon: Award,
@@ -71,10 +71,10 @@ const pillars = [
           <div class="w-8 h-0.5 rounded-full bg-gradient-to-l from-primary to-plum"></div>
         </div>
         <h2 class="font-display text-3xl md:text-4xl tracking-tight leading-tight text-base-content">
-          We don't place admins. We place professionals.
+          Only the top 3% make it through.
         </h2>
         <p class="mt-4 text-base text-base-content/60 leading-relaxed">
-          Every HiveMind VA clears a multi-stage gauntlet &mdash; AI pre-screen, human recruiter interview, and a role-specific skills assessment &mdash; before they ever touch your account. You get the top 3%: intelligently staffed, highly trained, relentlessly effective.
+          Every HiveMind VA clears AI pre-screening, a recruiter interview, and a role-specific skills test before they ever touch your account &mdash; then we match them to your tools and time zone.
         </p>
       </div>
 
