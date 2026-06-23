@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import {
-  Mic, MicOff, Video, VideoOff, SwitchCamera, Sparkles, ImagePlus, MonitorUp, MonitorOff, PhoneOff, Wand2, Copy, Check, Crown, Users, Loader2,
+  Mic, MicOff, Video, VideoOff, SwitchCamera, Sparkles, ImagePlus, MonitorUp, MonitorOff, PhoneOff, Wand2, Bell, BellOff, Copy, Check, Crown, Users, Loader2,
   Maximize2, X, Hand, Smile, MessageSquare, UserPlus, Send, Clock,
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
@@ -775,6 +775,10 @@ const isBgImg = (url: string | null | undefined) =>
 
         <button class="mtg-ctrlbtn" :class="room.noiseSuppression.value ? 'active' : ''" :title="room.rnnoiseActive.value ? 'AI noise cancellation' : 'Noise cancellation'" @click="room.toggleNoise()">
           <Wand2 class="w-[21px] h-[21px]" :stroke-width="1.75" />
+        </button>
+
+        <button class="mtg-ctrlbtn" :class="room.soundsOn.value ? '' : 'muted'" :title="room.soundsOn.value ? 'Meeting sounds on' : 'Meeting sounds off'" @click="room.toggleSounds()">
+          <component :is="room.soundsOn.value ? Bell : BellOff" class="w-[21px] h-[21px]" :stroke-width="1.75" />
         </button>
 
         <button v-if="room.isHost.value" class="h-[52px] px-5 rounded-full text-sm font-bold text-white" style="background: #e23b54" @click="room.endMeeting()">

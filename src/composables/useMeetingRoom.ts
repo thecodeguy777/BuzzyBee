@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { iceServers } from '@/lib/iceServers'
 import { createNoisePipeline, type NoisePipeline } from '@/lib/noiseSuppressor'
 import { createVideoBackground, type VideoBackground, type BgMode } from '@/lib/virtualBackground'
+import { meetSounds } from '@/lib/meetingSounds'
 
 // Gmeet-style guest meeting rooms. WebRTC audio + screen-share mesh signaled
 // over a PUBLIC realtime channel `meet:<token>` — the unguessable token in the
@@ -99,6 +100,7 @@ export function useMeetingRoom() {
     typeof window === 'undefined' || window.localStorage.getItem('buzzybee.comms.noise-suppression') !== '0',
   )
   const rnnoiseActive = ref(false)
+  const soundsOn = ref(meetSounds.isEnabled())
 
   const myId = ref('')
   const myName = ref('')
@@ -131,6 +133,12 @@ export function useMeetingRoom() {
   let audioCtx: AudioContext | null = null
   let speakingRaf = 0
   const analysers = new Map<string, AnalyserNode>()
+  // Presence-driven sound cues: diff each presence update to fire join/leave/
+  // knock/hand sounds. soundsArmed gates the initial roster (no blast on join).
+  let prevAdmittedIds = new Set<string>()
+  let prevWaitingIds = new Set<string>()
+  let prevHandIds = new Set<string>()
+  let soundsArmed = false
 
   interface PeerEntry {
     pc: RTCPeerConnection
@@ -186,6 +194,7 @@ export function useMeetingRoom() {
     token.value = tk
     status.value = 'joining'
     error.value = null
+    meetSounds.unlock() // prime audio during the join gesture (guests)
     startCameraOnLive = !!opts?.startCamera
     const meta = await resolve(tk)
     if (!meta) {
@@ -269,7 +278,37 @@ export function useMeetingRoom() {
     for (const uid of Object.keys(remoteScreens.value)) if (!sharers.has(uid)) removeRemoteScreen(uid)
     const cammers = new Set(online.value.filter((p) => p.cam).map((p) => p.userId))
     for (const uid of Object.keys(remoteCameras.value)) if (!cammers.has(uid)) removeRemoteCamera(uid)
-    if (amAdmitted.value) reconcilePeers()
+    if (amAdmitted.value) {
+      playPresenceSounds()
+      reconcilePeers()
+    }
+  }
+  // Diff this presence update against the last to fire sound cues. One sound per
+  // category per update (no overlap spam when several people change at once).
+  function playPresenceSounds() {
+    const admitted = new Set<string>()
+    const waiting = new Set<string>()
+    const hands = new Set<string>()
+    for (const p of online.value) {
+      if (p.userId === myId.value) continue
+      if (p.admitted) { admitted.add(p.userId); if (p.hand) hands.add(p.userId) }
+      else waiting.add(p.userId)
+    }
+    if (soundsArmed) {
+      let joined = false, left = false, knocked = false, raised = false
+      for (const id of admitted) if (!prevAdmittedIds.has(id)) joined = true
+      for (const id of prevAdmittedIds) if (!admitted.has(id)) left = true
+      if (canAdmit.value) for (const id of waiting) if (!prevWaitingIds.has(id)) knocked = true
+      for (const id of hands) if (!prevHandIds.has(id)) raised = true
+      if (knocked) meetSounds.knock()
+      if (joined) meetSounds.join()
+      if (left) meetSounds.leave()
+      if (raised) meetSounds.hand()
+    }
+    prevAdmittedIds = admitted
+    prevWaitingIds = waiting
+    prevHandIds = hands
+    soundsArmed = true
   }
 
   // ── Lobby control ─────────────────────────────────────────────────────────
@@ -284,7 +323,7 @@ export function useMeetingRoom() {
       return
     }
     if (p.to !== myId.value) return
-    if (p.type === 'admit' && !amAdmitted.value) void goLive()
+    if (p.type === 'admit' && !amAdmitted.value) { meetSounds.admitted(); void goLive() }
     else if (p.type === 'deny') {
       status.value = 'denied'
       leave()
@@ -305,6 +344,7 @@ export function useMeetingRoom() {
   async function goLive() {
     amAdmitted.value = true
     status.value = 'live'
+    meetSounds.unlock()
     try {
       await ensureLocalStream()
     } catch {
@@ -890,7 +930,14 @@ export function useMeetingRoom() {
   }
   function toggleHand() {
     handRaised.value = !handRaised.value
+    if (handRaised.value) meetSounds.hand() // immediate feedback for the raiser
     trackPresence()
+  }
+  function toggleSounds() {
+    soundsOn.value = !soundsOn.value
+    meetSounds.setEnabled(soundsOn.value)
+    meetSounds.unlock()
+    if (soundsOn.value) meetSounds.hand() // confirm it's on
   }
 
   // ── In-call chat + reactions ──────────────────────────────────────────────
@@ -972,6 +1019,10 @@ export function useMeetingRoom() {
   }
 
   async function leave() {
+    soundsArmed = false
+    prevAdmittedIds = new Set()
+    prevWaitingIds = new Set()
+    prevHandIds = new Set()
     teardownMedia()
     if (channel) {
       try {
@@ -1010,6 +1061,7 @@ export function useMeetingRoom() {
     reactions,
     noiseSuppression,
     rnnoiseActive,
+    soundsOn,
     me,
     peek,
     join,
@@ -1025,6 +1077,7 @@ export function useMeetingRoom() {
     setBackground,
     setBackgroundImage,
     toggleNoise,
+    toggleSounds,
     sendChat,
     sendReaction,
   }
