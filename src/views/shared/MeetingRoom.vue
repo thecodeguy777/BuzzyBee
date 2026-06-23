@@ -2,7 +2,7 @@
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import {
   Mic, MicOff, Video, VideoOff, SwitchCamera, Sparkles, ImagePlus, MonitorUp, MonitorOff, PhoneOff, Wand2, Bell, BellOff, AlertTriangle, Copy, Check, Crown, Users, Loader2,
-  Maximize2, X, Hand, Smile, MessageSquare, UserPlus, Send, Clock, Lock, ArrowRight,
+  Maximize2, X, Hand, Smile, MessageSquare, UserPlus, Send, Clock, Lock, ArrowRight, MoreVertical, UserMinus,
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
 import MeetingVideo from '@/components/shared/MeetingVideo.vue'
@@ -22,6 +22,9 @@ import MediaPermissionNotice from '@/components/shared/MediaPermissionNotice.vue
 const props = defineProps<{ token: string }>()
 const auth = useAuthStore()
 const room = useMeetingRoom()
+
+// Which participant's host-moderation menu is open (host only).
+const menuFor = ref<string | null>(null)
 
 // Check mic + camera permissions the moment the link loads, so we can guide
 // people to unblock them before they try to join.
@@ -368,7 +371,7 @@ const isBgImg = (url: string | null | undefined) =>
   <!-- w-full (not w-screen: that includes the scrollbar and overflows
        horizontally) and dvh (vh overflows under mobile URL bars). The whole
        surface — portal included — lives on the dark stage. -->
-  <div class="mtg h-screen h-[100dvh] w-full overflow-hidden flex flex-col">
+  <div class="mtg overflow-hidden flex flex-col">
     <!-- ── Guest join modal (Claude Design: Join Meeting.html) ── -->
     <div v-if="needsName" class="flex-1 overflow-y-auto flex p-4">
       <div class="jm-shell">
@@ -505,6 +508,10 @@ const isBgImg = (url: string | null | undefined) =>
 
     <!-- ── Live: the dark stage ── -->
     <div v-else-if="room.status.value === 'live'" class="flex-1 min-h-0 flex flex-col">
+      <!-- host action notice ("The host muted you", etc.) -->
+      <Transition name="mtg-toast">
+        <div v-if="room.hostNotice.value" class="mtg-toast">{{ room.hostNotice.value }}</div>
+      </Transition>
       <!-- header -->
       <div class="mtg-header">
         <div class="min-w-0">
@@ -650,6 +657,19 @@ const isBgImg = (url: string | null | undefined) =>
               {{ copied ? 'Link copied — send it' : 'Add people' }}
             </button>
 
+            <!-- click-away layer for the host menu -->
+            <div v-if="menuFor" class="fixed inset-0 z-20" @click="menuFor = null" />
+
+            <!-- host room-wide controls -->
+            <div v-if="room.isHost.value && room.admittedPeople.value.length > 1" class="flex gap-2 mb-2.5">
+              <button class="mtg-modbtn flex-1" @click="room.muteEveryone()">
+                <MicOff class="w-4 h-4" :stroke-width="2" /> Mute all
+              </button>
+              <button class="mtg-modbtn flex-1" :class="room.roomShareLocked.value ? 'on' : ''" @click="room.toggleShareLock()">
+                <Lock class="w-4 h-4" :stroke-width="2" /> {{ room.roomShareLocked.value ? 'Share locked' : 'Lock share' }}
+              </button>
+            </div>
+
             <!-- waiting room, folded into People -->
             <template v-if="room.canAdmit.value && room.waiting.value.length">
               <div class="px-2 pt-2 pb-1 text-[0.65rem] font-bold uppercase tracking-wider" style="color: var(--mtg-fg-3)">Waiting to join</div>
@@ -662,7 +682,7 @@ const isBgImg = (url: string | null | undefined) =>
               <div class="my-2 border-t" style="border-color: var(--mtg-border)" />
             </template>
 
-            <div v-for="p in room.admittedPeople.value" :key="p.userId" class="flex items-center gap-[11px] px-2.5 py-2 rounded-[10px]">
+            <div v-for="p in room.admittedPeople.value" :key="p.userId" class="relative flex items-center gap-[11px] px-2.5 py-2 rounded-[10px]">
               <HexAvatar :name="p.name" :color-key="p.userId" :size="34" />
               <div class="flex-1 min-w-0">
                 <div class="text-[13.5px] font-semibold truncate">
@@ -673,6 +693,23 @@ const isBgImg = (url: string | null | undefined) =>
               <AlertTriangle v-if="permWarn(p)" class="w-4 h-4" style="color: #ff8a9b" :stroke-width="2" :title="permWarn(p) || ''" />
               <Hand v-if="p.hand" class="w-4 h-4" style="color: #e6c85a" :stroke-width="2" />
               <component :is="p.muted ? MicOff : Mic" class="w-4 h-4" :style="{ color: p.muted ? '#ff8a9b' : 'var(--mtg-fg-2)' }" :stroke-width="1.75" />
+              <!-- host moderation menu (host, others only) -->
+              <button
+                v-if="room.isHost.value && !isYou(p)"
+                class="mtg-ctrlbtn !w-7 !h-7 flex-none"
+                style="background: rgba(255, 255, 255, 0.06)"
+                title="Host controls"
+                @click.stop="menuFor = menuFor === p.userId ? null : p.userId"
+              >
+                <MoreVertical class="w-4 h-4" :stroke-width="2" />
+              </button>
+              <div v-if="menuFor === p.userId" class="mtg-modmenu" @click.stop>
+                <button v-if="!p.muted" @click="room.muteParticipant(p.userId); menuFor = null"><MicOff class="w-4 h-4" :stroke-width="1.9" /> Mute</button>
+                <button v-if="p.cam" @click="room.turnOffParticipantCam(p.userId); menuFor = null"><VideoOff class="w-4 h-4" :stroke-width="1.9" /> Turn off camera</button>
+                <button v-if="p.sharing" @click="room.stopParticipantShare(p.userId); menuFor = null"><MonitorOff class="w-4 h-4" :stroke-width="1.9" /> Stop screen share</button>
+                <button v-if="p.hand" @click="room.lowerParticipantHand(p.userId); menuFor = null"><Hand class="w-4 h-4" :stroke-width="1.9" /> Lower hand</button>
+                <button class="danger" @click="room.removeParticipant(p.userId); menuFor = null"><UserMinus class="w-4 h-4" :stroke-width="1.9" /> Remove from call</button>
+              </div>
             </div>
           </div>
 
@@ -780,8 +817,15 @@ const isBgImg = (url: string | null | undefined) =>
           <input ref="bgFileInput" type="file" accept="image/*" class="hidden" @change="onBgFile" />
         </div>
 
-        <button v-if="canShareScreen" class="mtg-ctrlbtn" :class="room.sharingScreen.value ? 'active' : ''" :title="room.sharingScreen.value ? 'Stop presenting' : 'Present now'" @click="room.toggleScreenShare()">
-          <component :is="room.sharingScreen.value ? MonitorOff : MonitorUp" class="w-[23px] h-[23px]" :stroke-width="1.75" />
+        <button
+          v-if="canShareScreen"
+          class="mtg-ctrlbtn"
+          :class="room.sharingScreen.value ? 'active' : ''"
+          :disabled="!room.isHost.value && room.roomShareLocked.value"
+          :title="!room.isHost.value && room.roomShareLocked.value ? 'The host locked screen sharing' : room.sharingScreen.value ? 'Stop presenting' : 'Present now'"
+          @click="room.toggleScreenShare()"
+        >
+          <component :is="room.sharingScreen.value ? MonitorOff : (!room.isHost.value && room.roomShareLocked.value ? Lock : MonitorUp)" class="w-[23px] h-[23px]" :stroke-width="1.75" />
         </button>
 
         <!-- reactions -->
@@ -844,6 +888,18 @@ const isBgImg = (url: string | null | undefined) =>
 /* Dark stage palette — from the Meeting.html design handoff. The call surface
    is always dark regardless of app theme: video and shares need it. */
 .mtg {
+  /* Fixed full-viewport lock. /meet is a bare layout, so the room pins itself
+     to the screen instead of relying on a page-height class pair (h-screen +
+     h-[100dvh] desynced on iPad → the page grew past the visible area and
+     scrolled into a white gap). Fixed = it adds no document height, so there's
+     nothing to scroll; dvh (not vh) = the *visible* height, keeping the control
+     bar above the iOS/iPadOS toolbar. */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100vh; /* fallback for no-dvh browsers */
+  height: 100dvh;
   --stage: #171520;
   --stage-2: #1f1c29;
   --tile: #262232;
@@ -1072,6 +1128,39 @@ const isBgImg = (url: string | null | undefined) =>
   0%, 100% { transform: scale(1); opacity: 1; }
   50% { transform: scale(1.06); opacity: 0.85; }
 }
+
+/* ── Host moderation ── */
+.mtg-ctrlbtn:disabled { opacity: 0.4; cursor: not-allowed; }
+.mtg-modbtn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 32px; border-radius: 9px; font-size: 12px; font-weight: 700;
+  color: var(--mtg-fg-2); background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--mtg-border); transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.mtg-modbtn:hover { background: rgba(255, 255, 255, 0.1); color: var(--mtg-fg); }
+.mtg-modbtn.on { background: rgba(226, 59, 84, 0.16); color: #ff8a9b; border-color: rgba(226, 59, 84, 0.4); }
+.mtg-modmenu {
+  position: absolute; right: 8px; top: 40px; z-index: 30; min-width: 182px;
+  padding: 5px; border-radius: 12px; background: var(--stage-2);
+  border: 1px solid var(--mtg-border-2); box-shadow: 0 18px 44px -18px rgba(0, 0, 0, 0.7);
+}
+.mtg-modmenu button {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  padding: 8px 10px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  color: var(--mtg-fg); transition: background 0.12s;
+}
+.mtg-modmenu button:hover { background: rgba(255, 255, 255, 0.08); }
+.mtg-modmenu button.danger { color: #ff8a9b; }
+.mtg-modmenu button.danger:hover { background: rgba(226, 59, 84, 0.14); }
+.mtg-toast {
+  position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 60;
+  max-width: min(92vw, 420px); padding: 11px 18px; border-radius: 12px;
+  background: rgba(20, 16, 28, 0.92); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border: 1px solid var(--mtg-border-2); box-shadow: 0 18px 44px -18px rgba(0, 0, 0, 0.7);
+  font-size: 13.5px; font-weight: 600; color: var(--mtg-fg); text-align: center;
+}
+.mtg-toast-enter-active, .mtg-toast-leave-active { transition: opacity 0.25s ease, transform 0.25s ease; }
+.mtg-toast-enter-from, .mtg-toast-leave-to { opacity: 0; transform: translate(-50%, -8px); }
 
 /* ── Guest join modal (Claude Design: Join Meeting.html) ── */
 .jm-shell {

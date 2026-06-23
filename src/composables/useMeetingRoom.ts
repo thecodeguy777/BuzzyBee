@@ -1,4 +1,4 @@
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, onUnmounted, watch } from 'vue'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { broadcast } from '@/lib/realtime'
@@ -41,6 +41,9 @@ export interface Participant {
   /** Per-page-load session token — a change means the peer rejoined. */
   epoch?: string
   since?: number
+  /** Host-only: screen-sharing locked to the host (others read it via the
+   *  host's presence so late joiners inherit the policy). */
+  shareLocked?: boolean
 }
 
 export interface MeetingChatMsg {
@@ -112,6 +115,13 @@ export function useMeetingRoom() {
   )
   const rnnoiseActive = ref(false)
   const soundsOn = ref(meetSounds.isEnabled())
+
+  // Host moderation: the screen-share lock (only the host's presence carries it;
+  // everyone else reads it via roomShareLocked), plus a transient notice shown to
+  // a participant a host action just targeted ("The host muted you").
+  const shareLocked = ref(false)
+  const hostNotice = ref<string | null>(null)
+  let noticeTimer: ReturnType<typeof setTimeout> | undefined
 
   const myId = ref('')
   const myName = ref('')
@@ -191,6 +201,9 @@ export function useMeetingRoom() {
   const waiting = computed(() => online.value.filter((p) => !p.admitted && p.userId !== myId.value))
   const canAdmit = computed(() => myRole.value === 'host' || myRole.value === 'member')
   const isHost = computed(() => myRole.value === 'host')
+  // The room's share policy lives in the host's presence, so late joiners inherit
+  // it automatically without a replay handshake.
+  const roomShareLocked = computed(() => online.value.find((p) => p.role === 'host')?.shareLocked ?? false)
   const me = () => myId.value
 
   // ── Resolve + join ──────────────────────────────────────────────────────────
@@ -293,6 +306,7 @@ export function useMeetingRoom() {
       hand: handRaised.value,
       micBlocked: myMicBlocked,
       camBlocked: myCamBlocked,
+      shareLocked: shareLocked.value,
       epoch: myEpoch,
       since: Date.now(), // heartbeat timestamp — powers freshness dedup + ghost reaping
     } satisfies Participant)
@@ -370,14 +384,29 @@ export function useMeetingRoom() {
       teardownMedia()
       return
     }
+    // Global host command — applies to everyone but the host, no single target.
+    if (p.type === 'mute-all') {
+      if (!isHost.value) { forceMuteSelf(); notify('The host muted everyone') }
+      return
+    }
     if (p.to !== myId.value) return
     if (p.type === 'admit' && !amAdmitted.value) { meetSounds.admitted(); void goLive() }
     else if (p.type === 'deny') {
       status.value = 'denied'
       leave()
     } else if (p.type === 'kick') {
+      notify('The host removed you from the meeting')
       leave()
       status.value = 'ended'
+    } else if (p.type === 'force-mute') {
+      forceMuteSelf()
+      notify('The host muted you')
+    } else if (p.type === 'force-cam-off') {
+      if (cameraOn.value) { disableCamera(); notify('The host turned your camera off') }
+    } else if (p.type === 'force-stop-share') {
+      if (sharingScreen.value) { stopScreenShare(); notify('The host stopped your screen share') }
+    } else if (p.type === 'lower-hand') {
+      if (handRaised.value) { handRaised.value = false; trackPresence() }
     }
   }
   function admit(userId: string) {
@@ -388,6 +417,38 @@ export function useMeetingRoom() {
     if (!canAdmit.value) return
     sendCtrl('deny', userId)
   }
+
+  // ── Host moderation ───────────────────────────────────────────────────────
+  function notify(msg: string) {
+    hostNotice.value = msg
+    if (noticeTimer) clearTimeout(noticeTimer)
+    noticeTimer = setTimeout(() => { hostNotice.value = null }, 4500)
+  }
+  // Force my own mic off because a host told me to. One-way: a host can mute you,
+  // but only you can unmute yourself.
+  function forceMuteSelf() {
+    if (muted.value) return
+    muted.value = true
+    ;(rawStream ?? localStream)?.getAudioTracks().forEach((t) => (t.enabled = false))
+    trackPresence()
+  }
+  // Host → one participant.
+  function muteParticipant(uid: string) { if (isHost.value && uid !== myId.value) sendCtrl('force-mute', uid) }
+  function turnOffParticipantCam(uid: string) { if (isHost.value && uid !== myId.value) sendCtrl('force-cam-off', uid) }
+  function stopParticipantShare(uid: string) { if (isHost.value && uid !== myId.value) sendCtrl('force-stop-share', uid) }
+  function lowerParticipantHand(uid: string) { if (isHost.value && uid !== myId.value) sendCtrl('lower-hand', uid) }
+  function removeParticipant(uid: string) { if (isHost.value && uid !== myId.value) sendCtrl('kick', uid) }
+  // Host → everyone but the host.
+  function muteEveryone() { if (isHost.value) sendCtrl('mute-all') }
+  function toggleShareLock() {
+    if (!isHost.value) return
+    shareLocked.value = !shareLocked.value
+    trackPresence()
+  }
+  // A non-host presenting when the host locks sharing gets stopped.
+  watch(roomShareLocked, (locked) => {
+    if (locked && !isHost.value && sharingScreen.value) stopScreenShare()
+  })
 
   async function goLive() {
     amAdmitted.value = true
@@ -665,6 +726,7 @@ export function useMeetingRoom() {
   }
   async function startScreenShare() {
     if (!amAdmitted.value || sharingScreen.value) return
+    if (!isHost.value && roomShareLocked.value) { notify('The host has locked screen sharing'); return }
     try {
       screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: { frameRate: { ideal: 15, max: 30 } },
@@ -1111,6 +1173,16 @@ export function useMeetingRoom() {
     waiting,
     canAdmit,
     isHost,
+    roomShareLocked,
+    shareLocked,
+    hostNotice,
+    muteParticipant,
+    turnOffParticipantCam,
+    stopParticipantShare,
+    lowerParticipantHand,
+    removeParticipant,
+    muteEveryone,
+    toggleShareLock,
     myId,
     muted,
     handRaised,
