@@ -4,8 +4,9 @@
 -- stale Realtime presence snapshot, because once the reaper deletes the row it
 -- simply does not exist for any client to re-pull.
 --
--- ⚠ DRAFT FOR REVIEW — NOT APPLIED. Three choices are flagged inline as
---   [DECISION]; settle them before running this against the database.
+-- Decisions settled 2026-06-25: token-gated reads · public 25 MB attachments
+--   bucket · guests may upload. BuzzyBee-only (buzzybee schema + a bb- bucket /
+--   cron job); touches no MikeSteel/public object. Pre-ship dev.
 --
 -- Shape
 --   buzzybee.meeting_participants  — live roster (client heartbeat + pg_cron reaper)

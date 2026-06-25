@@ -811,10 +811,10 @@ function openDuePicker(triggerEl: HTMLElement) {
             <Hash class="w-3.5 h-3.5" :stroke-width="1.75" />
             <span class="font-mono">{{ t?.reference_number }}</span>
             <span class="text-base-content/30">·</span>
-            <span class="truncate max-w-[14rem]">{{ t?.client_name ?? '—' }}</span>
+            <span class="truncate max-w-56">{{ t?.client_name ?? '—' }}</span>
             <template v-if="creatorName">
               <span class="text-base-content/30">·</span>
-              <span class="truncate max-w-[10rem]" title="Task creator (can always edit)">by {{ creatorName }}</span>
+              <span class="truncate max-w-40" title="Task creator (can always edit)">by {{ creatorName }}</span>
             </template>
           </div>
           <div class="flex items-center gap-2">
@@ -1314,7 +1314,7 @@ function openDuePicker(triggerEl: HTMLElement) {
                       {{ fmtCommentTime(m.created_at) }}
                     </span>
                   </div>
-                  <div class="text-sm text-base-content/90 whitespace-pre-wrap break-words">
+                  <div class="text-sm text-base-content/90 whitespace-pre-wrap wrap-break-word">
                     <CommsRichText :text="m.message" :mention-names="mentionNamesFor(m)" />
                   </div>
                 </div>

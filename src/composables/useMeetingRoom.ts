@@ -60,18 +60,31 @@ export interface FlyingReaction {
   x: number
 }
 
+const GUEST_ID_KEY = 'buzzybee.meet.guest-id'
 function guestId(): string {
-  // localStorage (not sessionStorage) so a guest keeps the SAME id across tab
-  // close/reopen + refresh. Same id → presence dedups old+new into one tile
-  // (no ghost) and peers renegotiate the same key instead of stacking a second
-  // dead connection. Matches how logged-in members already use a stable user.id.
-  const KEY = 'buzzybee.meet.guest-id'
-  let id = typeof window !== 'undefined' ? window.localStorage.getItem(KEY) : null
+  // localStorage (not sessionStorage) so a guest keeps the SAME token across a
+  // tab close/reopen + RELOAD — they come back as the same person (one tile, the
+  // peer renegotiates the same key instead of stacking a dead connection). Only a
+  // DELIBERATE leave/end clears it (forgetGuestId); a reload never does.
+  let id = typeof window !== 'undefined' ? window.localStorage.getItem(GUEST_ID_KEY) : null
   if (!id) {
     id = (crypto.randomUUID?.() ?? `guest-${Math.random().toString(36).slice(2)}-${Date.now()}`)
-    try { window.localStorage.setItem(KEY, id) } catch { /* ignore */ }
+    try { window.localStorage.setItem(GUEST_ID_KEY, id) } catch { /* ignore */ }
   }
   return id
+}
+const LAST_ROOM_KEY = 'buzzybee.meet.last-room'
+// Remember which room a guest is in (token + name + when) so an accidental RELOAD
+// can auto-rejoin instead of re-showing the green room. Cleared on a deliberate
+// leave (forgetGuestId).
+function rememberRoom(token: string, name: string) {
+  try { window.localStorage.setItem(LAST_ROOM_KEY, JSON.stringify({ token, name, at: Date.now() })) } catch { /* ignore */ }
+}
+function forgetGuestId() {
+  try {
+    window.localStorage.removeItem(GUEST_ID_KEY)
+    window.localStorage.removeItem(LAST_ROOM_KEY)
+  } catch { /* ignore */ }
 }
 
 export function useMeetingRoom() {
@@ -87,29 +100,17 @@ export function useMeetingRoom() {
   // case it was a spoof or the untrack never lands), so a leaver drops instantly
   // without a re-add flicker from a presence sync that still lists them.
   const byed = new Set<string>()
-  // Liveness heartbeat (mirrors useHuddlePresence's proven pattern, applied to
-  // the call roster). Presence alone can't tell "left" from "still server-
-  // tracked": an abruptly-closed peer lingers in the server's presence table and
-  // gets re-pulled onto everyone via a resync, resurrecting as "connected". So
-  // each admitted peer broadcasts a cheap 'alive' ping; a peer that WAS pinging
-  // and then goes silent past ALIVE_TTL is filtered out of the roster — even if a
-  // resync re-lists them — until they ping again. This is a BROADCAST into a map,
-  // NOT a presence re-track, so it carries none of the churn the old 5s re-track
-  // approach did (no presence-sync storm, no per-tick peer rebuild).
-  const lastSeen = new Map<string, number>()
-  const ALIVE_TTL = 25_000        // hide a peer this long after their last ping
-  const ALIVE_ENTRY_TTL = 60_000  // then forget the entry (server has reaped them)
-  // Liveness can only be JUDGED when my OWN signaling socket is healthy and pings
-  // are actually reaching me. lastAnyPingAt = last 'alive' heard from anyone;
-  // channelJoinedAt = when my channel last (re)joined. If my socket is down (a
-  // blip) I hear nobody, and right after a reconnect nobody has pinged me yet —
-  // in both cases the silence is MINE, so canReapStale() stays false and I never
-  // tear down healthy peers over my own hiccup (the mass-teardown regression).
-  let lastAnyPingAt = 0
-  let channelJoinedAt = 0
-  let channelWasJoined = false
-  const canReapStale = () =>
-    channel?.state === REALTIME_CHANNEL_STATES.joined && lastAnyPingAt > channelJoinedAt
+  // Presence drives WHO is shown (instant, robust); the DB only AUTHORITATIVELY
+  // REMOVES. buzzybee.meeting_participants is server-reaped via pg_cron and
+  // streamed here over postgres_changes — a DELETE (reap or clean leave) adds the
+  // user to `reaped` so a presence resync can't resurrect them; an INSERT clears
+  // it. A DB hiccup therefore can NEVER make a live participant invisible (the
+  // earlier bug) — worst case a ghost lingers on presence's own timeout. Guests
+  // are stored 'guest:<id>' server-side; dbId() strips the prefix to match the
+  // presence userId.
+  const reaped = new Set<string>()
+  let rosterChannel: RealtimeChannel | null = null
+  const dbId = (uid: string) => (uid.startsWith('guest:') ? uid.slice(6) : uid)
 
   const muted = ref(false)
   const handRaised = ref(false)
@@ -303,11 +304,18 @@ export function useMeetingRoom() {
       myName.value = displayName?.trim() || 'Guest'
       myRole.value = 'guest'
       amAdmitted.value = false
+      rememberRoom(tk, myName.value) // enable auto-rejoin on an accidental reload
     }
 
     await subscribe(tk)
+    await subscribeRoster(meta.id)
+    // A guest who was already admitted in a prior session (e.g. just before a
+    // reload) is still admitted in the DB — skip the lobby and go straight back.
+    if (!amAdmitted.value && myRole.value === 'guest' && (await isAlreadyAdmitted(meta.id))) {
+      amAdmitted.value = true
+    }
     if (amAdmitted.value) await goLive()
-    else status.value = 'lobby'
+    else { void rpcJoin(false); status.value = 'lobby' } // lobby guest joins the DB waiting list
   }
 
   async function subscribe(tk: string) {
@@ -329,7 +337,6 @@ export function useMeetingRoom() {
     ch.on('presence', { event: 'leave' }, onPresence)
     ch.on('broadcast', { event: 'rtc' }, (m: { payload?: any }) => void handleSignal(m.payload))
     ch.on('broadcast', { event: 'ctrl' }, (m: { payload?: any }) => onCtrl(m.payload))
-    ch.on('broadcast', { event: 'alive' }, (m: { payload?: any }) => onAlive(m.payload))
     ch.on('broadcast', { event: 'media' }, (m: { payload?: any }) => onMedia(m.payload))
     ch.on('broadcast', { event: 'media-req' }, (m: { payload?: any }) => onMediaReq(m.payload))
     ch.on('broadcast', { event: 'chat' }, (m: { payload?: any }) => {
@@ -366,8 +373,6 @@ export function useMeetingRoom() {
         if (s === 'SUBSCRIBED') {
           reconnecting.value = false
           reconnectAttempts = 0
-          channelJoinedAt = Date.now() // (re)joined — pings must re-arrive before reaping
-          channelWasJoined = true
           trackPresence()
           done()
         } else if (s === 'CHANNEL_ERROR' || s === 'TIMED_OUT' || s === 'CLOSED') {
@@ -447,26 +452,8 @@ export function useMeetingRoom() {
     if (reconcileTimer) return
     reconcileTimer = setInterval(() => {
       if (status.value !== 'live' || !amAdmitted.value) return
-      // Track my own (re)join so staleness is judged only once pings can flow
-      // again — a silent socket-level reconnect that never re-fires SUBSCRIBED is
-      // still caught here within one tick.
-      const joined = channel?.state === REALTIME_CHANNEL_STATES.joined
-      if (joined && !channelWasJoined) channelJoinedAt = Date.now()
-      channelWasJoined = joined
-      broadcast(channel, 'alive', { userId: myId.value }) // liveness heartbeat
-      const now = Date.now()
-      for (const [uid, t] of lastSeen) if (now - t > ALIVE_ENTRY_TTL) lastSeen.delete(uid)
-      // Drop a shown peer that went silent past the TTL — but ONLY when I can
-      // trust the silence (canReapStale: my socket is healthy + pings flowing),
-      // so my own blip can't tear down the whole mesh. Otherwise just run the
-      // dead-peer safety-net reconcile.
-      const staleShown = canReapStale() && online.value.some((p) => {
-        if (p.userId === myId.value) return false
-        const t = lastSeen.get(p.userId)
-        return t !== undefined && now - t > ALIVE_TTL
-      })
-      if (staleShown) onPresence()
-      else reconcilePeers()
+      void rpcHeartbeat() // keep my DB row fresh so the server reaper doesn't drop me
+      reconcilePeers()    // safety-net rebuild of a peer that died but is still listed
     }, 10000)
   }
 
@@ -512,36 +499,105 @@ export function useMeetingRoom() {
         if (!cur || (m.since ?? 0) >= (cur.since ?? 0)) seen.set(m.userId, m)
       }
     }
-    const now = Date.now()
-    const judge = canReapStale() // only drop silent peers when MY socket is the healthy one
     online.value = [...seen.values()].filter((p) => {
       if (byed.has(p.userId)) return false
       if (p.userId === myId.value) return true
-      if (!judge) return true // my own socket is the silent one — show everyone
-      const t = lastSeen.get(p.userId)
-      // Optimistic for a peer we've never heard a ping from yet (just joined);
-      // once they've pinged, require freshness — a silent (departed) peer is
-      // dropped even though the server still lists them.
-      return t === undefined || now - t < ALIVE_TTL
+      // Shown via presence; hidden only if the DB explicitly reaped them.
+      return !reaped.has(p.userId)
     })
-    const sharers = new Set(online.value.filter((p) => p.sharing).map((p) => p.userId))
-    for (const uid of Object.keys(remoteScreens.value)) if (!sharers.has(uid)) removeRemoteScreen(uid)
-    const cammers = new Set(online.value.filter((p) => p.cam).map((p) => p.userId))
-    for (const uid of Object.keys(remoteCameras.value)) if (!cammers.has(uid)) removeRemoteCamera(uid)
+    // Remote cam/screen tiles are added/removed AUTHORITATIVELY by the 'media'
+    // announcement (classifyVideo removes when ms.cam/screen turns null), the
+    // track 'ended' event, and closePeer on leave. We deliberately do NOT reap
+    // them off the presence cam/sharing flag: presence propagates slower than the
+    // media broadcast + the track, so reaping on a momentarily-stale flag tore
+    // down a just-enabled camera ("opens then immediately closes for the peer").
     if (amAdmitted.value) {
       playPresenceSounds()
       reconcilePeers()
     }
   }
-  function onAlive(p: { userId?: string } | undefined) {
-    const uid = p?.userId
-    if (!uid || uid === myId.value) return
-    lastAnyPingAt = Date.now() // proof my socket is receiving — enables reaping
-    const prev = lastSeen.get(uid)
-    lastSeen.set(uid, Date.now())
-    // A peer we'd filtered out (gone silent) just pinged — they're back; rebuild
-    // so they reappear and their peer is re-established promptly.
-    if (prev !== undefined && Date.now() - prev > ALIVE_TTL) onPresence()
+  // ── Authoritative DB roster (presence ∩ dbMembers) ──────────────────────────
+  function applyRosterRow(uid: string | undefined, present: boolean) {
+    if (!uid) return
+    const id = dbId(uid)
+    // Only re-render when membership actually flips. A 10s heartbeat UPDATE that
+    // doesn't change `reaped` must NOT churn onPresence (that was constantly
+    // re-running and reaping live media). A new joiner appears via their presence
+    // 'join' event, not here.
+    if (present) { if (reaped.delete(id)) onPresence() }       // un-suppress a rejoiner
+    else if (!reaped.has(id)) { reaped.add(id); onPresence() } // suppress a reaped/left peer
+  }
+  async function refreshRoster(roomId: string) {
+    // On (re)subscribe, reconcile against the authoritative list: anyone present
+    // but absent from the DB was reaped (possibly while we were offline) → hide;
+    // anyone in the DB → show. postgres_changes streams only future deltas, so
+    // this re-SELECT is what catches reaps missed during a blip.
+    const { data } = await supabase
+      .from('meeting_participants').select('user_id').eq('room_id', roomId)
+    const dbSet = new Set((data ?? []).map((r: { user_id: string }) => dbId(r.user_id)))
+    reaped.clear()
+    if (channel) {
+      const state = channel.presenceState<Participant>()
+      for (const metas of Object.values(state)) {
+        for (const m of metas as unknown as Participant[]) {
+          if (m?.userId && m.userId !== myId.value && !dbSet.has(m.userId)) reaped.add(m.userId)
+        }
+      }
+    }
+    onPresence()
+  }
+  async function subscribeRoster(roomId: string) {
+    if (rosterChannel) {
+      try { await supabase.removeChannel(rosterChannel) } catch { /* ignore */ }
+      rosterChannel = null
+    }
+    const ch = supabase.channel(`meet-roster:${roomId}`)
+    ch.on(
+      'postgres_changes',
+      { event: '*', schema: 'buzzybee', table: 'meeting_participants', filter: `room_id=eq.${roomId}` } as any,
+      (p: any) => {
+        if (p.eventType === 'DELETE') applyRosterRow(p.old?.user_id, false)
+        else applyRosterRow(p.new?.user_id, true)
+      },
+    )
+    rosterChannel = ch
+    // Re-sync the full set on every (re)join — postgres_changes only streams future
+    // deltas, so a reconnect must re-SELECT to catch reaps missed while offline.
+    ch.subscribe((s) => { if (s === 'SUBSCRIBED') void refreshRoster(roomId) })
+  }
+  // RPC wrappers (token-gated, guest-safe). Pass myId.value as the raw id; the RPC
+  // namespaces guests to 'guest:<id>' and pins members to auth.uid().
+  // NB: a Supabase rpc() builder is LAZY — it only fires the request when then()/
+  // await runs. These wrappers .then() so callers can fire-and-forget AND so any
+  // error surfaces (silent 'void rpc()' was the no-row bug).
+  function rpcJoin(admitted: boolean) {
+    return supabase.rpc('meeting_join', {
+      p_token: token.value, p_user_id: myId.value, p_name: myName.value, p_role: myRole.value, p_admitted: admitted,
+    }).then(({ error }) => { if (error) console.error('[meet] meeting_join', error.message) },
+            (e: unknown) => console.error('[meet] meeting_join', e))
+  }
+  function rpcHeartbeat() {
+    return supabase.rpc('meeting_heartbeat', {
+      p_token: token.value, p_user_id: myId.value,
+      p_muted: muted.value, p_cam: cameraOn.value, p_sharing: sharingScreen.value, p_hand: handRaised.value,
+    }).then(({ error }) => { if (error) console.error('[meet] meeting_heartbeat', error.message) },
+            (e: unknown) => console.error('[meet] meeting_heartbeat', e))
+  }
+  function rpcLeave() {
+    return supabase.rpc('meeting_leave', { p_token: token.value, p_user_id: myId.value })
+      .then(({ error }) => { if (error) console.error('[meet] meeting_leave', error.message) },
+            (e: unknown) => console.error('[meet] meeting_leave', e))
+  }
+  // Was this guest already admitted in a prior session? (Their DB row persists
+  // across a reload; the host's admit set admitted=true.) Members never reach
+  // this — they bypass the lobby.
+  async function isAlreadyAdmitted(roomId: string): Promise<boolean> {
+    try {
+      const { data } = await supabase
+        .from('meeting_participants').select('admitted')
+        .eq('room_id', roomId).eq('user_id', `guest:${myId.value}`).maybeSingle()
+      return !!(data as { admitted?: boolean } | null)?.admitted
+    } catch { return false }
   }
   // Diff this presence update against the last to fire sound cues. One sound per
   // category per update (no overlap spam when several people change at once).
@@ -586,6 +642,7 @@ export function useMeetingRoom() {
     if (HOST_CMDS.has(p.type) && p.from !== room.value?.host_id) return
     if (p.type === 'ended') {
       status.value = 'ended'
+      if (myRole.value === 'guest') forgetGuestId() // meeting's over — fresh token next visit
       teardownMedia()
       return
     }
@@ -613,10 +670,10 @@ export function useMeetingRoom() {
     if (p.type === 'admit' && !amAdmitted.value) { meetSounds.admitted(); void goLive() }
     else if (p.type === 'deny') {
       status.value = 'denied'
-      leave()
+      leave(true) // removed by host — forget the token
     } else if (p.type === 'kick') {
       notify('The host removed you from the meeting')
-      leave()
+      leave(true) // removed by host — forget the token
       status.value = 'ended'
     } else if (p.type === 'force-mute') {
       forceMuteSelf()
@@ -684,7 +741,7 @@ export function useMeetingRoom() {
     amAdmitted.value = true
     status.value = 'live'
     startReconcileTimer()
-    broadcast(channel, 'alive', { userId: myId.value }) // announce liveness at once
+    void rpcJoin(true) // record me as admitted in the authoritative DB roster
     meetSounds.unlock()
     try {
       await ensureLocalStream()
@@ -1411,23 +1468,30 @@ export function useMeetingRoom() {
     audioCtx = null
   }
 
-  async function leave() {
+  async function leave(forget = false) {
     soundsArmed = false
     prevAdmittedIds = new Set()
     prevWaitingIds = new Set()
     prevHandIds = new Set()
-    // Announce my departure so peers drop me instantly (tile + connection)
-    // rather than waiting on Supabase's presence-leave. Mirrors the mute/cam
-    // signals; fire-and-forget while the channel is still joined, and the
-    // untrack() round-trip below gives it time to flush. An abrupt tab-close
-    // skips leave() entirely and falls back to the native presence-leave.
-    sendCtrl('bye')
+    // A DELIBERATE leave/end (forget=true) announces departure so peers drop me
+    // instantly AND deletes my authoritative DB row; a guest also forgets its
+    // token so the next visit is a fresh identity. An onUnmounted from a RELOAD
+    // passes forget=false — we skip both, so the guest reconnects with the SAME
+    // token + DB row (the reaper removes me only if I truly never return).
+    if (forget) {
+      sendCtrl('bye')
+      void rpcLeave()
+      if (myRole.value === 'guest') forgetGuestId()
+    }
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
     if (reconcileTimer) { clearInterval(reconcileTimer); reconcileTimer = null }
     reconnecting.value = false
-    lastSeen.clear()
-    channelWasJoined = false
+    reaped.clear()
     removeReconnectListeners()
+    if (rosterChannel) {
+      try { await supabase.removeChannel(rosterChannel) } catch { /* ignore */ }
+      rosterChannel = null
+    }
     teardownMedia()
     if (onPageHide && typeof window !== 'undefined') {
       window.removeEventListener('pagehide', onPageHide)
@@ -1464,6 +1528,27 @@ export function useMeetingRoom() {
     }
   }
 
+  // Dev debug snapshot — surfaced by the meeting view's DBG overlay.
+  function debugState() {
+    return {
+      status: status.value,
+      myId: myId.value,
+      myRole: myRole.value,
+      myName: myName.value,
+      amAdmitted: amAdmitted.value,
+      epoch: myEpoch,
+      token: token.value,
+      roomId: room.value?.id ?? null,
+      roster: online.value.map((p) => `${p.name}${p.admitted ? '' : ' (lobby)'}`),
+      reaped: [...reaped],
+      byed: [...byed],
+      peers: peers.size,
+      chan: channel?.state ?? '—',
+      rosterChan: rosterChannel?.state ?? '—',
+      reconnecting: reconnecting.value,
+    }
+  }
+
   onUnmounted(leave)
 
   return {
@@ -1478,6 +1563,7 @@ export function useMeetingRoom() {
     roomShareLocked,
     roomFull,
     reconnecting,
+    debugState,
     shareLocked,
     hostNotice,
     muteParticipant,

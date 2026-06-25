@@ -55,6 +55,16 @@ const invalidRoom = ref(false)
 const left = ref(false)
 const copied = ref(false)
 
+// Auto-rejoin: a guest who reloaded while in a room comes straight back (skips the
+// green room) if the saved room matches + is recent + they still hold a token.
+const REJOIN_WINDOW_MS = 6 * 60 * 60 * 1000 // 6h
+function readLastRoom(): { token: string; name: string; at: number } | null {
+  try { return JSON.parse(window.localStorage.getItem('buzzybee.meet.last-room') || 'null') } catch { return null }
+}
+function hasGuestToken(): boolean {
+  try { return !!window.localStorage.getItem('buzzybee.meet.guest-id') } catch { return false }
+}
+
 onMounted(async () => {
   // Wait for session restore so a logged-in member isn't mistaken for a guest.
   if (!auth.ready) {
@@ -69,14 +79,22 @@ onMounted(async () => {
   if (auth.user) {
     await room.join(props.token)
   } else {
-    // Guests get the portal: resolve the room first so the landing shows the
-    // real meeting title (and dead links fail before anyone types a name).
-    peeking.value = true
-    const meta = await room.peek(props.token)
-    peeking.value = false
-    if (!meta) invalidRoom.value = true
-    else if (!meta.valid) invalidRoom.value = true
-    else needsName.value = true
+    // Guest who was just in THIS room (saved token, recent) and still holds their
+    // identity → auto-rejoin, skipping the green room. join() validates the room
+    // and restores their admitted state from the DB.
+    const saved = readLastRoom()
+    if (saved && saved.token === props.token && Date.now() - saved.at < REJOIN_WINDOW_MS && hasGuestToken()) {
+      await room.join(props.token, saved.name)
+    } else {
+      // Otherwise the portal: resolve the room first so the landing shows the real
+      // meeting title (and dead links fail before anyone types a name).
+      peeking.value = true
+      const meta = await room.peek(props.token)
+      peeking.value = false
+      if (!meta) invalidRoom.value = true
+      else if (!meta.valid) invalidRoom.value = true
+      else needsName.value = true
+    }
   }
 })
 
@@ -178,7 +196,7 @@ function stopCamPreview() {
 onBeforeUnmount(stopCamPreview)
 
 function leaveRoom() {
-  void room.leave()
+  void room.leave(true) // deliberate leave — drop instantly + forget the guest token
   left.value = true
 }
 function copyLink() {
@@ -365,6 +383,34 @@ function onBgFile(e: Event) {
 onBeforeUnmount(() => { if (customBgUrl.value) URL.revokeObjectURL(customBgUrl.value) })
 const isBgImg = (url: string | null | undefined) =>
   room.bgMode.value === 'image' && !!url && room.bgImageUrl.value === url
+
+// ── Dev debug overlay (top-right) — what's persisted + live runtime state ──────
+const isDev = import.meta.env.DEV
+const debugOn = ref(false)
+const debugLS = ref<[string, string][]>([])
+const debugRT = ref<Record<string, unknown>>({})
+let debugTimer: ReturnType<typeof setInterval> | undefined
+function refreshDebug() {
+  const ls: [string, string][] = []
+  try {
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const k = window.localStorage.key(i)
+      if (k && k.startsWith('buzzybee')) ls.push([k, window.localStorage.getItem(k) ?? ''])
+    }
+  } catch { /* ignore */ }
+  debugLS.value = ls
+  try { debugRT.value = room.debugState() } catch { /* ignore */ }
+}
+function fmtDebug(v: unknown): string {
+  if (Array.isArray(v)) return v.length ? v.join(', ') : '—'
+  if (v === null || v === undefined || v === '') return '—'
+  return String(v)
+}
+watch(debugOn, (on) => {
+  if (on) { refreshDebug(); debugTimer = setInterval(refreshDebug, 1000) }
+  else if (debugTimer) { clearInterval(debugTimer); debugTimer = undefined }
+})
+onBeforeUnmount(() => { if (debugTimer) clearInterval(debugTimer) })
 </script>
 
 <template>
@@ -372,6 +418,29 @@ const isBgImg = (url: string | null | undefined) =>
        horizontally) and dvh (vh overflows under mobile URL bars). The whole
        surface — portal included — lives on the dark stage. -->
   <div class="mtg overflow-hidden flex flex-col">
+    <!-- ── Dev debug overlay (top-right): localStorage + live runtime ── -->
+    <template v-if="isDev">
+      <button
+        type="button"
+        style="position:fixed;top:8px;right:8px;z-index:9999;font:600 11px/1 monospace;padding:4px 8px;background:#0b0b0e;color:#4ade80;border:1px solid #4ade80;border-radius:6px;opacity:.85;cursor:pointer"
+        @click="debugOn = !debugOn"
+      >{{ debugOn ? '× DBG' : 'DBG' }}</button>
+      <div
+        v-if="debugOn"
+        style="position:fixed;top:36px;right:8px;z-index:9999;width:360px;max-height:72vh;overflow:auto;font:11px/1.55 monospace;padding:8px 10px;background:rgba(11,11,14,.96);color:#cbd5e1;border:1px solid #4ade80;border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,.5)"
+      >
+        <div style="color:#4ade80;margin-bottom:4px">— localStorage (buzzybee*) —</div>
+        <div v-for="[k, v] in debugLS" :key="k" style="word-break:break-all;margin-bottom:2px">
+          <span style="color:#7dd3fc">{{ k }}</span>: {{ v }}
+        </div>
+        <div v-if="!debugLS.length" style="opacity:.6">(none)</div>
+        <div style="color:#4ade80;margin:8px 0 4px">— runtime —</div>
+        <div v-for="(v, k) in debugRT" :key="k" style="word-break:break-all;margin-bottom:2px">
+          <span style="color:#7dd3fc">{{ k }}</span>: {{ fmtDebug(v) }}
+        </div>
+      </div>
+    </template>
+
     <!-- ── Guest join modal (Claude Design: Join Meeting.html) ── -->
     <div v-if="needsName" class="flex-1 overflow-y-auto flex p-4">
       <div class="jm-shell">
