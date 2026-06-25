@@ -115,7 +115,7 @@ const pros = [
       <div v-reveal="200" class="mt-10 text-center">
         <p class="text-sm text-base-content/60">
           <span class="font-semibold text-base-content">Every plan includes one</span>,
-          matched to your business, managed by a dedicated project manager, and backed by the whole hive.
+          matched to your business, managed by a dedicated project manager, with the HiveMind team behind them.
         </p>
       </div>
     </div>

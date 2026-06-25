@@ -56,7 +56,7 @@ const features = [
     name: 'HiveReview',
     type: 'Command center',
     replaces: ['Spreadsheets', 'QPRs'],
-    desc: "One screen for the whole hive: who's online, what's overdue, hours logged, and what needs you today.",
+    desc: "One screen for everything: who's online, what's overdue, hours logged, and what needs you today.",
     nav: 'command' as Key,
   },
 ]
