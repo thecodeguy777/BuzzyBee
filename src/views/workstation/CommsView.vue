@@ -693,6 +693,13 @@ function insertMentionTrigger() {
     onComposerInput()
   })
 }
+// Close the mention popover when the composer loses focus (e.g. a mobile soft
+// keyboard dismiss, which fires no outside click for onDocMouseDown). Deferred
+// so a popover-row mousedown still picks first (its @mousedown.prevent keeps
+// focus, but the delay is belt-and-suspenders across browsers).
+function onComposerBlur() {
+  window.setTimeout(() => { mentionOpen.value = false }, 120)
+}
 // Close the (teleported, fixed-position) mention popover when clicking elsewhere.
 function onDocMouseDown(e: MouseEvent) {
   if (!mentionOpen.value) return
@@ -832,10 +839,14 @@ async function onTaskCreate(payload: {
       target = posted
       scrollToBottom()
     }
-    const id = await stream.createTaskFromMessage(target, payload)
-    if (id) {
+    const res = await stream.createTaskFromMessage(target, payload)
+    if (res) {
       activityOpen.value = true
-      fireToast('Task created & linked', `Added to the board · #${channels.currentChannel?.name ?? ''}`)
+      const where = `#${channels.currentChannel?.name ?? ''}`
+      fireToast(
+        res.linked ? 'Task created & linked' : 'Task created',
+        res.linked ? `Added to the board · ${where}` : `Added to the board · couldn't link it to this message`
+      )
     }
   } catch (e) {
     commsError.value = (e as Error).message
@@ -851,6 +862,10 @@ function onReact(m: CommsMsg, emoji: string) {
 // so the drawer opens right here over the chat — no jump to the task board.
 function openTask(taskId: string) {
   tasks.selectTask(taskId)
+}
+// Soft-delete a chat line (tombstone). Confirm first — it clears the content.
+function confirmDelete(m: CommsMsg) {
+  if (window.confirm('Delete this message? This can’t be undone.')) void stream.deleteMessage(m)
 }
 
 const headerMembers = computed(() => stream.online.value.slice(0, 6))
@@ -1125,6 +1140,7 @@ function fullscreenScreen() {
                 :last-reply-at="(stream.repliesByParent.value[m.id] ?? []).at(-1)?.created_at"
                 :linked-task="linkedTaskFor(m.linked_task_id)"
                 :can-manage="canManage"
+                :is-own="m.user_id === auth.user?.id"
                 :can-log-crm="!!crmTarget"
                 @log-crm="logMessageToCrm(m)"
                 @react="(e) => onReact(m, e)"
@@ -1132,6 +1148,8 @@ function fullscreenScreen() {
                 @make-task="makeTask(m)"
                 @toggle-pin="stream.togglePin(m)"
                 @mark-decision="stream.markDecision(m)"
+                @edit="(body) => stream.editMessage(m.id, body)"
+                @delete="confirmDelete(m)"
                 @open-task="openTask"
                 @open-dm="startDm"
               />
@@ -1298,6 +1316,7 @@ function fullscreenScreen() {
             @keydown="onComposerKeydown"
             @input="onComposerInput"
             @paste="onPaste"
+            @blur="onComposerBlur"
           />
           <div class="flex items-center gap-1 px-2 pb-2">
             <button class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center text-base-content/50" aria-label="Attach file" title="Attach file" @click="pickFiles('*/*')"><Paperclip class="w-4 h-4" :stroke-width="1.75" /></button>
@@ -1345,10 +1364,14 @@ function fullscreenScreen() {
           :reply-count="0"
           :linked-task="linkedTaskFor(threadParent!.linked_task_id)"
           :can-log-crm="!!crmTarget"
+          :is-own="threadParent!.user_id === auth.user?.id"
+          :can-manage="canManage"
           @log-crm="logMessageToCrm(threadParent!)"
           @react="(e) => stream.toggleReaction(threadParent!.id, e)"
           @make-task="makeTask(threadParent!)"
           @toggle-pin="stream.togglePin(threadParent!)"
+          @edit="(body) => stream.editMessage(threadParent!.id, body)"
+          @delete="confirmDelete(threadParent!)"
           @open-task="openTask"
           @open-dm="startDm"
         />
@@ -1361,9 +1384,13 @@ function fullscreenScreen() {
           :message="r"
           :reactions="stream.reactionList(r.id)"
           :reply-count="0"
+          :is-own="r.user_id === auth.user?.id"
+          :can-manage="canManage"
           @react="(e) => stream.toggleReaction(r.id, e)"
           @make-task="makeTask(r)"
           @toggle-pin="stream.togglePin(r)"
+          @edit="(body) => stream.editMessage(r.id, body)"
+          @delete="confirmDelete(r)"
           @open-task="openTask"
           @open-dm="startDm"
         />

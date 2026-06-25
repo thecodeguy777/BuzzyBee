@@ -160,6 +160,15 @@ export function useMentionAutocomplete(opts: {
     picked.value = new Map()
   }
 
+  // Close on blur (e.g. a mobile soft-keyboard dismiss, which fires no outside
+  // click for onDocMouseDown). Deferred so a popover-row mousedown still picks
+  // first (its @mousedown.prevent keeps focus, but the delay is belt-and-braces).
+  function onBlur() {
+    window.setTimeout(() => {
+      open.value = false
+    }, 120)
+  }
+
   // Close on an outside mousedown. Clicking a popover row picks first (its
   // @mousedown.prevent fires at the target before this bubbles to document and
   // sets open=false), so we only need to ignore clicks inside the composer.
@@ -179,6 +188,7 @@ export function useMentionAutocomplete(opts: {
     style,
     onInput,
     onKeydown,
+    onBlur,
     pick,
     insertTrigger,
     resolveMentions,

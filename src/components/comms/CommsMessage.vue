@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import {
-  Smile, MessageSquare, CheckSquare, Pin, ChevronRight, Sparkles, Handshake
+  Smile, MessageSquare, CheckSquare, Pin, ChevronRight, Sparkles, Handshake, Pencil, Trash2
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
 import CommsAttachments from '@/components/comms/CommsAttachments.vue'
@@ -33,6 +33,8 @@ const props = withDefaults(
     canLogCrm?: boolean
     /** Offer "turn into task" (off in personal DMs, which have no board). */
     canTask?: boolean
+    /** The signed-in user authored this message (gates edit + own-delete). */
+    isOwn?: boolean
   }>(),
   {
     // Vue casts absent Boolean props to false, so without an explicit default
@@ -51,6 +53,8 @@ const emit = defineEmits<{
   (e: 'open-task', taskId: string): void
   (e: 'open-dm', userId: string): void
   (e: 'log-crm'): void
+  (e: 'edit', body: string): void
+  (e: 'delete'): void
 }>()
 
 const team = useTeamStore()
@@ -85,12 +89,48 @@ function react(e: string) {
   pickerOpen.value = false
   emit('react', e)
 }
+
+// ── Edit / delete ─────────────────────────────────────────────────────────────
+const isDeleted = computed(() => !!props.message.deleted_at)
+// Edit your own real messages (not the system announcer, not once deleted).
+const canEdit = computed(() => !!props.isOwn && !!props.message.user_id && !isDeleted.value)
+// Delete your own, or anyone's if you manage the channel (admin / PM).
+const canDelete = computed(() => (!!props.isOwn || !!props.canManage) && !isDeleted.value)
+const editing = ref(false)
+const editDraft = ref('')
+const editEl = ref<HTMLTextAreaElement | null>(null)
+function startEdit() {
+  pickerOpen.value = false
+  editDraft.value = props.message.body
+  editing.value = true
+  void nextTick(() => {
+    const el = editEl.value
+    if (!el) return
+    el.focus()
+    el.setSelectionRange(el.value.length, el.value.length)
+  })
+}
+function saveEdit() {
+  const next = editDraft.value.trim()
+  editing.value = false
+  // No-op on an unchanged or emptied edit (clearing = delete, handled separately).
+  if (!next || next === props.message.body) return
+  emit('edit', next)
+}
+function cancelEdit() {
+  editing.value = false
+}
+function onEditKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') { e.preventDefault(); cancelEdit() }
+  else if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit() }
+}
 </script>
 
 <template>
   <div class="group relative flex gap-2.5 px-[18px] hover:bg-base-200/40" :class="[continuation ? 'py-px' : 'pt-1.5 pb-0.5 mt-0.5', unseen ? 'msg-unseen' : '']">
     <!-- hover toolbar -->
     <div
+      v-if="!isDeleted"
       class="absolute -top-3 right-4 z-10 hidden group-hover:flex items-center gap-0.5 rounded-lg border border-base-300 bg-base-100 shadow-sm p-0.5"
     >
       <div class="relative">
@@ -137,6 +177,20 @@ function react(e: string) {
       >
         <Pin class="w-3.5 h-3.5" :stroke-width="1.75" />
       </button>
+      <button
+        v-if="canEdit"
+        class="w-7 h-7 rounded-md hover:bg-base-200 flex items-center justify-center text-base-content/60"
+        title="Edit" @click="startEdit"
+      >
+        <Pencil class="w-3.5 h-3.5" :stroke-width="1.75" />
+      </button>
+      <button
+        v-if="canDelete"
+        class="w-7 h-7 rounded-md hover:bg-error/10 flex items-center justify-center text-base-content/60 hover:text-error"
+        title="Delete" @click="emit('delete')"
+      >
+        <Trash2 class="w-3.5 h-3.5" :stroke-width="1.75" />
+      </button>
     </div>
 
     <div class="w-[34px] shrink-0 flex justify-center" :class="continuation ? '' : 'mt-0.5'">
@@ -167,42 +221,65 @@ function react(e: string) {
         <span v-if="message.is_pinned" class="inline-flex items-center gap-1 text-[0.65rem] text-primary"><Pin class="w-3 h-3" :stroke-width="2" /> pinned</span>
       </div>
 
-      <div v-if="message.body" class="text-sm text-base-content/90 whitespace-pre-wrap break-words leading-[1.46]">
-        <CommsRichText :text="message.body" :mention-names="mentionNames" />
+      <!-- deleted tombstone -->
+      <div v-if="isDeleted" class="flex items-center gap-1.5 py-0.5 text-sm italic text-base-content/40">
+        <Trash2 class="w-3.5 h-3.5 shrink-0" :stroke-width="1.75" /> This message was deleted
       </div>
 
-      <!-- attachments (images / video / files / links — shared renderer) -->
-      <CommsAttachments v-if="message.attachments?.length" :attachments="message.attachments" />
+      <!-- inline editor -->
+      <div v-else-if="editing" class="mt-0.5">
+        <textarea
+          ref="editEl"
+          v-model="editDraft"
+          rows="2"
+          class="w-full rounded-lg border border-base-300 bg-base-100 px-2.5 py-1.5 text-sm outline-none focus:border-primary/50 resize-none leading-[1.46]"
+          @keydown="onEditKeydown"
+        />
+        <div class="mt-1 flex items-center gap-2 text-xs">
+          <button class="px-2.5 py-1 rounded-lg bg-primary text-white font-semibold disabled:opacity-40" :disabled="!editDraft.trim()" @click="saveEdit">Save</button>
+          <button class="px-2 py-1 rounded-lg hover:bg-base-200 text-base-content/60" @click="cancelEdit">Cancel</button>
+          <span class="text-base-content/35">enter to save · esc to cancel</span>
+        </div>
+      </div>
 
-      <!-- linked task — embedded card / pill -->
-      <CommsLinkedTask v-if="linkedTask" :task="linkedTask" @open="emit('open-task', $event)" />
+      <template v-else>
+        <div v-if="message.body" class="text-sm text-base-content/90 whitespace-pre-wrap break-words leading-[1.46]">
+          <CommsRichText :text="message.body" :mention-names="mentionNames" /><span v-if="message.edited_at" class="ml-1 text-[0.62rem] text-base-content/35" title="Edited">(edited)</span>
+        </div>
 
-      <!-- reactions -->
-      <div v-if="reactions.length" class="mt-1.5 flex items-center gap-1.5 flex-wrap">
+        <!-- attachments (images / video / files / links — shared renderer) -->
+        <CommsAttachments v-if="message.attachments?.length" :attachments="message.attachments" />
+
+        <!-- linked task — embedded card / pill -->
+        <CommsLinkedTask v-if="linkedTask" :task="linkedTask" @open="emit('open-task', $event)" />
+
+        <!-- reactions -->
+        <div v-if="reactions.length" class="mt-1.5 flex items-center gap-1.5 flex-wrap">
+          <button
+            v-for="r in reactions"
+            :key="r.emoji"
+            class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold border"
+            :class="r.mine ? 'bg-primary/10 text-primary border-primary/30' : 'bg-base-200 text-base-content/70 border-transparent'"
+            @click="emit('react', r.emoji)"
+          >
+            <span class="text-sm">{{ r.emoji }}</span>{{ r.count }}
+          </button>
+          <button class="w-6 h-6 rounded-full bg-base-200 text-base-content/50 flex items-center justify-center" title="Add reaction" @click="pickerOpen = !pickerOpen">
+            <Smile class="w-3.5 h-3.5" :stroke-width="1.75" />
+          </button>
+        </div>
+
+        <!-- thread chip -->
         <button
-          v-for="r in reactions"
-          :key="r.emoji"
-          class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold border"
-          :class="r.mine ? 'bg-primary/10 text-primary border-primary/30' : 'bg-base-200 text-base-content/70 border-transparent'"
-          @click="emit('react', r.emoji)"
+          v-if="replyCount > 0"
+          class="mt-1.5 inline-flex items-center gap-2 rounded-full border border-base-300 bg-base-100 pl-2 pr-2.5 py-1 text-xs font-medium text-primary hover:border-primary/40"
+          @click="emit('open-thread')"
         >
-          <span class="text-sm">{{ r.emoji }}</span>{{ r.count }}
+          {{ replyCount }} {{ replyCount === 1 ? 'reply' : 'replies' }}
+          <span v-if="lastReplyAt" class="text-base-content/40 font-normal">· last {{ new Date(lastReplyAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) }}</span>
+          <ChevronRight class="w-3.5 h-3.5 text-base-content/40" :stroke-width="2" />
         </button>
-        <button class="w-6 h-6 rounded-full bg-base-200 text-base-content/50 flex items-center justify-center" title="Add reaction" @click="pickerOpen = !pickerOpen">
-          <Smile class="w-3.5 h-3.5" :stroke-width="1.75" />
-        </button>
-      </div>
-
-      <!-- thread chip -->
-      <button
-        v-if="replyCount > 0"
-        class="mt-1.5 inline-flex items-center gap-2 rounded-full border border-base-300 bg-base-100 pl-2 pr-2.5 py-1 text-xs font-medium text-primary hover:border-primary/40"
-        @click="emit('open-thread')"
-      >
-        {{ replyCount }} {{ replyCount === 1 ? 'reply' : 'replies' }}
-        <span v-if="lastReplyAt" class="text-base-content/40 font-normal">· last {{ new Date(lastReplyAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) }}</span>
-        <ChevronRight class="w-3.5 h-3.5 text-base-content/40" :stroke-width="2" />
-      </button>
+      </template>
 
       <!-- seen-by honeycomb -->
       <div v-if="seen && seen.length" class="mt-1.5 flex items-center justify-end gap-1.5 pr-0.5">

@@ -1340,6 +1340,7 @@ function openDuePicker(triggerEl: HTMLElement) {
                 class="textarea textarea-bordered textarea-sm flex-1 resize-none leading-relaxed min-h-0 py-1.5"
                 @input="onComposerInput"
                 @keydown="onComposerKeydown"
+                @blur="mention.onBlur"
               />
               <button
                 type="submit"

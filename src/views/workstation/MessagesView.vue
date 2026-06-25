@@ -296,6 +296,10 @@ async function sendReply() {
     drafts.set(`thread:${pid}`, body)
   }
 }
+// Soft-delete a DM line (tombstone). Confirm first — it clears the content.
+function confirmDelete(m: CommsMsg) {
+  if (window.confirm('Delete this message? This can’t be undone.')) void stream.deleteMessage(m)
+}
 
 // ── Composer ──────────────────────────────────────────────────────────────────
 // Messenger-style draft: persisted per conversation, restored on switch/reload.
@@ -572,10 +576,13 @@ function lastReplyAtFor(m: CommsMsg) {
             :continuation="isContinuation(i)"
             :unseen="freshIds.has(m.id)"
             :can-task="false"
+            :is-own="m.user_id === auth.user?.id"
             @react="(e) => stream.toggleReaction(m.id, e)"
             @open-thread="threadParentId = m.id"
             @toggle-pin="stream.togglePin(m)"
             @mark-decision="stream.markDecision(m)"
+            @edit="(body) => stream.editMessage(m.id, body)"
+            @delete="confirmDelete(m)"
             @open-task="() => {}"
             @open-dm="startDm"
           />
@@ -611,6 +618,7 @@ function lastReplyAtFor(m: CommsMsg) {
               class="flex-1 bg-transparent text-sm outline-none min-w-0"
               @input="onInput"
               @keydown="onComposerKeydown"
+              @blur="mention.onBlur"
             />
             <MentionPopover
               :open="mentionOpen"
@@ -642,10 +650,13 @@ function lastReplyAtFor(m: CommsMsg) {
               :reactions="stream.reactionList(threadParent.id)"
               :reply-count="0"
               :can-task="false"
+              :is-own="threadParent!.user_id === auth.user?.id"
               @react="(e) => stream.toggleReaction(threadParent!.id, e)"
               @open-thread="() => {}"
               @toggle-pin="stream.togglePin(threadParent!)"
               @mark-decision="stream.markDecision(threadParent!)"
+              @edit="(body) => stream.editMessage(threadParent!.id, body)"
+              @delete="confirmDelete(threadParent!)"
               @open-task="() => {}"
               @open-dm="startDm"
             />
@@ -659,10 +670,13 @@ function lastReplyAtFor(m: CommsMsg) {
               :reactions="stream.reactionList(r.id)"
               :reply-count="0"
               :can-task="false"
+              :is-own="r.user_id === auth.user?.id"
               @react="(e) => stream.toggleReaction(r.id, e)"
               @open-thread="() => {}"
               @toggle-pin="stream.togglePin(r)"
               @mark-decision="stream.markDecision(r)"
+              @edit="(body) => stream.editMessage(r.id, body)"
+              @delete="confirmDelete(r)"
               @open-task="() => {}"
               @open-dm="startDm"
             />

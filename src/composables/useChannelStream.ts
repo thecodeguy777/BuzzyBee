@@ -18,7 +18,7 @@ import {
   setSoundsMuted,
 } from '@/lib/commsSounds'
 import { createNoisePipeline, type NoisePipeline } from '@/lib/noiseSuppressor'
-import { iceServers } from '@/lib/iceServers'
+import { iceServers, hasTurn } from '@/lib/iceServers'
 
 export interface Attachment {
   /** Stable id assigned at creation — used as the v-for key in the composer. */
@@ -45,6 +45,8 @@ export interface CommsMessage {
   decision_done: boolean
   linked_task_id: string | null
   edited_at: string | null
+  /** Set when the author/manager soft-deletes — renders a "deleted" tombstone. */
+  deleted_at?: string | null
   created_at: string
   updated_at: string
 }
@@ -681,6 +683,27 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
   const togglePin = (m: CommsMessage) => patchMessage(m.id, { is_pinned: !m.is_pinned })
   const markDecision = (m: CommsMessage) => patchMessage(m.id, { is_decision: !m.is_decision })
   const toggleDecisionDone = (m: CommsMessage) => patchMessage(m.id, { decision_done: !m.decision_done })
+  // Edit stamps edited_at so the UI can show "(edited)". RLS (messages_update)
+  // restricts this to the author / admins / the client PM; patchMessage rolls
+  // back the optimistic change if the 0-row (denied) update comes back empty.
+  function editMessage(id: string, body: string) {
+    const text = body.trim()
+    if (!text) return Promise.resolve()
+    return patchMessage(id, { body: text, edited_at: new Date().toISOString() })
+  }
+  // Soft delete: a tombstone, not a hard DELETE — messages.parent_id cascades,
+  // so removing a threaded parent would wipe its replies. Clears the content and
+  // any pin/decision flags so it drops out of those surfaces too.
+  function deleteMessage(m: CommsMessage) {
+    return patchMessage(m.id, {
+      deleted_at: new Date().toISOString(),
+      body: '',
+      attachments: [],
+      is_pinned: false,
+      is_decision: false,
+      decision_done: false,
+    })
+  }
 
   /** Projects belonging to a message's channel-client (for the task picker). */
   function projectsForMessage(m: CommsMessage) {
@@ -701,7 +724,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
       priority?: 1 | 2 | 3 | 4
       statusKey?: string
     } = {},
-  ): Promise<string | null> {
+  ): Promise<{ id: string; linked: boolean } | null> {
     const channelObj = channelsStore.channels.find((c) => c.id === m.channel_id)
     const clientId = channelObj?.client_id
     if (!clientId) return null
@@ -740,7 +763,10 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
       if (j !== -1) allMessages.value[j] = { ...allMessages.value[j], linked_task_id: prevLink }
       console.warn('[comms] link_task_to_message:', linkErr?.message ?? 'link not applied')
     }
-    return task.id
+    // The task always lands on the board; `linked` tells the caller whether the
+    // back-link to this message actually persisted, so the toast can't claim
+    // "& linked" when the link RPC rejected (already linked / not permitted).
+    return { id: task.id, linked: !linkErr && !!linked }
   }
 
   // ── Huddle: WebRTC audio mesh ───────────────────────────────────────────────
@@ -915,7 +941,20 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
       }
     }
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') closePeer(userId)
+      const st = pc.connectionState
+      if (st === 'failed') {
+        // A failed peer used to die silently — surface it so people don't sit in
+        // a dead/one-way call wondering why. Strict/symmetric NATs need a TURN
+        // relay (STUN alone can't punch through), so hint at it when none is set.
+        const who = team.profiles[userId]?.full_name
+          ?? huddlePeople.value.find((p) => p.userId === userId)?.name
+          ?? 'a teammate'
+        huddleError.value = hasTurn()
+          ? `Lost the audio connection to ${who}.`
+          : `Lost the audio connection to ${who} — strict networks need a TURN relay (set VITE_TURN_*).`
+        console.warn('[huddle] peer connection failed:', userId, 'turn=', hasTurn())
+      }
+      if (st === 'failed' || st === 'closed') closePeer(userId)
     }
     return entry
   }
@@ -1235,6 +1274,8 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     togglePin,
     markDecision,
     toggleDecisionDone,
+    editMessage,
+    deleteMessage,
     createTaskFromMessage,
     projectsForMessage,
     toggleHuddle,
