@@ -123,11 +123,11 @@ const nodeLit = (i: number) => sp(i) > 0.08
       <div class="relative pt-10 md:pt-14 pb-4 text-center px-6">
         <div class="flex items-center gap-3 justify-center mb-3">
           <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-[#a85be0]/0 to-[#a85be0]" />
-          <span class="font-mono text-[11px] font-medium uppercase tracking-[0.25em] text-[#a85be0]">One thread of work</span>
+          <span class="font-mono text-[11px] font-medium uppercase tracking-[0.25em] text-[#a85be0]">One request, start to finish</span>
           <div class="w-8 h-0.5 rounded-full bg-gradient-to-l from-[#a85be0]/0 to-[#a85be0]" />
         </div>
         <h2 class="font-display text-2xl md:text-4xl tracking-tight text-white">
-          Watch one request travel the whole hive.
+          Watch one request go from message to closed deal.
         </h2>
         <!-- progress counter -->
         <div class="absolute right-6 top-10 md:top-14 hidden md:flex items-baseline gap-1 font-mono text-white/30 text-sm tabular-nums">
@@ -208,7 +208,7 @@ const nodeLit = (i: number) => sp(i) > 0.08
               <span class="w-6 h-6 rounded-lg grid place-items-center shrink-0" style="background: rgba(13,148,136,.18); color:#2dd4bf"><Phone class="w-3 h-3" /></span>
               <div class="min-w-0 flex-1">
                 <div class="text-[12.5px] text-white/85 leading-snug">
-                  <strong class="font-bold text-white">Maya</strong> logged a call — “revised scope approved, send Thursday”
+                  <strong class="font-bold text-white">Maya</strong> logged a call: “revised scope approved, send Thursday”
                 </div>
                 <div class="text-[9.5px] text-white/35 mt-0.5">just now · Last activity updated automatically</div>
               </div>
@@ -220,7 +220,7 @@ const nodeLit = (i: number) => sp(i) > 0.08
             <div v-if="wonStage === 2" class="thr-burst" aria-hidden="true" />
             <div class="thr-card-head"><Trophy class="w-3 h-3" /> Pipeline</div>
             <div class="px-3.5 pb-2 flex items-center gap-3">
-              <span class="flex-1 text-[13px] font-semibold text-white/90 truncate">Henderson Group — 2 VAs</span>
+              <span class="flex-1 text-[13px] font-semibold text-white/90 truncate">Henderson Group, 2 VAs</span>
               <span class="font-mono text-[12px] font-bold text-white/80">$1,600<span class="text-white/35">/mo</span></span>
               <span
                 class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10.5px] font-bold transition-all duration-400"
@@ -232,7 +232,7 @@ const nodeLit = (i: number) => sp(i) > 0.08
             <div class="mx-3.5 mb-3 flex items-center gap-2 rounded-lg px-2.5 py-1.5 transition-all duration-500"
               :class="wonStage === 2 ? 'bg-[#a85be0]/10 opacity-100 translate-y-0' : 'opacity-0 translate-y-1'">
               <span class="thr-hex !w-[18px] !h-[18px] !text-[8px] bg-gradient-to-br from-[#a85be0] to-[#6a4cdd] !text-white">🐝</span>
-              <span class="text-[11.5px] text-[#d4b3f2]/90 font-medium">🏆 Deal won: Henderson Group — posted to #general by HiveMind</span>
+              <span class="text-[11.5px] text-[#d4b3f2]/90 font-medium">🏆 Deal won: Henderson Group, posted to #general by HiveMind</span>
             </div>
           </div>
 
@@ -262,18 +262,18 @@ const nodeLit = (i: number) => sp(i) > 0.08
         <div :style="{ transform: `scale(${0.92 + finale * 0.08})` }" class="transition-transform duration-300">
           <Sparkles class="w-7 h-7 text-[#c79bef] mx-auto mb-4" />
           <p class="font-display text-3xl md:text-5xl tracking-tight text-white leading-[1.1]">
-            One hire. One thread.<br />
+            One person. Every step.<br />
             <span class="bg-gradient-to-r from-[#c79bef] to-[#a85be0] bg-clip-text text-transparent">Nothing dropped.</span>
           </p>
           <p class="mt-4 text-white/55 max-w-md mx-auto text-sm leading-relaxed">
-            Five tools' worth of work, connected end to end — by one VA who never had to leave the hive.
+            Five tools' worth of work, handled by one VA in one place. Nothing slipped.
           </p>
           <a
             href="#contact"
             class="inline-flex items-center gap-2 mt-7 text-sm font-semibold bg-gradient-to-r from-[#6a4cdd] to-[#a85be0] text-white px-6 py-3 rounded-md hover:opacity-90 transition-opacity"
             :class="finale > 0.6 ? 'pointer-events-auto' : ''"
           >
-            See it live — book a demo
+            See it live. Book a demo
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7" /></svg>
           </a>
         </div>

@@ -36,7 +36,7 @@ const industries = [
           A professional who already knows your world.
         </h2>
         <p class="mt-4 text-base text-base-content/60 leading-relaxed">
-          We match you with someone trained for your industry's tools and workflows — productive from week one, not month three.
+          We match you with someone trained for your industry's tools and workflows. Productive from week one, not month three.
         </p>
       </div>
 

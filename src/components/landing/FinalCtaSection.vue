@@ -23,7 +23,7 @@ const ctaHref = formToken ? `/f/${formToken}` : 'mailto:hello@hivemind.co'
             <h2 class="font-display">Your next closing pays for a full year.</h2>
             <p>
               Twenty minutes on a call. You leave with a scoped role, your best-fit VA, and a plan
-              for week one &mdash; no commitment, no pressure.
+              for week one. No commitment, no pressure.
             </p>
             <div class="cta-btns">
               <a class="btn btn-white" :href="ctaHref">

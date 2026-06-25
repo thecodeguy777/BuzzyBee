@@ -110,16 +110,16 @@ const lit = (i: number) => hovered.value === i || (hovered.value === -1 && spotl
       <div v-reveal class="text-center max-w-2xl mx-auto mb-4">
         <div class="flex items-center gap-3 mb-4 justify-center">
           <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-[#a85be0]/0 to-[#a85be0]" />
-          <span class="font-mono text-[11px] font-medium uppercase tracking-[0.25em] text-[#a85be0]">The Arsenal</span>
+          <span class="font-mono text-[11px] font-medium uppercase tracking-[0.25em] text-[#a85be0]">What it replaces</span>
           <div class="w-8 h-0.5 rounded-full bg-gradient-to-l from-[#a85be0]/0 to-[#a85be0]" />
         </div>
         <h2 class="font-display text-3xl md:text-5xl tracking-tight leading-[1.08] text-white">
-          Your VA just upgraded
-          <span class="block bg-gradient-to-r from-[#c79bef] via-[#a85be0] to-[#6a4cdd] bg-clip-text text-transparent pb-1">their arsenal.</span>
+          Stop paying for six subscriptions.
+          <span class="block bg-gradient-to-r from-[#c79bef] via-[#a85be0] to-[#6a4cdd] bg-clip-text text-transparent pb-1">They're included.</span>
         </h2>
         <p class="mt-5 text-base text-white/55 leading-relaxed">
-          One hire arrives carrying the whole stack — chat, CRM, tasks, meetings, calls, and time —
-          already connected, already included. No seats. No add-ons. No software tax.
+          One hire comes with every tool: chat, CRM, tasks, meetings, calls, and time tracking.
+          All connected, all included. No seats, no add-ons, no extra software bills.
         </p>
       </div>
 

@@ -74,7 +74,7 @@ const filtered = computed(() =>
         </h2>
         <p class="mt-4 text-base text-base-content/60 leading-relaxed">
           Every HiveMind VA is pre-screened, fluent in English, and backed by the platform and a dedicated
-          project manager. Tell us the role — we bring the right person.
+          project manager. Tell us the role. We bring the right person.
         </p>
 
         <!-- Filter tabs -->

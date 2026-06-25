@@ -24,7 +24,7 @@ const features = [
     name: 'HiveFlow',
     type: 'Task board',
     replaces: ['Asana', 'Monday', 'ClickUp'],
-    desc: "Your VA's work lives on a board you both see. Every request becomes a tracked task — assigned, prioritized, and moving in real time.",
+    desc: "Your VA's work lives on a board you both see. Every request becomes a tracked task, assigned, prioritized, and moving in real time.",
     nav: 'tasks' as Key,
   },
   {
@@ -32,7 +32,7 @@ const features = [
     name: 'HiveChat',
     type: 'Team chat',
     replaces: ['Slack', 'Teams'],
-    desc: 'Message your VA like a teammate. Turn any message into a tracked task with one click — nothing slips through.',
+    desc: 'Message your VA like a teammate. Turn any message into a tracked task with one click. Nothing slips through.',
     nav: 'chat' as Key,
   },
   {
@@ -40,7 +40,7 @@ const features = [
     name: 'HiveCRM',
     type: 'CRM & pipeline',
     replaces: ['Follow Up Boss', 'HubSpot'],
-    desc: 'Your VA works your leads and deals. You watch them move from first touch to closed-won — no spreadsheet handoffs.',
+    desc: 'Your VA works your leads and deals. You watch them move from first touch to closed-won. No spreadsheet handoffs.',
     nav: 'crm' as Key,
   },
   {
@@ -48,7 +48,7 @@ const features = [
     name: 'HiveTrack',
     type: 'Time & activity',
     replaces: ['Time Doctor', 'Hubstaff'],
-    desc: 'See exactly what your VA worked on, by the minute. Honest timestamps and notes — no creepy screenshots or keylogging.',
+    desc: 'See exactly what your VA worked on, by the minute. Honest timestamps and notes. No creepy screenshots or keylogging.',
     nav: 'time' as Key,
   },
   {
@@ -224,8 +224,8 @@ const sparkStyle = computed(() => ({
           <div class="ps-eyebrow">The workspace</div>
           <h2 class="ps-h2">Everything your VA does.<br />All in one place.</h2>
           <p class="ps-lede">
-            Every plan includes the full platform your assistant works in — and that you watch them through.
-            One hive instead of a $200-a-month pile of software.
+            Every plan includes the full platform your assistant works in, and that you watch them through.
+            No separate apps to buy. It replaces about $200 a month in software, included.
           </p>
 
           <ul class="ps-feats">
@@ -357,9 +357,9 @@ const sparkStyle = computed(() => ({
                     <div class="ps-div"><span>Today · June 15</span></div>
                     <div class="ps-msg" :style="msgStyle(0)">
                       <span class="ps-hx" style="background:#12A594">MS</span>
-                      <div class="ps-msg-b"><div class="ps-msg-h"><span class="ps-name" style="color:#3ec9b6">Maria Santos</span><span class="ps-time">9:02 AM</span></div><div class="ps-text">Morning team 🐝 pulling the new Acme listings into the CRM now — done before the US reps log on.</div></div>
+                      <div class="ps-msg-b"><div class="ps-msg-h"><span class="ps-name" style="color:#3ec9b6">Maria Santos</span><span class="ps-time">9:02 AM</span></div><div class="ps-text">Morning team 🐝 pulling the new Acme listings into the CRM now, done before the US reps log on.</div></div>
                     </div>
-                    <div class="ps-msg ps-msg-group" :style="msgStyle(1)"><span class="ps-gutter">9:03</span><div class="ps-msg-b"><div class="ps-text">Found 6 duplicate contacts — merging them now.</div></div></div>
+                    <div class="ps-msg ps-msg-group" :style="msgStyle(1)"><span class="ps-gutter">9:03</span><div class="ps-msg-b"><div class="ps-text">Found 6 duplicate contacts. Merging them now.</div></div></div>
                     <div class="ps-msg ps-msg-hover" :style="msgStyle(2)">
                       <span class="ps-hx" style="background:#8E4EC6">JR</span>
                       <div class="ps-msg-b"><div class="ps-msg-h"><span class="ps-name" style="color:#b48ce0">Jayson Remigio</span><span class="ps-time">9:14 AM</span></div><div class="ps-text"><span class="ps-mention">@Maria Santos</span> nice. Once that's in, flag the 3 hot deals so the reps see them first?</div><div class="ps-react"><span class="ps-rpill is-mine">🐝 3</span><span class="ps-thread">2 replies · last 9:21 AM</span></div></div>
@@ -367,11 +367,11 @@ const sparkStyle = computed(() => ({
                     </div>
                     <div class="ps-msg" :style="msgStyle(3)">
                       <span class="ps-hx" style="background:#0090FF">DP</span>
-                      <div class="ps-msg-b"><div class="ps-msg-h"><span class="ps-name" style="color:#5bb0ff">Dwayne Pereda</span><span class="ps-time">9:18 AM</span></div><div class="ps-text">Reps are dialing the Riverside batch — 42 connected, 5 callbacks booked so far.</div><div class="ps-react"><span class="ps-rpill">🔥 4</span><span class="ps-rpill">🚀 2</span></div></div>
+                      <div class="ps-msg-b"><div class="ps-msg-h"><span class="ps-name" style="color:#5bb0ff">Dwayne Pereda</span><span class="ps-time">9:18 AM</span></div><div class="ps-text">Reps are dialing the Riverside batch. 42 connected, 5 callbacks booked so far.</div><div class="ps-react"><span class="ps-rpill">🔥 4</span><span class="ps-rpill">🚀 2</span></div></div>
                     </div>
                   </div>
                   <div v-if="!typed" class="ps-typing"><span class="ps-hx ps-hx--xs" style="background:#0090FF">DP</span> Dwayne is typing<span class="ps-dots"><i /><i /><i /></span></div>
-                  <div class="ps-composer"><span class="ps-comp-typed"><span v-if="!typed" class="ps-comp-ph">Message #general — type / for commands</span>{{ typed }}<i class="ps-caret" /></span><span class="ps-send"><ArrowRight :size="14" :stroke-width="2.4" /></span></div>
+                  <div class="ps-composer"><span class="ps-comp-typed"><span v-if="!typed" class="ps-comp-ph">Message #general, type / for commands</span>{{ typed }}<i class="ps-caret" /></span><span class="ps-send"><ArrowRight :size="14" :stroke-width="2.4" /></span></div>
                 </div>
               </div>
 
@@ -388,7 +388,7 @@ const sparkStyle = computed(() => ({
                     <div class="ps-dcard ps-hot ps-crm-hero">
                       <span v-if="crmWon" class="ps-burst" />
                       <div class="ps-dtop"><span class="ps-sq" style="background:#46A758">SM</span><span class="ps-co">Summit Lending</span><span class="ps-stagechip" :style="crmStageChip"><span class="ps-d" style="background:currentColor" />{{ CRM_STAGES[crmStage].label }}</span></div>
-                      <div class="ps-dt">Refi package — 12 units</div>
+                      <div class="ps-dt">Refi package, 12 units</div>
                       <div class="ps-dfoot"><b class="ps-val" :class="{ 'ps-val-won': crmWon }">{{ heroVal }}</b><span class="ps-date"><CalendarDays :size="11" :stroke-width="2" /> Jun 27</span></div>
                     </div>
                   </div>
@@ -405,7 +405,7 @@ const sparkStyle = computed(() => ({
 
               <!-- ─────────── TIME (HiveTrack) ─────────── -->
               <div class="ps-panel ps-pad" :style="panelStyle(3)">
-                <div class="ps-panel-head"><div><div class="ps-panel-title">Time</div><div class="ps-panel-sub">Honest activity log. Timestamps only — no screenshots, no keystrokes.</div></div><span class="ps-ghost"><Download :size="13" :stroke-width="2" /> CSV</span></div>
+                <div class="ps-panel-head"><div><div class="ps-panel-title">Time</div><div class="ps-panel-sub">Honest activity log. Timestamps only. No screenshots, no keystrokes.</div></div><span class="ps-ghost"><Download :size="13" :stroke-width="2" /> CSV</span></div>
                 <div class="ps-range"><span class="is-on">Today</span><span>This week</span><span>Last week</span><span>This month</span></div>
                 <div class="ps-stats2">
                   <div class="ps-stat"><div class="ps-stat-l">Today total</div><div class="ps-stat-v">{{ todayTotal }}</div><div class="ps-stat-s">4 sessions</div></div>

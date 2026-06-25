@@ -155,9 +155,9 @@ const beatClass = (i: number) => ({
       <div class="hj-beat hj-beat--open" :class="beatClass(0)">
         <p class="hj-eyebrow">One assistant. One platform. No monthly software bills</p>
         <h1 class="hj-headline">
-          <span>Your VA</span><span>does the work.</span><span class="hj-accent">You just watch.</span>
+          <span>Your VA</span><span>does the work.</span><span class="hj-accent">You get your time back.</span>
         </h1>
-        <p class="hj-sub">A trained professional handles every request. From the first message to a closed deal, while you watch each step move through the hive.</p>
+        <p class="hj-sub">A trained assistant handles the day-to-day, from first message to closed deal. You spend your time on clients and closings, not admin.</p>
         <div class="hj-cue"><span>Scroll</span><ArrowDown class="hj-cue-icon" :size="16" :stroke-width="2" /></div>
       </div>
 

@@ -88,7 +88,7 @@ const skipDone = (at: number) => p.value >= at
 // ── Part 2: the 7-day path timeline ────────────────────────────────
 const steps = [
   { num: '01', title: 'Discovery call', body: 'A 20-minute call to understand your business: team size, transaction volume, tools you use, and what\'s eating your time.', icon: Phone },
-  { num: '02', title: 'Your best-fit match', body: 'Within 72 hours, we hand you your one best-fit VA — pre-screened, and already fluent in real-estate workflows, your CRM, and your time zone.', icon: Users },
+  { num: '02', title: 'Your best-fit match', body: 'Within 72 hours, we hand you your one best-fit VA, pre-screened, and already fluent in real-estate workflows, your CRM, and your time zone.', icon: Users },
   { num: '03', title: '7-day onboarding', body: 'Your VA learns your playbook, brokerage systems, and communication style. By day 7, they\'re handling tasks independently.', icon: Rocket },
   { num: '04', title: 'Managed support', body: 'A project manager runs daily check-ins, weekly reports, and quarterly reviews. Problems get caught before you feel them.', icon: Headphones },
   { num: '05', title: 'Scale your team', body: 'Add a transaction coordinator, a marketing VA, or a second admin as your production grows. One platform, unlimited growth.', icon: TrendingUp }
@@ -130,7 +130,7 @@ const stepActive = (i: number) => sp.value > (i + 0.35) / steps.length
             Skip the hiring process entirely.
           </h2>
           <p class="mt-5 text-base text-base-content/60 leading-relaxed max-w-md">
-            No job posts. No résumé piles. No interview marathons. Tell us what you need &mdash; we run the search, the screening, and the matching, then hand you one best-fit candidate. Usually within 72 hours.
+            No job posts. No résumé piles. No interview marathons. Tell us what you need. We run the search, the screening, and the matching, then hand you one best-fit candidate. Usually within 72 hours.
           </p>
 
           <!-- Live status chip -->
@@ -187,7 +187,7 @@ const stepActive = (i: number) => sp.value > (i + 0.35) / steps.length
               </div>
 
               <div class="mt-4 space-y-2">
-                <div v-for="t in ['Knows Follow Up Boss & Dotloop', '9am–5pm PST overlap', 'Top 3% · skills-tested']" :key="t" class="flex items-center gap-2 text-xs text-base-content/70">
+                <div v-for="t in ['Knows Follow Up Boss & Dotloop', '9am-5pm PST overlap', 'Top 3% · skills-tested']" :key="t" class="flex items-center gap-2 text-xs text-base-content/70">
                   <svg class="w-3.5 h-3.5 shrink-0 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
                   {{ t }}
                 </div>

@@ -36,7 +36,7 @@ const pillars = [
   {
     icon: BadgeCheck,
     title: 'High-quality workforce',
-    body: 'Degree-holding professionals from the top 3% of thousands of applicants — screened, not gig-economy labor.'
+    body: 'Degree-holding professionals from the top 3% of thousands of applicants. Screened, not gig-economy labor.'
   },
   {
     icon: Target,
@@ -46,7 +46,7 @@ const pillars = [
   {
     icon: Zap,
     title: 'Highly effective people',
-    body: 'Trained on your playbook, so they\'re productive from week one — no months-long ramp-up.'
+    body: 'Trained on your playbook, so they\'re productive from week one. No months-long ramp-up.'
   },
   {
     icon: Award,
@@ -74,7 +74,7 @@ const pillars = [
           Only the top 3% make it through.
         </h2>
         <p class="mt-4 text-base text-base-content/60 leading-relaxed">
-          Every HiveMind VA clears AI pre-screening, a recruiter interview, and a role-specific skills test before they ever touch your account &mdash; then we match them to your tools and time zone.
+          Every HiveMind VA clears AI pre-screening, a recruiter interview, and a role-specific skills test before they ever touch your account. Then we match them to your tools and time zone.
         </p>
       </div>
 

@@ -7,7 +7,7 @@ import AmbientGradient from './AmbientGradient.vue'
 // real, attributable testimonials once they exist.
 const testimonials = [
   {
-    quote: 'My VA took over lead follow-up and transaction coordination in week one. I stopped drowning in paperwork — and I\'m finally home for dinner.',
+    quote: 'My VA took over lead follow-up and transaction coordination in week one. I stopped drowning in paperwork, and I\'m finally home for dinner.',
     name: 'Alana J.',
     role: 'Real Estate Broker, Austin TX'
   },
@@ -17,17 +17,17 @@ const testimonials = [
     role: 'Team Lead, Phoenix AZ'
   },
   {
-    quote: 'She knew Dotloop and Follow Up Boss on day one. I didn\'t have to explain what a listing agreement was — she already spoke real estate.',
+    quote: 'She knew Dotloop and Follow Up Boss on day one. I didn\'t have to explain what a listing agreement was. She already spoke real estate.',
     name: 'Sarah K.',
     role: 'Solo Agent, Charlotte NC'
   },
   {
-    quote: 'We brought on two VAs for our team. They handle the CRM, social, and transaction files — so our agents finally spend their time on dollar-productive work.',
+    quote: 'We brought on two VAs for our team. They handle the CRM, social, and transaction files, so our agents finally spend their time on dollar-productive work.',
     name: 'David R.',
     role: 'Brokerage Owner, Denver CO'
   },
   {
-    quote: 'The speed-to-lead difference is night and day — my VA replies while leads are still hot, so far more of them turn into appointments.',
+    quote: 'The speed-to-lead difference is night and day. My VA replies while leads are still hot, so far more of them turn into appointments.',
     name: 'Jennifer M.',
     role: 'Luxury Agent, Miami FL'
   }

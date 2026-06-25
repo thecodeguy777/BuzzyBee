@@ -57,7 +57,7 @@ const pros = [
           They already know Dotloop, MLS, and Follow Up Boss.
         </h2>
         <p class="mt-4 text-base text-base-content/60 leading-relaxed">
-          The platform is just how you see the work. The work itself is done by a real, trained person — one
+          The platform is just how you see the work. The work itself is done by a real, trained person
           who already knows your tools and does the job from day one. Here's who that looks like.
         </p>
       </div>
@@ -114,7 +114,7 @@ const pros = [
       <!-- closing line -->
       <div v-reveal="200" class="mt-10 text-center">
         <p class="text-sm text-base-content/60">
-          <span class="font-semibold text-base-content">Every plan includes one</span> —
+          <span class="font-semibold text-base-content">Every plan includes one</span>,
           matched to your business, managed by a dedicated project manager, and backed by the whole hive.
         </p>
       </div>

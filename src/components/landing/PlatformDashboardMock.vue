@@ -32,7 +32,7 @@ const todoTasks: Task[] = [
 ]
 
 const inProgressTasks: Task[] = [
-  { ref: 'TASK-0138', title: 'Follow up on Smith offer — counter expected', priority: 1, dueLabel: 'Today', assignee: 'M', assigneeColor: 'from-blue-500 to-purple-500', comments: 5, attachments: 2 },
+  { ref: 'TASK-0138', title: 'Follow up on Smith offer, counter expected', priority: 1, dueLabel: 'Today', assignee: 'M', assigneeColor: 'from-blue-500 to-purple-500', comments: 5, attachments: 2 },
   { ref: 'TASK-0139', title: 'Prepare Just Listed campaign for 27 Birch Ln', priority: 2, dueLabel: 'Wed', assignee: 'A', assigneeColor: 'from-pink-500 to-purple-500', attachments: 4 },
   { ref: 'TASK-0140', title: 'Update FollowUpBoss tags for Q2 leads', priority: 3, dueLabel: 'Fri', assignee: 'M', assigneeColor: 'from-blue-500 to-purple-500' },
 ]
