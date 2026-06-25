@@ -47,8 +47,22 @@ export interface CommsMessage {
   edited_at: string | null
   /** Set when the author/manager soft-deletes — renders a "deleted" tombstone. */
   deleted_at?: string | null
+  /** Present when this message is a poll (rendered as a poll card). */
+  poll?: { question: string; options: string[] } | null
   created_at: string
   updated_at: string
+}
+
+export interface CommsReminder {
+  id: string
+  channel_id: string
+  created_by: string
+  body: string
+  remind_at: string
+  fired_at: string | null
+  /** Manual completion (separate from the cron's fired_at delivery). */
+  done_at: string | null
+  created_at: string
 }
 
 export interface HuddlePresence {
@@ -78,6 +92,10 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
   // (not a raw counter) makes applying a reaction idempotent — so the optimistic
   // update and the DB broadcast echo for the same (user, emoji) don't double up.
   const reactions = ref<Record<string, Record<string, Set<string>>>>({})
+  // poll votes: messageId -> userId -> optionIndex. One vote per user (single
+  // choice, changeable); counts + your-vote derive from this, kept live off the
+  // same channel broadcast as reactions.
+  const pollVotes = ref<Record<string, Record<string, number>>>({})
   const loading = ref(false)
   const sending = ref(false)
   const online = ref<HuddlePresence[]>([])
@@ -91,6 +109,9 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
   // mirrors broadcast_message), so "seen by" updates instantly instead of
   // trailing behind on the slower postgres_changes path. Powers the honeycomb.
   const reads = ref<{ user_id: string; last_read_at: string }[]>([])
+  // Pending reminders for the bound channel (unfired). Loaded on entry + after
+  // any create/edit/delete; not realtime (they change rarely).
+  const reminders = ref<CommsReminder[]>([])
 
   // Huddle: WebRTC audio mesh, signaled over the channel's private broadcast.
   const inHuddle = ref(false)
@@ -194,6 +215,18 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
       .map(([emoji, users]) => ({ emoji, count: users.size, mine: users.has(uid) }))
       .filter((x) => x.count > 0)
   }
+  // Aggregate a poll's votes: voter ids per option, total, and your own pick.
+  function pollTally(messageId: string) {
+    const v = pollVotes.value[messageId] ?? {}
+    const uid = me() ?? ''
+    const byOption: Record<number, string[]> = {}
+    let total = 0
+    for (const [userId, opt] of Object.entries(v)) {
+      ;(byOption[opt] ?? (byOption[opt] = [])).push(userId)
+      total++
+    }
+    return { byOption, total, myVote: uid in v ? v[uid] : null }
+  }
   function profile(userId: string) {
     return team.profiles[userId] ?? null
   }
@@ -232,6 +265,16 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     reactions.value = { ...reactions.value, [mid]: { ...byEmoji } }
   }
 
+  function applyPollVoteRow(row: any, removed: boolean) {
+    const mid = row?.message_id
+    const uid = row?.user_id
+    if (!mid || !uid) return
+    const byUser = pollVotes.value[mid] ?? (pollVotes.value[mid] = {})
+    if (removed) delete byUser[uid]
+    else byUser[uid] = row.option_index
+    pollVotes.value = { ...pollVotes.value, [mid]: { ...byUser } }
+  }
+
   // Replies for a set of root messages (threads load with their parents).
   async function fetchReplies(rootIds: string[]): Promise<CommsMessage[]> {
     if (!rootIds.length) return []
@@ -267,6 +310,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
       allMessages.value = [...roots, ...replies]
       primeProfiles(allMessages.value)
       await loadReactions()
+      await loadPollVotes()
     } catch (e) {
       console.warn('[comms] loadHistory:', (e as Error).message)
       if (!opts.silent) {
@@ -304,6 +348,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
         allMessages.value = [...add, ...allMessages.value]
         primeProfiles(add)
         await loadReactions()
+        await loadPollVotes()
       }
     } catch (e) {
       console.warn('[comms] loadOlder:', (e as Error).message)
@@ -367,6 +412,28 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
       s.add(r.user_id)
     }
     reactions.value = map
+  }
+
+  // Pull votes for every loaded poll message (rebuilt like loadReactions).
+  async function loadPollVotes() {
+    const ids = allMessages.value.filter((m) => m.poll).map((m) => m.id)
+    if (!ids.length) {
+      pollVotes.value = {}
+      return
+    }
+    const { data, error } = await supabase
+      .from('comms_poll_votes')
+      .select('message_id, user_id, option_index')
+      .in('message_id', ids)
+    if (error) {
+      console.warn('[comms] loadPollVotes:', error.message)
+      return
+    }
+    const map: Record<string, Record<string, number>> = {}
+    for (const r of (data ?? []) as any[]) {
+      ;(map[r.message_id] ??= {})[r.user_id] = r.option_index
+    }
+    pollVotes.value = map
   }
 
   async function teardown() {
@@ -518,8 +585,10 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
 
   async function setup(id: string, token: number) {
     activeId = id
+    reminders.value = []
     await loadHistory(id)
     void loadReads(id)
+    void loadReminders(id)
     if (token !== setupToken) return
     try { await supabase.realtime.setAuth() } catch { /* already set */ }
     if (token !== setupToken) return
@@ -542,6 +611,9 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
       } else if (table === 'message_reactions') {
         if (p.operation === 'DELETE' || m.event === 'DELETE') applyReactionRow(old, true)
         else applyReactionRow(rec, false)
+      } else if (table === 'comms_poll_votes') {
+        if (p.operation === 'DELETE' || m.event === 'DELETE') applyPollVoteRow(old, true)
+        else applyPollVoteRow(rec, false)
       } else {
         // messages
         if (p.operation === 'DELETE' || m.event === 'DELETE') {
@@ -665,6 +737,155 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
         .insert({ message_id: messageId, user_id: uid, emoji })
       if (error) console.warn('[comms] react:', error.message)
     }
+  }
+
+  // ── Polls ──────────────────────────────────────────────────────────────────
+  async function createPoll(question: string, options: string[]) {
+    const id = activeId
+    const uid = me()
+    const q = question.trim()
+    const opts = options.map((o) => o.trim()).filter(Boolean)
+    if (!q || opts.length < 2 || !id || !uid || sending.value) return null
+    sending.value = true
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          channel_id: id,
+          user_id: uid,
+          user_name: auth.fullName || null,
+          body: q,
+          poll: { question: q, options: opts },
+        })
+        .select('*')
+        .single()
+      if (error) throw error
+      upsertMessage(data as CommsMessage)
+      return data as CommsMessage
+    } catch (e) {
+      console.warn('[comms] createPoll:', (e as Error).message)
+      throw e
+    } finally {
+      sending.value = false
+    }
+  }
+  // Single-choice, changeable: clicking your current option clears it (unvote);
+  // any other option upserts. self:false on the channel means the optimistic
+  // update is authoritative for the voter; everyone else gets the broadcast.
+  async function votePoll(messageId: string, optionIndex: number) {
+    const uid = me()
+    if (!uid) return
+    const removing = pollVotes.value[messageId]?.[uid] === optionIndex
+    applyPollVoteRow({ message_id: messageId, user_id: uid, option_index: optionIndex }, removing)
+    if (removing) {
+      const { error } = await supabase
+        .from('comms_poll_votes')
+        .delete()
+        .eq('message_id', messageId)
+        .eq('user_id', uid)
+      if (error) console.warn('[comms] unvote:', error.message)
+    } else {
+      const { error } = await supabase
+        .from('comms_poll_votes')
+        .upsert({ message_id: messageId, user_id: uid, option_index: optionIndex }, { onConflict: 'message_id,user_id' })
+      if (error) console.warn('[comms] vote:', error.message)
+    }
+  }
+
+  // ── Reminders ───────────────────────────────────────────────────────────────
+  // Queued against the channel; the bb-fire-comms-reminders pg_cron job posts
+  // "⏰ Reminder: …" into the channel at remind_at and @mentions the creator.
+  function sortReminders(list: CommsReminder[]) {
+    return [...list].sort((a, b) => a.remind_at.localeCompare(b.remind_at))
+  }
+  async function createReminder(remindAt: string, body: string) {
+    const id = activeId
+    const uid = me()
+    const text = body.trim()
+    if (!text || !id || !uid) return null
+    const { data, error } = await supabase
+      .from('comms_reminders')
+      .insert({ channel_id: id, created_by: uid, body: text, remind_at: remindAt })
+      .select('*')
+      .single()
+    if (error) {
+      console.warn('[comms] createReminder:', error.message)
+      throw error
+    }
+    if (data && activeId === id) reminders.value = sortReminders([...reminders.value, data as CommsReminder])
+    // Announce in the channel so the team sees it the moment it's set (a HiveMind
+    // announcer line, same style as the fire message). Best-effort — the reminder
+    // itself is already saved; a failed notice shouldn't surface as an error.
+    const when = new Date(remindAt).toLocaleString(undefined, {
+      weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+    })
+    const who = auth.fullName || 'Someone'
+    try {
+      const { data: notice, error: noticeErr } = await supabase.rpc('post_channel_notice', {
+        p_channel_id: id,
+        p_body: `📌 ${who} set a reminder for ${when}: ${text}`,
+      })
+      if (noticeErr) console.warn('[comms] reminder notice:', noticeErr.message)
+      // Show it immediately for the author — the DB-triggered broadcast covers others.
+      else if (notice) upsertMessage((Array.isArray(notice) ? notice[0] : notice) as CommsMessage)
+    } catch (e) {
+      console.warn('[comms] reminder notice:', (e as Error).message)
+    }
+    return (data as { id: string } | null)?.id ?? null
+  }
+  // Pending (unfired) reminders for a channel — fired ones become messages.
+  async function loadReminders(channelId?: string) {
+    const id = channelId ?? activeId
+    if (!id) return
+    // All reminders for the channel (the rail filters Upcoming/All/Done; fired
+    // but not-done ones linger as "overdue" until checked off).
+    const { data, error } = await supabase
+      .from('comms_reminders')
+      .select('*')
+      .eq('channel_id', id)
+      .order('remind_at', { ascending: true })
+      .limit(200)
+    if (error) {
+      console.warn('[comms] loadReminders:', error.message)
+      return
+    }
+    if (activeId !== id) return
+    reminders.value = (data ?? []) as CommsReminder[]
+  }
+  async function updateReminder(
+    id: string,
+    patch: { body?: string; remind_at?: string; done_at?: string | null; fired_at?: string | null },
+  ) {
+    const prev = reminders.value
+    reminders.value = sortReminders(reminders.value.map((r) => (r.id === id ? { ...r, ...patch } : r)))
+    // .select() so an RLS-blocked update (not a channel member) rolls back.
+    const { data, error } = await supabase.from('comms_reminders').update(patch).eq('id', id).select('id')
+    if (error || (data ?? []).length === 0) {
+      reminders.value = prev
+      console.warn('[comms] updateReminder:', error?.message ?? 'no rows updated (RLS)')
+      return false
+    }
+    return true
+  }
+  // Mark a reminder done / active. A done reminder won't fire.
+  const toggleReminderDone = (r: CommsReminder) =>
+    updateReminder(r.id, { done_at: r.done_at ? null : new Date().toISOString() })
+  // Push a reminder out and let it fire again at the new time.
+  const snoozeReminder = (r: CommsReminder, minutes = 60) =>
+    updateReminder(r.id, {
+      remind_at: new Date(new Date(r.remind_at).getTime() + minutes * 60000).toISOString(),
+      fired_at: null,
+    })
+  async function deleteReminder(id: string) {
+    const prev = reminders.value
+    reminders.value = reminders.value.filter((r) => r.id !== id)
+    const { error } = await supabase.from('comms_reminders').delete().eq('id', id)
+    if (error) {
+      reminders.value = prev
+      console.warn('[comms] deleteReminder:', error.message)
+      return false
+    }
+    return true
   }
 
   async function patchMessage(id: string, patch: Partial<CommsMessage>) {
@@ -833,6 +1054,11 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     } catch {
       rawStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
     }
+    // Apply the mute state the instant the mic exists — before the (async) RNNoise
+    // graph is built or the track is added to any peer — so "join muted" never
+    // leaves a hot mic open during the pipeline-build window. Re-applied below
+    // after the pipeline in case mute was toggled mid-build.
+    rawStream.getAudioTracks().forEach((t) => (t.enabled = !muted.value))
 
     // Route the mic through RNNoise; fall back to the raw mic if it can't load.
     nsPipeline = await createNoisePipeline(rawStream, noiseSuppression.value)
@@ -1268,9 +1494,19 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
     rnnoiseActive,
     toggleNoise,
     reactionList,
+    pollTally,
     profile,
     send,
     toggleReaction,
+    createPoll,
+    votePoll,
+    createReminder,
+    reminders,
+    loadReminders,
+    updateReminder,
+    toggleReminderDone,
+    snoozeReminder,
+    deleteReminder,
     togglePin,
     markDecision,
     toggleDecisionDone,

@@ -7,6 +7,7 @@ import HexAvatar from '@/components/shared/HexAvatar.vue'
 import CommsAttachments from '@/components/comms/CommsAttachments.vue'
 import CommsLinkedTask from '@/components/comms/CommsLinkedTask.vue'
 import CommsRichText from '@/components/comms/CommsRichText.vue'
+import CommsPoll from '@/components/comms/CommsPoll.vue'
 import SeenCluster from '@/components/comms/SeenCluster.vue'
 import CommsProfilePopover from '@/components/comms/CommsProfilePopover.vue'
 import { userColor } from '@/lib/userColor'
@@ -35,6 +36,8 @@ const props = withDefaults(
     canTask?: boolean
     /** The signed-in user authored this message (gates edit + own-delete). */
     isOwn?: boolean
+    /** Live vote tally for a poll message (from stream.pollTally). */
+    pollTally?: { byOption: Record<number, string[]>; total: number; myVote: number | null } | null
   }>(),
   {
     // Vue casts absent Boolean props to false, so without an explicit default
@@ -55,6 +58,7 @@ const emit = defineEmits<{
   (e: 'log-crm'): void
   (e: 'edit', body: string): void
   (e: 'delete'): void
+  (e: 'vote', optionIndex: number): void
 }>()
 
 const team = useTeamStore()
@@ -243,12 +247,19 @@ function onEditKeydown(e: KeyboardEvent) {
       </div>
 
       <template v-else>
-        <div v-if="message.body" class="text-sm text-base-content/90 whitespace-pre-wrap break-words leading-[1.46]">
+        <!-- poll card (the message IS the poll) -->
+        <CommsPoll
+          v-if="message.poll"
+          :poll="message.poll"
+          :tally="pollTally ?? null"
+          @vote="emit('vote', $event)"
+        />
+        <div v-else-if="message.body" class="text-sm text-base-content/90 whitespace-pre-wrap break-words leading-[1.46]">
           <CommsRichText :text="message.body" :mention-names="mentionNames" /><span v-if="message.edited_at" class="ml-1 text-[0.62rem] text-base-content/35" title="Edited">(edited)</span>
         </div>
 
         <!-- attachments (images / video / files / links — shared renderer) -->
-        <CommsAttachments v-if="message.attachments?.length" :attachments="message.attachments" />
+        <CommsAttachments v-if="!message.poll && message.attachments?.length" :attachments="message.attachments" />
 
         <!-- linked task — embedded card / pill -->
         <CommsLinkedTask v-if="linkedTask" :task="linkedTask" @open="emit('open-task', $event)" />

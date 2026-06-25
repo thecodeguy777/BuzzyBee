@@ -164,8 +164,8 @@ export function useMeetingRoom() {
 
   const ICE = iceServers()
   // Surfaced once a peer's connection has truly failed (after the ICE-restart
-  // grace) so guests aren't left in a silent dead call. STUN-only can't cross
-  // strict NATs, so hint at TURN when none is configured.
+  // grace) so guests aren't stranded in a silent dead call. STUN alone can't
+  // cross strict/symmetric NATs, so hint at TURN when none is configured.
   function notePeerFailed() {
     error.value = hasTurn()
       ? 'A participant dropped off — their connection failed.'
@@ -797,10 +797,6 @@ export function useMeetingRoom() {
     } catch {
       rawStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
     }
-    // Apply mute the instant the mic exists — before the (async) RNNoise build or
-    // adding the track to any peer — so "join muted" never leaves a hot mic open
-    // during the pipeline-build window. Re-applied below in case mute toggled mid-build.
-    rawStream.getAudioTracks().forEach((t) => (t.enabled = !muted.value))
     nsPipeline = await createNoisePipeline(rawStream, noiseSuppression.value)
     rnnoiseActive.value = !!nsPipeline
     localStream = nsPipeline ? nsPipeline.stream : rawStream
@@ -946,13 +942,9 @@ export function useMeetingRoom() {
           entry.restartedIce = true
           try { pc.restartIce() } catch { /* unsupported */ }
           setTimeout(() => {
-            if (peers.get(userId) === entry && pc.connectionState === 'failed') {
-              notePeerFailed()
-              closePeer(userId)
-            }
+            if (peers.get(userId) === entry && pc.connectionState === 'failed') closePeer(userId)
           }, 4000)
         } else {
-          notePeerFailed()
           closePeer(userId)
         }
       }

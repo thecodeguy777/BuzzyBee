@@ -5,7 +5,7 @@ import {
   Hash, Search, Users, Headphones, Mic, MicOff, MonitorUp, MonitorOff, PictureInPicture2, Monitor, PhoneOff,
   Paperclip, Image as ImageIcon, Link2, Smile, AtSign, Send, X, CheckSquare,
   Settings2, Crown, Maximize2, Bell, BellOff, Wand2, Video, Menu, ArrowDown, Loader2, AlertCircle,
-  Slash, BarChart3, MessageSquare
+  Slash, BarChart3, MessageSquare, AlarmClock
 } from 'lucide-vue-next'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
 import CommsMessage from '@/components/comms/CommsMessage.vue'
@@ -15,6 +15,8 @@ import MediaPicker from '@/components/comms/MediaPicker.vue'
 import CommsChannelList from '@/components/comms/CommsChannelList.vue'
 import CommsActivityRail from '@/components/comms/CommsActivityRail.vue'
 import CommsTaskComposer from '@/components/comms/CommsTaskComposer.vue'
+import CommsPollComposer from '@/components/comms/CommsPollComposer.vue'
+import CommsReminderComposer from '@/components/comms/CommsReminderComposer.vue'
 import { type Gif } from '@/lib/giphy'
 import { createMeetingRoom } from '@/lib/meetingRoom'
 import { useChannelsStore } from '@/stores/channels'
@@ -780,6 +782,8 @@ const slashFiltered = computed(() => SLASH_CMDS.filter((s) => s.cmd.startsWith(d
 function pickSlash(cmd: string) {
   if (cmd === '/task') startSlashTask()
   else if (cmd === '/huddle') { draft.value = ''; stream.toggleHuddle() }
+  else if (cmd === '/poll') { draft.value = ''; mentionOpen.value = false; pollComposerOpen.value = true }
+  else if (cmd === '/remind') { draft.value = ''; mentionOpen.value = false; editingReminder.value = null; reminderComposerOpen.value = true }
   else { draft.value = ''; fireToast(`${cmd} isn't wired up yet`, 'On the roadmap') }
 }
 function openSlash() {
@@ -790,6 +794,12 @@ function openSlash() {
 // ── Task-from-chat ──────────────────────────────────────────────────────────
 const taskComposerFor = ref<CommsMsg | null>(null)
 const taskComposerStandalone = ref(false)
+const pollComposerOpen = ref(false)
+const reminderComposerOpen = ref(false)
+const editingReminder = ref<{ id: string; body: string; remind_at: string } | null>(null)
+// Right rail tab — the AlarmClock header button jumps straight to Reminders.
+const activityTab = ref<'tasks' | 'reminders'>('tasks')
+const upcomingReminderCount = computed(() => stream.reminders.value.filter((r) => !r.done_at).length)
 const toast = ref<{ title: string; sub: string } | null>(null)
 let toastTimer: number | undefined
 function fireToast(title: string, sub: string) {
@@ -855,6 +865,46 @@ async function onTaskCreate(payload: {
 // React handler — reactions are just reactions. Turning a message into a task
 // is the explicit hover "Task" button / "/task" only (a ✅ used to auto-create
 // a task, which read as "I approve" and surprised people with board entries).
+async function onPollCreate(payload: { question: string; options: string[] }) {
+  pollComposerOpen.value = false
+  try {
+    const posted = await stream.createPoll(payload.question, payload.options)
+    if (posted) scrollToBottom()
+  } catch (e) {
+    commsError.value = (e as Error).message
+  }
+}
+async function onReminderCreate(payload: { remindAt: string; body: string }) {
+  reminderComposerOpen.value = false
+  const editId = editingReminder.value?.id ?? null
+  editingReminder.value = null
+  const where = `#${channels.currentChannel?.name ?? ''}`
+  try {
+    if (editId) {
+      const ok = await stream.updateReminder(editId, { body: payload.body, remind_at: payload.remindAt })
+      if (ok) fireToast('Reminder updated', `Posts in ${where}`)
+    } else {
+      await stream.createReminder(payload.remindAt, payload.body)
+      fireToast('Reminder set', `HiveMind will post it in ${where}`)
+    }
+  } catch (e) {
+    commsError.value = (e as Error).message
+  }
+}
+// AlarmClock button → open the right rail straight to the Reminders tab.
+function openReminders() {
+  activityOpen.value = true
+  activityTab.value = 'reminders'
+  void stream.loadReminders()
+}
+function openNewReminder() {
+  editingReminder.value = null
+  reminderComposerOpen.value = true
+}
+function openEditReminder(r: { id: string; body: string; remind_at: string }) {
+  editingReminder.value = { id: r.id, body: r.body, remind_at: r.remind_at }
+  reminderComposerOpen.value = true
+}
 function onReact(m: CommsMsg, emoji: string) {
   stream.toggleReaction(m.id, emoji)
 }
@@ -1018,6 +1068,10 @@ function fullscreenScreen() {
         <button class="w-8 h-8 rounded-lg hover:bg-base-200 flex items-center justify-center text-base-content/60" aria-label="New meeting link (shareable)" title="New meeting link (shareable)" @click="newMeeting"><Video class="w-4 h-4" :stroke-width="1.75" /></button>
         <button class="hidden sm:flex w-8 h-8 rounded-lg hover:bg-base-200 items-center justify-center text-base-content/60" aria-label="Mic & sound check" title="Mic &amp; sound check" @click="showMicCheck = true"><Settings2 class="w-4 h-4" :stroke-width="1.75" /></button>
         <button class="w-8 h-8 rounded-lg flex items-center justify-center text-base-content/60" :class="searchOpen ? 'bg-base-200 text-primary' : 'hover:bg-base-200'" aria-label="Search messages" title="Search messages" @click="toggleSearch"><Search class="w-4 h-4" :stroke-width="1.75" /></button>
+        <button class="relative hidden xl:flex w-8 h-8 rounded-lg items-center justify-center" :class="activityOpen && activityTab === 'reminders' ? 'bg-base-200 text-primary' : 'text-base-content/60 hover:bg-base-200'" aria-label="Reminders" title="Reminders" @click="openReminders">
+          <AlarmClock class="w-4 h-4" :stroke-width="1.75" />
+          <span v-if="upcomingReminderCount" class="absolute -top-0.5 -right-0.5 min-w-[15px] h-[15px] px-1 rounded-full bg-primary text-white text-[0.58rem] font-bold flex items-center justify-center ring-2 ring-base-100">{{ upcomingReminderCount }}</span>
+        </button>
         <button class="w-8 h-8 rounded-lg flex items-center justify-center text-base-content/60" :class="membersOpen ? 'bg-base-200 text-primary' : 'hover:bg-base-200'" aria-label="Members" title="Members" @click="membersOpen = !membersOpen"><Users class="w-4 h-4" :stroke-width="1.75" /></button>
         <button class="hidden xl:flex w-8 h-8 rounded-lg items-center justify-center" :class="activityOpen ? 'bg-primary/10 text-primary' : 'text-base-content/60 hover:bg-base-200'" aria-label="Activity & tasks" title="Activity & tasks from chat" @click="activityOpen = !activityOpen"><CheckSquare class="w-4 h-4" :stroke-width="1.75" /></button>
       </header>
@@ -1141,6 +1195,7 @@ function fullscreenScreen() {
                 :linked-task="linkedTaskFor(m.linked_task_id)"
                 :can-manage="canManage"
                 :is-own="m.user_id === auth.user?.id"
+                :poll-tally="m.poll ? stream.pollTally(m.id) : null"
                 :can-log-crm="!!crmTarget"
                 @log-crm="logMessageToCrm(m)"
                 @react="(e) => onReact(m, e)"
@@ -1150,6 +1205,7 @@ function fullscreenScreen() {
                 @mark-decision="stream.markDecision(m)"
                 @edit="(body) => stream.editMessage(m.id, body)"
                 @delete="confirmDelete(m)"
+                @vote="(opt) => stream.votePoll(m.id, opt)"
                 @open-task="openTask"
                 @open-dm="startDm"
               />
@@ -1366,12 +1422,14 @@ function fullscreenScreen() {
           :can-log-crm="!!crmTarget"
           :is-own="threadParent!.user_id === auth.user?.id"
           :can-manage="canManage"
+          :poll-tally="threadParent!.poll ? stream.pollTally(threadParent!.id) : null"
           @log-crm="logMessageToCrm(threadParent!)"
           @react="(e) => stream.toggleReaction(threadParent!.id, e)"
           @make-task="makeTask(threadParent!)"
           @toggle-pin="stream.togglePin(threadParent!)"
           @edit="(body) => stream.editMessage(threadParent!.id, body)"
           @delete="confirmDelete(threadParent!)"
+          @vote="(opt) => stream.votePoll(threadParent!.id, opt)"
           @open-task="openTask"
           @open-dm="startDm"
         />
@@ -1412,8 +1470,12 @@ function fullscreenScreen() {
     <!-- ── Activity rail (tasks created from chat) ── -->
     <CommsActivityRail
       v-if="activityOpen && !threadParent"
+      :tab="activityTab"
+      @update:tab="activityTab = $event"
       @close="activityOpen = false"
       @open="openTask"
+      @new-reminder="openNewReminder"
+      @edit-reminder="openEditReminder"
     />
 
     <MicCheck v-if="showMicCheck" @close="showMicCheck = false" />
@@ -1424,6 +1486,23 @@ function fullscreenScreen() {
       :message="taskComposerFor"
       @create="onTaskCreate"
       @close="taskComposerFor = null"
+    />
+
+    <!-- /poll composer -->
+    <CommsPollComposer
+      v-if="pollComposerOpen && currentChannelId"
+      :channel-id="currentChannelId"
+      @create="onPollCreate"
+      @close="pollComposerOpen = false"
+    />
+
+    <!-- /remind composer (create or edit) -->
+    <CommsReminderComposer
+      v-if="reminderComposerOpen && currentChannelId"
+      :channel-id="currentChannelId"
+      :reminder="editingReminder"
+      @create="onReminderCreate"
+      @close="reminderComposerOpen = false; editingReminder = null"
     />
 
     <!-- Task-created toast -->

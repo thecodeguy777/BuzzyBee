@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   MessagesSquare, Headphones, Mic, MicOff, MonitorUp, PhoneOff, Wand2,
   Send, ChevronDown, Maximize2, Crown, Hash, Bell, BellOff, Users,
+  Pencil, Trash2, AlarmClock, CheckSquare, BarChart3,
 } from 'lucide-vue-next'
 import { supabase } from '@/lib/supabase'
 import { HEX_CLIP_ID } from '@/lib/hexPath'
@@ -13,6 +14,11 @@ import SeenCluster from '@/components/comms/SeenCluster.vue'
 import CommsAttachments from '@/components/comms/CommsAttachments.vue'
 import TypingIndicator from '@/components/comms/TypingIndicator.vue'
 import CommsProfilePopover from '@/components/comms/CommsProfilePopover.vue'
+import CommsPoll from '@/components/comms/CommsPoll.vue'
+import CommsPollComposer from '@/components/comms/CommsPollComposer.vue'
+import CommsReminderComposer from '@/components/comms/CommsReminderComposer.vue'
+import CommsTaskComposer from '@/components/comms/CommsTaskComposer.vue'
+import type { CommsMessage } from '@/composables/useChannelStream'
 import { userColor } from '@/lib/userColor'
 import { useProfileHover } from '@/composables/useProfileHover'
 import { COMMS_STREAM, HUDDLE_PRESENCE } from '@/composables/commsStream'
@@ -213,6 +219,115 @@ async function send() {
     drafts.set(cid, body)
   }
 }
+const canManage = computed(() => auth.isAdmin || auth.role === 'pm')
+
+// ── Message edit / delete (inline) ───────────────────────────────────────────
+const editingId = ref<string | null>(null)
+const editDraft = ref('')
+function startEdit(m: CommsMessage) {
+  editingId.value = m.id
+  editDraft.value = m.body
+}
+function cancelEdit() { editingId.value = null }
+async function saveEdit(m: CommsMessage) {
+  const next = editDraft.value.trim()
+  editingId.value = null
+  if (!next || next === m.body) return
+  await stream.editMessage(m.id, next)
+}
+async function confirmDelete(m: CommsMessage) {
+  if (window.confirm('Delete this message? This can’t be undone.')) await stream.deleteMessage(m)
+}
+
+// ── Slash commands (mirror the full Comms composer, minus @mentions) ──────────
+const pollComposerOpen = ref(false)
+const reminderComposerOpen = ref(false)
+const taskComposerFor = ref<CommsMessage | null>(null)
+const taskComposerStandalone = ref(false)
+const editingReminder = ref<{ id: string; body: string; remind_at: string } | null>(null)
+const SLASH_CMDS = [
+  { cmd: '/task', icon: CheckSquare, label: 'Create a task' },
+  { cmd: '/huddle', icon: Headphones, label: 'Start a huddle' },
+  { cmd: '/poll', icon: BarChart3, label: 'Create a poll' },
+  { cmd: '/remind', icon: Bell, label: 'Set a reminder' },
+]
+const showSlash = computed(() => draft.value.startsWith('/') && !draft.value.includes(' '))
+const slashFiltered = computed(() => SLASH_CMDS.filter((s) => s.cmd.startsWith(draft.value.toLowerCase())))
+function pickSlash(cmd: string) {
+  if (cmd === '/task') startSlashTask()
+  else if (cmd === '/huddle') { draft.value = ''; stream.toggleHuddle() }
+  else if (cmd === '/poll') { draft.value = ''; pollComposerOpen.value = true }
+  else if (cmd === '/remind') { draft.value = ''; editingReminder.value = null; reminderComposerOpen.value = true }
+}
+function onComposerKeydown(e: KeyboardEvent) {
+  if (showSlash.value && slashFiltered.value.length) {
+    if (e.key === 'Enter') { e.preventDefault(); pickSlash(slashFiltered.value[0].cmd); return }
+    if (e.key === 'Escape') { e.preventDefault(); draft.value = ''; return }
+  }
+  if (e.key === 'Enter') { e.preventDefault(); void send() }
+}
+async function onPollCreate(payload: { question: string; options: string[] }) {
+  pollComposerOpen.value = false
+  try { if (await stream.createPoll(payload.question, payload.options)) scrollToBottom() } catch { /* ignore */ }
+}
+function startSlashTask() {
+  draft.value = ''
+  const cid = channels.currentChannelId
+  if (!cid) return
+  taskComposerStandalone.value = true
+  taskComposerFor.value = {
+    id: '', channel_id: cid, parent_id: null, user_id: auth.user?.id ?? '',
+    user_name: auth.fullName || null, body: '', attachments: [], mentioned_user_ids: [],
+    is_pinned: false, is_decision: false, decision_done: false, linked_task_id: null,
+    edited_at: null, created_at: '', updated_at: '',
+  } as CommsMessage
+}
+async function onTaskCreate(payload: { title: string; projectId?: string; statusKey?: string; assignee_id: string | null; due_on: string | null; priority: 1 | 2 | 3 | 4 }) {
+  const m = taskComposerFor.value
+  const standalone = taskComposerStandalone.value
+  taskComposerFor.value = null
+  taskComposerStandalone.value = false
+  if (!m) return
+  try {
+    let target = m
+    if (standalone) {
+      const posted = await stream.send(payload.title)
+      if (!posted) throw new Error('Could not post the task message.')
+      target = posted
+      scrollToBottom()
+    }
+    await stream.createTaskFromMessage(target, payload)
+  } catch { /* ignore */ }
+}
+
+// ── Reminders (list / edit / delete) ─────────────────────────────────────────
+const remindersOpen = ref(false)
+const pendingReminders = computed(() => stream.reminders.value.filter((r) => !r.done_at))
+function toggleReminders() {
+  remindersOpen.value = !remindersOpen.value
+  if (remindersOpen.value) void stream.loadReminders()
+}
+async function onReminderCreate(payload: { remindAt: string; body: string }) {
+  reminderComposerOpen.value = false
+  const editId = editingReminder.value?.id ?? null
+  editingReminder.value = null
+  try {
+    if (editId) await stream.updateReminder(editId, { body: payload.body, remind_at: payload.remindAt })
+    else await stream.createReminder(payload.remindAt, payload.body)
+  } catch { /* ignore */ }
+}
+function editReminder(r: { id: string; body: string; remind_at: string }) {
+  remindersOpen.value = false
+  editingReminder.value = { id: r.id, body: r.body, remind_at: r.remind_at }
+  reminderComposerOpen.value = true
+}
+async function removeReminder(r: { id: string }) {
+  await stream.deleteReminder(r.id)
+}
+function reminderWhen(iso: string) {
+  return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+}
+
 function open() {
   expanded.value = true
   channelMenuOpen.value = false
@@ -451,6 +566,15 @@ onBeforeUnmount(() => { if (viewing) stream.unregisterViewer() })
           <span v-if="stream.inHuddle.value && hostName" class="text-[0.65rem] text-base-content/40 truncate">· {{ hostName }} 👑</span>
           <div class="flex-1" />
           <button
+            class="relative w-7 h-7 rounded-md hover:bg-base-200 flex items-center justify-center"
+            :class="remindersOpen ? 'text-primary' : 'text-base-content/50'"
+            title="Reminders"
+            @click="toggleReminders"
+          >
+            <AlarmClock class="w-4 h-4" :stroke-width="1.75" />
+            <span v-if="pendingReminders.length" class="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-primary text-white text-[0.55rem] font-bold flex items-center justify-center">{{ pendingReminders.length }}</span>
+          </button>
+          <button
             class="w-7 h-7 rounded-md hover:bg-base-200 flex items-center justify-center"
             :class="stream.soundMuted.value ? 'text-base-content/40' : 'text-base-content/60'"
             :title="stream.soundMuted.value ? 'Comms sounds off' : 'Comms sounds on'"
@@ -494,6 +618,20 @@ onBeforeUnmount(() => { if (viewing) stream.unregisterViewer() })
               </button>
             </template>
           </div>
+
+          <!-- reminders dropdown -->
+          <div v-if="remindersOpen" class="absolute right-2 top-full mt-1 z-20 w-64 max-h-72 overflow-y-auto rounded-xl border border-base-300 bg-base-100 shadow-lg p-1" @mouseleave="remindersOpen = false">
+            <div class="px-2 pt-1 pb-1.5 text-[0.6rem] font-semibold uppercase tracking-wider text-base-content/40 truncate">Reminders · #{{ channelName }}</div>
+            <p v-if="!pendingReminders.length" class="px-2 py-2 text-xs text-base-content/40">None set. Type <span class="font-mono text-base-content/60">/remind</span>.</p>
+            <div v-for="r in pendingReminders" :key="r.id" class="flex items-start gap-1.5 px-2 py-1.5 rounded-md hover:bg-base-200">
+              <div class="min-w-0 flex-1">
+                <div class="text-[0.8rem] text-base-content/90 break-words">{{ r.body }}</div>
+                <div class="text-[0.65rem] text-base-content/45 mt-0.5">{{ reminderWhen(r.remind_at) }}</div>
+              </div>
+              <button class="w-5 h-5 rounded hover:bg-base-300 flex items-center justify-center text-base-content/50 hover:text-base-content shrink-0" title="Edit" @click="editReminder(r)"><Pencil class="w-3 h-3" :stroke-width="2" /></button>
+              <button class="w-5 h-5 rounded hover:bg-error/10 flex items-center justify-center text-base-content/50 hover:text-error shrink-0" title="Delete" @click="removeReminder(r)"><Trash2 class="w-3 h-3" :stroke-width="2" /></button>
+            </div>
+          </div>
         </header>
 
         <!-- participants (in a call) -->
@@ -524,9 +662,17 @@ onBeforeUnmount(() => { if (viewing) stream.unregisterViewer() })
           <div
             v-for="(m, i) in messages"
             :key="m.id"
-            class="relative flex gap-2 px-3"
+            class="group/dmsg relative flex gap-2 px-3"
             :class="[isContinuation(i) ? 'py-0.5' : 'py-1 mt-1', freshIds.has(m.id) ? 'dock-unseen' : '']"
           >
+            <!-- hover edit/delete (own messages, or manager delete) -->
+            <div
+              v-if="!m.deleted_at && editingId !== m.id && (m.user_id === auth.user?.id || canManage)"
+              class="absolute top-0 right-2 z-10 hidden group-hover/dmsg:flex items-center gap-0.5 rounded-md border border-base-300 bg-base-100 shadow-sm p-0.5"
+            >
+              <button v-if="m.user_id === auth.user?.id && !m.poll" class="w-5 h-5 rounded hover:bg-base-200 flex items-center justify-center text-base-content/60" title="Edit" @click="startEdit(m)"><Pencil class="w-3 h-3" :stroke-width="2" /></button>
+              <button class="w-5 h-5 rounded hover:bg-error/10 flex items-center justify-center text-base-content/60 hover:text-error" title="Delete" @click="confirmDelete(m)"><Trash2 class="w-3 h-3" :stroke-width="2" /></button>
+            </div>
             <div class="w-6 shrink-0 flex justify-center">
               <button
                 v-if="!isContinuation(i)"
@@ -551,8 +697,30 @@ onBeforeUnmount(() => { if (viewing) stream.unregisterViewer() })
                 >{{ nameFor(m) }}</button>
                 <span class="text-[0.6rem] text-base-content/40 shrink-0">{{ timeFor(m.created_at) }}</span>
               </div>
-              <div v-if="m.body" class="text-[0.8rem] text-base-content/90 whitespace-pre-wrap break-words leading-snug">{{ m.body }}</div>
-              <CommsAttachments v-if="m.attachments?.length" :attachments="m.attachments" compact />
+              <!-- deleted tombstone -->
+              <div v-if="m.deleted_at" class="text-[0.78rem] italic text-base-content/40 flex items-center gap-1">
+                <Trash2 class="w-3 h-3 shrink-0" :stroke-width="1.75" /> This message was deleted
+              </div>
+              <!-- poll card -->
+              <CommsPoll v-else-if="m.poll" :poll="m.poll" :tally="stream.pollTally(m.id)" @vote="stream.votePoll(m.id, $event)" />
+              <!-- inline editor -->
+              <div v-else-if="editingId === m.id" class="mt-0.5">
+                <input
+                  v-model="editDraft"
+                  class="w-full rounded-lg border border-base-300 bg-base-100 px-2 py-1 text-[0.8rem] outline-none focus:border-primary"
+                  @keydown.enter.prevent="saveEdit(m)"
+                  @keydown.esc.prevent="cancelEdit"
+                />
+                <div class="mt-1 flex items-center gap-2 text-[0.65rem]">
+                  <button class="px-2 py-0.5 rounded bg-primary text-white font-semibold" @click="saveEdit(m)">Save</button>
+                  <button class="px-1.5 py-0.5 rounded hover:bg-base-200 text-base-content/60" @click="cancelEdit">Cancel</button>
+                </div>
+              </div>
+              <!-- body -->
+              <template v-else>
+                <div v-if="m.body" class="text-[0.8rem] text-base-content/90 whitespace-pre-wrap break-words leading-snug">{{ m.body }}<span v-if="m.edited_at" class="ml-1 text-[0.6rem] text-base-content/35">(edited)</span></div>
+                <CommsAttachments v-if="m.attachments?.length" :attachments="m.attachments" compact />
+              </template>
             </div>
           </div>
 
@@ -567,14 +735,28 @@ onBeforeUnmount(() => { if (viewing) stream.unregisterViewer() })
         <TypingIndicator :members="typingMembers" class="px-3 pt-1" />
 
         <!-- composer -->
-        <div class="px-2 py-2 border-t border-base-300">
+        <div class="relative px-2 py-2 border-t border-base-300">
+          <!-- slash command menu -->
+          <div v-if="showSlash && slashFiltered.length" class="absolute bottom-[calc(100%-0.25rem)] left-2 right-2 z-10 rounded-xl border border-base-300 bg-base-100 shadow-lg overflow-hidden">
+            <button
+              v-for="(s, i) in slashFiltered"
+              :key="s.cmd"
+              type="button"
+              class="w-full flex items-center gap-2 px-3 py-2 text-left"
+              :class="i === 0 ? 'bg-base-200/60' : 'hover:bg-base-200'"
+              @click="pickSlash(s.cmd)"
+            >
+              <component :is="s.icon" class="w-3.5 h-3.5 text-base-content/60 shrink-0" :stroke-width="1.75" />
+              <span class="text-[0.8rem]"><span class="font-mono font-semibold">{{ s.cmd }}</span> · {{ s.label }}</span>
+            </button>
+          </div>
           <div class="flex items-center gap-1.5 rounded-xl border border-base-300 bg-base-100 pl-3 pr-1.5 py-1">
             <input
               v-model="draft"
-              :placeholder="currentIsDm ? `Message ${channelName}` : `Message #${channelName}`"
+              :placeholder="currentIsDm ? `Message ${channelName}` : `Message #${channelName} — / for commands`"
               class="flex-1 bg-transparent text-sm outline-none min-w-0"
               @input="onInput"
-              @keydown.enter.prevent="send"
+              @keydown="onComposerKeydown"
             />
             <button class="w-7 h-7 rounded-lg bg-primary text-white flex items-center justify-center disabled:opacity-40" :disabled="!draft.trim()" @click="send">
               <Send class="w-3.5 h-3.5" :stroke-width="2" />
@@ -733,6 +915,11 @@ onBeforeUnmount(() => { if (viewing) stream.unregisterViewer() })
           </div>
         </Teleport>
       </div>
+
+      <!-- /poll, /remind, /task composers (teleported modals) -->
+      <CommsPollComposer v-if="pollComposerOpen && channels.currentChannelId" :channel-id="channels.currentChannelId" @create="onPollCreate" @close="pollComposerOpen = false" />
+      <CommsReminderComposer v-if="reminderComposerOpen && channels.currentChannelId" :channel-id="channels.currentChannelId" :reminder="editingReminder" @create="onReminderCreate" @close="reminderComposerOpen = false; editingReminder = null" />
+      <CommsTaskComposer v-if="taskComposerFor" :message="taskComposerFor" @create="onTaskCreate" @close="taskComposerFor = null" />
 
       <!-- Hover profile card (shared with the full Comms stream) -->
       <CommsProfilePopover
