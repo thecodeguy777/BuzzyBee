@@ -434,6 +434,19 @@ export async function createVideoBackground(
     if (canvas && onRestored) canvas.removeEventListener('webglcontextrestored', onRestored)
     try { segmenter?.close() } catch { /* ignore */ }
     try { out?.getTracks().forEach((t) => t.stop()) } catch { /* ignore */ }
+    // Free GL resources deterministically + drop the context. Relying on GC of
+    // the removed canvas can exhaust the browser's ~16 live-WebGL-context cap
+    // when blur / camera is toggled repeatedly in one session, after which
+    // getContext('webgl2') returns null and the effect silently fails.
+    try {
+      if (gl && !contextLost) {
+        freeTargets()
+        if (videoTex) { gl.deleteTexture(videoTex.tex); gl.deleteFramebuffer(videoTex.fbo) }
+        if (srcTex) gl.deleteTexture(srcTex.tex)
+        if (maskTex) gl.deleteTexture(maskTex.tex)
+        gl.getExtension('WEBGL_lose_context')?.loseContext()
+      }
+    } catch { /* ignore */ }
     if (video) { video.srcObject = null; video.remove() }
     if (canvas) canvas.remove()
   }
