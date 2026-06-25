@@ -986,6 +986,12 @@ export function useMeetingRoom() {
         const collision = desc.type === 'offer' && (entry.makingOffer || pc.signalingState !== 'stable')
         entry.ignoreOffer = !entry.polite && collision
         if (entry.ignoreOffer) return
+        // Accepting a COLLIDING offer (we're the polite peer here) implicitly
+        // rolls back OUR in-flight offer, so our just-added tracks (e.g. a camera)
+        // drop out of negotiation. Re-arm so onsignalingstatechange re-offers them
+        // once we're stable again — some browsers don't re-fire negotiationneeded
+        // after a rollback, which is what stranded a late-joiner's second camera.
+        if (collision) entry.renegotiatePending = true
         await pc.setRemoteDescription(desc)
         // Flush candidates that raced ahead of the description — dropping them
         // is an intermittent one-way-audio generator on stricter NATs.
