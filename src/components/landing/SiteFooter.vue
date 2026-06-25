@@ -37,7 +37,7 @@ const columns = [
             <span class="text-sm font-semibold tracking-tight">HiveMind</span>
           </a>
           <p class="text-xs text-base-content/50 leading-relaxed max-w-xs">
-            Pre-vetted virtual assistants for real estate professionals. Managed on a platform built for the job.
+            Pre-screened virtual assistants for real estate professionals. Managed on a platform built for the job.
           </p>
         </div>
 

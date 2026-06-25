@@ -39,7 +39,7 @@ const steps = [
 ]
 
 const includes = [
-  'Pre-vetted Filipino VA (top 3% of applicants)',
+  'Pre-screened Filipino VA (top 3% of applicants)',
   '7-day onboarding with a tailored playbook',
   'Managed PM support and weekly check-ins',
   'Daily EOD reports in the HiveMind platform',

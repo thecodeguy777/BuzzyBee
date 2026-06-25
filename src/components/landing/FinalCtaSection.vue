@@ -52,7 +52,7 @@ const ctaHref = formToken ? `/f/${formToken}` : 'mailto:hello@hivemind.co'
             </div>
             <div class="row">
               <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6a3 3 0 0 1 0 6" /></svg></div>
-              <div><div class="rt">Meet your shortlist</div><div class="rs">Hand-picked, pre-vetted VAs</div></div>
+              <div><div class="rt">Meet your shortlist</div><div class="rs">Hand-picked, pre-screened VAs</div></div>
             </div>
           </div>
         </div>

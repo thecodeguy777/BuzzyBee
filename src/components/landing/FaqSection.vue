@@ -12,7 +12,7 @@ const faqs = [
   },
   {
     q: 'What if the match isn\'t right?',
-    a: 'You can swap at any time. We re-shortlist within 5 business days, no fee, no drama. Our vetting funnel means swaps are rare (under 6%), but the guarantee is always there.'
+    a: 'You can swap at any time. We re-shortlist within 5 business days, no fee, no drama. Our screening funnel means swaps are rare (under 6%), but the guarantee is always there.'
   },
   {
     q: 'Are these full-time or part-time?',

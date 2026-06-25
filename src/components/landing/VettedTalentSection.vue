@@ -36,7 +36,7 @@ const pillars = [
   {
     icon: BadgeCheck,
     title: 'High-quality workforce',
-    body: 'Degree-holding professionals from the top 3% of thousands of applicants — vetted, not gig-economy labor.'
+    body: 'Degree-holding professionals from the top 3% of thousands of applicants — screened, not gig-economy labor.'
   },
   {
     icon: Target,
@@ -67,7 +67,7 @@ const pillars = [
       <div v-reveal class="text-center max-w-2xl mx-auto mb-14">
         <div class="flex items-center gap-3 mb-3 justify-center">
           <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-plum"></div>
-          <span class="text-xs font-medium uppercase tracking-wider text-primary">Vetted talent</span>
+          <span class="text-xs font-medium uppercase tracking-wider text-primary">Screened talent</span>
           <div class="w-8 h-0.5 rounded-full bg-gradient-to-l from-primary to-plum"></div>
         </div>
         <h2 class="font-display text-3xl md:text-4xl tracking-tight leading-tight text-base-content">
@@ -79,9 +79,9 @@ const pillars = [
       </div>
 
       <div class="grid lg:grid-cols-[minmax(0,440px)_1fr] gap-10 lg:gap-14 items-center">
-        <!-- Vetting funnel (drains on scroll) -->
+        <!-- Screening funnel (drains on scroll) -->
         <div ref="funnelEl" v-reveal class="border border-base-300 rounded-lg p-6 bg-base-100">
-          <div class="text-[11px] font-medium uppercase tracking-wider text-base-content/50 mb-5">The vetting funnel</div>
+          <div class="text-[11px] font-medium uppercase tracking-wider text-base-content/50 mb-5">The screening funnel</div>
           <div class="space-y-4">
             <div v-for="(stage, i) in funnel" :key="stage.label">
               <div class="flex items-center justify-between text-[11px] mb-1.5">

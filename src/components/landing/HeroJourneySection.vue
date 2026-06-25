@@ -153,9 +153,9 @@ const beatClass = (i: number) => ({
 
       <!-- ── BEAT 0 — cold open ── -->
       <div class="hj-beat hj-beat--open" :class="beatClass(0)">
-        <p class="hj-eyebrow">A vetted professional · one platform · zero software tax</p>
+        <p class="hj-eyebrow">A screened professional · one platform · zero software tax</p>
         <h1 class="hj-headline">
-          <span>Your vetted VA</span><span>does the work.</span><span class="hj-accent">You just watch.</span>
+          <span>Your screened VA</span><span>does the work.</span><span class="hj-accent">You just watch.</span>
         </h1>
         <p class="hj-sub">A trained professional handles every request — from the first message to a closed deal — while you watch each step move through the hive.</p>
         <div class="hj-cue"><span>Scroll</span><ArrowDown class="hj-cue-icon" :size="16" :stroke-width="2" /></div>

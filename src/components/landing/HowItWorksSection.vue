@@ -9,7 +9,7 @@ import teamImg from '@/assets/landing/how-team-call.webp'
 
 const steps = [
   { num: '01', title: 'Discovery call', body: 'A 20-minute call to understand your business: team size, transaction volume, tools you use, and what\'s eating your time.', icon: Phone },
-  { num: '02', title: 'Curated match', body: 'Within 72 hours, we shortlist 3 pre-vetted VAs who know real estate workflows, your CRM, and your time zone.', icon: Users },
+  { num: '02', title: 'Curated match', body: 'Within 72 hours, we shortlist 3 pre-screened VAs who know real estate workflows, your CRM, and your time zone.', icon: Users },
   { num: '03', title: '7-day onboarding', body: 'Your VA learns your playbook, brokerage systems, and communication style. By day 7, they\'re handling tasks independently.', icon: Rocket },
   { num: '04', title: 'Managed support', body: 'A project manager runs daily check-ins, weekly reports, and quarterly reviews. Problems get caught before you feel them.', icon: Headphones },
   { num: '05', title: 'Scale your team', body: 'Add a transaction coordinator, a marketing VA, or a second admin as your production grows. One platform, unlimited growth.', icon: TrendingUp }

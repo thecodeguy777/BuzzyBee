@@ -73,7 +73,7 @@ const filtered = computed(() =>
           Hire the <span class="bg-gradient-to-r from-primary to-plum bg-clip-text text-transparent">talent</span>, skip the overhead.
         </h2>
         <p class="mt-4 text-base text-base-content/60 leading-relaxed">
-          Every HiveMind VA is pre-vetted, fluent in English, and backed by the platform and a dedicated
+          Every HiveMind VA is pre-screened, fluent in English, and backed by the platform and a dedicated
           project manager. Tell us the role — we bring the right person.
         </p>
 

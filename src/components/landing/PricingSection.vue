@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import AmbientGradient from './AmbientGradient.vue'
 
 const commonFeatures = [
-  'Pre-vetted Filipino VA (top 3% of applicants)',
+  'Pre-screened Filipino VA (top 3% of applicants)',
   '7-day onboarding with real estate playbook',
   'Managed PM support and weekly check-ins',
   'Daily EOD reports in the HiveMind platform',

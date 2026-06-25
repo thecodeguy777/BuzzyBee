@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // "The people you hire" — leads the page with the professional, not the product.
 // Faces, real roles, the tools they already know, and what they actually handle.
-// Light section that sits in the people cluster (Meet your VA / Vetted talent),
+// Light section that sits in the people cluster (Meet your VA / Screened talent),
 // reusing the landing design language. Honeycomb (hex) avatars via HexClipDef.
 import AmbientGradient from './AmbientGradient.vue'
 import HexClipDef from '@/components/shared/HexClipDef.vue'

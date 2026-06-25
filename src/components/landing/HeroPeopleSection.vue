@@ -54,7 +54,7 @@ const fillPct = computed(() => ((budget.value - MIN) / (MAX - MIN)) * 100)
               <div class="av" style="background: linear-gradient(135deg, #c2700c, #e8a64a)">AT</div>
             </div>
             <div class="trust-txt">
-              <span class="stars" aria-hidden="true">★★★★★</span>&nbsp;<b>Trusted by 200+ real-estate teams</b><br />placing pre-vetted VAs in under 7 days.
+              <span class="stars" aria-hidden="true">★★★★★</span>&nbsp;<b>Trusted by 200+ real-estate teams</b><br />placing pre-screened VAs in under 7 days.
             </div>
           </div>
         </div>
