@@ -57,7 +57,7 @@ export const FLOW_NODE_DEFS: FlowNodeDef[] = [
       { key: 'body', label: 'Body', kind: 'textarea', tokens: true, hideWhen: (c) => !!c.templateId },
       { key: 'fromName', label: 'From name', kind: 'text' },
     ],
-    defaultConfig: { templateId: null, to: '', subject: '', body: '', fromName: 'HiveMind' },
+    defaultConfig: { templateId: null, to: '', subject: '', body: '', fromName: 'BuzzyHive' },
     summary: (c) => c.subject || 'Send an email',
   },
   {

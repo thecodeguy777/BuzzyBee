@@ -6,7 +6,7 @@ const commonFeatures = [
   'Pre-screened Filipino VA (top 3% of applicants)',
   '7-day onboarding with real estate playbook',
   'Managed PM support and weekly check-ins',
-  'Daily EOD reports in the HiveMind platform',
+  'Daily EOD reports in the BuzzyHive platform',
   'VA swap guarantee if the fit is off'
 ]
 

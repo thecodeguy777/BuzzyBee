@@ -813,7 +813,7 @@ export function useChannelStream(channelId: Ref<string | null | undefined>) {
       throw error
     }
     if (data && activeId === id) reminders.value = sortReminders([...reminders.value, data as CommsReminder])
-    // Announce in the channel so the team sees it the moment it's set (a HiveMind
+    // Announce in the channel so the team sees it the moment it's set (a BuzzyHive
     // announcer line, same style as the fire message). Best-effort — the reminder
     // itself is already saved; a failed notice shouldn't surface as an error.
     const when = new Date(remindAt).toLocaleString(undefined, {

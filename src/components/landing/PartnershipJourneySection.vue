@@ -33,7 +33,7 @@ const steps = [
     n: '04',
     day: 'Day 8+',
     title: 'Daily rhythm',
-    blurb: 'End-of-day reports land in your HiveMind dashboard. A PM runs weekly check-ins to keep the partnership tight. You focus on closings — we run the back office.',
+    blurb: 'End-of-day reports land in your BuzzyHive dashboard. A PM runs weekly check-ins to keep the partnership tight. You focus on closings — we run the back office.',
     highlight: false,
   },
 ]
@@ -42,7 +42,7 @@ const includes = [
   'Pre-screened Filipino VA (top 3% of applicants)',
   '7-day onboarding with a tailored playbook',
   'Managed PM support and weekly check-ins',
-  'Daily EOD reports in the HiveMind platform',
+  'Daily EOD reports in the BuzzyHive platform',
   'VA swap guarantee if the fit is off',
 ]
 </script>

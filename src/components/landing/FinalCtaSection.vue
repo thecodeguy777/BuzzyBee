@@ -20,7 +20,7 @@ const ctaHref = formToken ? `/f/${formToken}` : 'mailto:hello@hivemind.co'
           <!-- Left: copy -->
           <div>
             <div class="cta-eyebrow">Free discovery call</div>
-            <h2 class="font-display">Your next closing pays for a full year.</h2>
+            <h2 class="font-display">One good hire pays for itself all year.</h2>
             <p>
               Twenty minutes on a call. You leave with a scoped role, your best-fit VA, and a plan
               for week one. No commitment, no pressure.

@@ -43,7 +43,7 @@ const hivePoints = [
           You're renting tools that don't do the work.
         </h2>
         <p class="mt-4 text-base text-base-content/60 leading-relaxed">
-          Slack, Asana, a time tracker, a docs app &mdash; overhead that produces nothing. HiveMind bundles all of it in, so your money buys output instead of subscriptions.
+          Slack, Asana, a time tracker, a docs app &mdash; overhead that produces nothing. BuzzyHive bundles all of it in, so your money buys output instead of subscriptions.
         </p>
       </div>
 
@@ -63,9 +63,9 @@ const hivePoints = [
           </ul>
         </div>
 
-        <!-- With HiveMind -->
+        <!-- With BuzzyHive -->
         <div class="relative border border-primary/40 rounded-lg p-8 bg-base-100 shadow-lg shadow-primary/10">
-          <div class="text-[11px] font-medium uppercase tracking-wider text-primary mb-4">With HiveMind — all of it on the work</div>
+          <div class="text-[11px] font-medium uppercase tracking-wider text-primary mb-4">With BuzzyHive — all of it on the work</div>
           <AllocationBar :segments="hiveSegments" :height="40" />
           <ul class="mt-5 space-y-2.5">
             <li v-for="p in hivePoints" :key="p" class="flex gap-2.5 text-sm text-base-content/70 leading-relaxed">

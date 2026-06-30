@@ -1,6 +1,6 @@
-# HiveMind Dialer
+# BuzzyHive Dialer
 
-Built-in softphone embedded in the HiveMind Electron app. Outbound-first, recording-enabled, Telnyx-backed. Designed to feed call audio into HiveMind's existing AI agents (Gemini/Groq) once the outbound MVP is solid.
+Built-in softphone embedded in the BuzzyHive Electron app. Outbound-first, recording-enabled, Telnyx-backed. Designed to feed call audio into BuzzyHive's existing AI agents (Gemini/Groq) once the outbound MVP is solid.
 
 ---
 
@@ -18,7 +18,7 @@ We compared building vs RingCentral Advanced for a 10-seat sales team at ~50k mi
 
 Cost is roughly tied. The justification is **strategic**, not financial:
 
-1. **AI integration** — call audio lands in our pipeline, not behind a webhook bolted on top of someone else's product. HiveMind's coach/summary/action-items agents reuse the recording directly.
+1. **AI integration** — call audio lands in our pipeline, not behind a webhook bolted on top of someone else's product. BuzzyHive's coach/summary/action-items agents reuse the recording directly.
 2. **CRM-tight call logging** — calls link to `clients` / `tickets` rows in Supabase via foreign keys, not via brittle integration layer.
 3. **No per-seat tax at scale** — when sales team grows past 20 with uneven usage, RingCentral's flat fee becomes pure waste; carrier-rate billing only charges for what we use.
 4. **Power-dialer friendly** — RingCentral throttles or upcharges for high-volume short calls. Carrier billing doesn't care.
@@ -120,7 +120,7 @@ The actual SIP signaling and audio happen entirely in the renderer — main proc
 - [ ] Reverse number lookup against `clients.phone` for caller-ID display
 - [ ] Inbound recording (same pipeline as outbound)
 
-### Phase 5 — AI integration (HiveMind core value)
+### Phase 5 — AI integration (BuzzyHive core value)
 - [ ] On call end, push recording URL to existing `summary-agent` (Gemini)
 - [ ] Action items from call → auto-create rows in `tasks` (existing table)
 - [ ] Coach prompts during live call via existing `coach-agent` (requires live transcription wired into the WebRTC stream)

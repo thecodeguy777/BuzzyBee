@@ -134,7 +134,7 @@ function testTwiml(): string {
     `<?xml version="1.0" encoding="UTF-8"?>`,
     `<Response>`,
     `<Pause length="1"/>`,
-    `<Say>Hello. This is a test call from HiveMind. The SignalWire integration is working correctly.</Say>`,
+    `<Say>Hello. This is a test call from BuzzyHive. The SignalWire integration is working correctly.</Say>`,
     `<Pause length="1"/>`,
     `<Say>Goodbye.</Say>`,
     `<Pause length="1"/>`,

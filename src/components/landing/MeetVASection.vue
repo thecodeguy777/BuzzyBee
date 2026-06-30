@@ -19,7 +19,7 @@ const stats = [
       <div class="grid lg:grid-cols-2 gap-10 lg:gap-14 items-center">
         <!-- Visual -->
         <div v-reveal class="relative aspect-[4/3] rounded-2xl overflow-hidden border border-base-300 shadow-lg order-last lg:order-first">
-          <img :src="vaImg" alt="Maria Santos, a HiveMind real estate virtual assistant, on a call" width="700" height="467" class="w-full h-full object-cover" loading="lazy" decoding="async" />
+          <img :src="vaImg" alt="Maria Santos, a BuzzyHive real estate virtual assistant, on a call" width="700" height="467" class="w-full h-full object-cover" loading="lazy" decoding="async" />
           <div class="absolute inset-0 bg-gradient-to-tr from-primary/15 via-transparent to-plum/10 pointer-events-none"></div>
           <!-- Recruiter-approved badge -->
           <div class="absolute top-4 left-4 inline-flex items-center gap-1.5 bg-white/95 backdrop-blur-sm border border-base-300 rounded-full px-3 py-1.5 shadow-lg">

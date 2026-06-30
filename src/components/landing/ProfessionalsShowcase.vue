@@ -54,7 +54,7 @@ const pros = [
           <div class="w-8 h-0.5 rounded-full bg-gradient-to-l from-primary to-plum"></div>
         </div>
         <h2 class="font-display text-3xl md:text-4xl tracking-tight leading-tight text-base-content">
-          They already know Dotloop, MLS, and Follow Up Boss.
+          They already know your CRM and your tools.
         </h2>
         <p class="mt-4 text-base text-base-content/60 leading-relaxed">
           The platform is just how you see the work. The work itself is done by a real, trained person
@@ -115,7 +115,7 @@ const pros = [
       <div v-reveal="200" class="mt-10 text-center">
         <p class="text-sm text-base-content/60">
           <span class="font-semibold text-base-content">Every plan includes one</span>,
-          matched to your business, managed by a dedicated project manager, with the HiveMind team behind them.
+          matched to your business, managed by a dedicated project manager, with the BuzzyHive team behind them.
         </p>
       </div>
     </div>

@@ -1,8 +1,8 @@
-# CLAUDE.md — BuzzyBee / HiveMind
+# CLAUDE.md — BuzzyBee / BuzzyHive
 
 ## What Is This
 
-`buzzybee` is the repo/package; the product is branded **"HiveMind"** — a VA‑staffing + team‑workspace platform. One git repo, **three Vite builds** plus a Supabase backend:
+`buzzybee` is the repo/package (and the Postgres schema name — unchanged); the product is branded **"BuzzyHive"** (formerly "HiveMind") — a VA‑staffing + team‑workspace platform. One git repo, **three Vite builds** plus a Supabase backend:
 
 1. **Web app** (`src/`) — the main Vue 3 SPA (workstation + admin).
 2. **Landing** (`landing/` + `vite.config.landing.ts`) — marketing site.
@@ -106,7 +106,7 @@ scripts/             # node .mjs utilities
 - **Boot order matters**: `main.ts` restores the Supabase session (`authStore.init()`) and awaits `router.isReady()` **before** mounting, to avoid a layout flash. Preserve that ordering.
 - **RLS is the source of truth for roles** (`docs/roles.md`): ladder `superadmin > admin > pm > va > sales > client`. SQL helpers: `is_ops()`, `accessible_client_ids()`, `can_manage_client()`, `is_staff()`. People/money are admin+; PMs read‑only there. Engagements live in `assignments`.
 - **Supabase client** (`src/lib/supabase.ts`) targets the `buzzybee` schema with realtime tuned for backgrounded tabs (Web Worker heartbeat + auto‑reconnect).
-- **Mixed naming**: package `buzzybee`, UI title "HiveMind", Electron appId `co.hivemind.ai`.
+- **Mixed naming**: package/schema `buzzybee`, UI brand "BuzzyHive" (was "HiveMind"), Electron appId `co.hivemind.ai` (internal id, intentionally unchanged). The `buzzybee` Postgres schema and the `hivemind_enabled` column are internal identifiers — never rename them as part of brand work.
 - **Ports**: app 5175 · landing 5176 · electron renderer 5177. `dist/` + `dist-landing/` are gitignored build outputs.
 
 ## Working Agreements (for Claude Code)

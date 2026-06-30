@@ -74,7 +74,7 @@ const pillars = [
           Only the top 3% make it through.
         </h2>
         <p class="mt-4 text-base text-base-content/60 leading-relaxed">
-          Every HiveMind VA clears AI pre-screening, a recruiter interview, and a role-specific skills test before they ever touch your account. Then we match them to your tools and time zone.
+          Every BuzzyHive VA clears AI pre-screening, a recruiter interview, and a role-specific skills test before they ever touch your account. Then we match them to your tools and time zone.
         </p>
       </div>
 

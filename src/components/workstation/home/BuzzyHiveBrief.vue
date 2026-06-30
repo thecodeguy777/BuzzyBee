@@ -20,7 +20,7 @@ defineProps<{
         class="text-[0.7rem] uppercase tracking-[0.08em] font-semibold"
         style="color: var(--hc-accent)"
       >
-        HiveMindAI · this week's brief
+        BuzzyHiveAI · this week's brief
       </span>
       <div class="flex-1" />
       <span class="text-[0.65rem] text-base-content/40">Synthesized from live data</span>

@@ -125,7 +125,7 @@ async function next() {
           </div>
         </div>
       </div>
-      <div class="text-center mt-4 text-[11.5px] text-base-content/40">Powered by HiveMind Forms</div>
+      <div class="text-center mt-4 text-[11.5px] text-base-content/40">Powered by BuzzyHive Forms</div>
     </div>
   </div>
 </template>

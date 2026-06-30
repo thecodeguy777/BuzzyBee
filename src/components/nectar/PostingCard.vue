@@ -36,10 +36,10 @@ function ago(iso: string) {
   <div class="nectar-card p-4 flex flex-col gap-3" @click="emit('open')">
     <!-- top -->
     <div class="flex items-center gap-2.5">
-      <HexAvatar :name="posting.client_name || 'HiveMind'" :size="40" tint="primary" />
+      <HexAvatar :name="posting.client_name || 'BuzzyHive'" :size="40" tint="primary" />
       <div class="flex-1 min-w-0">
         <div class="text-sm font-bold truncate leading-snug">{{ posting.role_title }}</div>
-        <div class="text-xs text-base-content/50">{{ posting.client_name || 'HiveMind' }} · {{ ago(posting.created_at) }}</div>
+        <div class="text-xs text-base-content/50">{{ posting.client_name || 'BuzzyHive' }} · {{ ago(posting.created_at) }}</div>
       </div>
       <button
         type="button"

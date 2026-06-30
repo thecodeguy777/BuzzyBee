@@ -885,7 +885,7 @@ async function onReminderCreate(payload: { remindAt: string; body: string }) {
       if (ok) fireToast('Reminder updated', `Posts in ${where}`)
     } else {
       await stream.createReminder(payload.remindAt, payload.body)
-      fireToast('Reminder set', `HiveMind will post it in ${where}`)
+      fireToast('Reminder set', `BuzzyHive will post it in ${where}`)
     }
   } catch (e) {
     commsError.value = (e as Error).message

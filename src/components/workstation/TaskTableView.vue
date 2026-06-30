@@ -203,7 +203,7 @@ const totalCols = computed(() => 9 + customCols.value.length + 1)
 //  ^ 9 = check + name + status + due + priority + stage + assignees + files + chat
 
 // -----------------------------------------------------------------------------
-// HiveMindAI suggestion banner (rule-based stub).
+// BuzzyHiveAI suggestion banner (rule-based stub).
 // One contextual suggestion based on the current state.
 // -----------------------------------------------------------------------------
 const suggestion = computed(() => {
@@ -717,7 +717,7 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
 
 <template>
   <div class="space-y-3">
-    <!-- Toolbar (Filter / Sort / Group / HiveMindAI not wired up yet) -->
+    <!-- Toolbar (Filter / Sort / Group / BuzzyHiveAI not wired up yet) -->
     <div class="flex items-center gap-2 flex-wrap">
       <button type="button" disabled title="Coming soon" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 text-xs font-medium opacity-50 cursor-not-allowed">
         <Filter class="w-3.5 h-3.5" :stroke-width="1.75" />
@@ -741,7 +741,7 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
         class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-base-100 border border-base-300 text-xs font-medium opacity-50 cursor-not-allowed shadow-hc-1"
       >
         <Sparkles class="w-3.5 h-3.5" :stroke-width="1.75" style="color: var(--hc-accent)" />
-        Ask HiveMindAI
+        Ask BuzzyHiveAI
       </button>
       <button
         type="button"
@@ -860,7 +860,7 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
 
           <!-- Banner + empty state (non-draggable) -->
           <tbody>
-            <!-- HiveMindAI suggestion banner -->
+            <!-- BuzzyHiveAI suggestion banner -->
             <tr
               v-if="suggestion && !suggestionDismissed"
               class="border-b border-base-300/40"
@@ -869,7 +869,7 @@ tbody tr:hover .bb-frozen-col { background: color-mix(in oklch, var(--hc-paper) 
               <td :colspan="totalCols" class="px-4 py-2">
                 <div class="flex items-center gap-2.5 text-sm">
                   <Sparkles class="w-3.5 h-3.5 shrink-0" :stroke-width="1.75" style="color: var(--hc-accent)" />
-                  <span class="font-medium" style="color: var(--hc-accent)">HiveMindAI suggests:</span>
+                  <span class="font-medium" style="color: var(--hc-accent)">BuzzyHiveAI suggests:</span>
                   <span class="text-base-content/80">
                     <strong class="font-medium">{{ suggestion.lead }}</strong>
                     <span class="text-base-content/60">{{ suggestion.tail }}</span>

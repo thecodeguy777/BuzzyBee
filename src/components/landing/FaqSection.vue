@@ -16,11 +16,11 @@ const faqs = [
   },
   {
     q: 'Are these full-time or part-time?',
-    a: 'Full-time, 160 hours per month, Monday to Friday, in your preferred time zone. Your VA is dedicated to you, not shared across multiple agents. They\'re employed by HiveMind, which handles payroll, benefits, and equipment.'
+    a: 'Full-time, 160 hours per month, Monday to Friday, in your preferred time zone. Your VA is dedicated to you, not shared across multiple agents. They\'re employed by BuzzyHive, which handles payroll, benefits, and equipment.'
   },
   {
     q: 'Who manages the VA day-to-day?',
-    a: 'You assign the work. We provide the management layer. A HiveMind project manager reviews daily EOD reports, runs weekly 1:1s with your VA, and conducts quarterly reviews with you. Performance issues get caught early, before they affect your business.'
+    a: 'You assign the work. We provide the management layer. A BuzzyHive project manager reviews daily EOD reports, runs weekly 1:1s with your VA, and conducts quarterly reviews with you. Performance issues get caught early, before they affect your business.'
   },
   {
     q: 'Can my VA handle transaction coordination?',
@@ -28,7 +28,7 @@ const faqs = [
   },
   {
     q: 'How do you handle data security?',
-    a: 'VAs work on HiveMind-provisioned machines with password managers, MFA, and a locked-down browser policy. We sign NDAs by default and can execute custom data protection agreements for brokerages with compliance requirements.'
+    a: 'VAs work on BuzzyHive-provisioned machines with password managers, MFA, and a locked-down browser policy. We sign NDAs by default and can execute custom data protection agreements for brokerages with compliance requirements.'
   },
   {
     q: 'What\'s the minimum commitment?',

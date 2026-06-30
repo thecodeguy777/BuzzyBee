@@ -46,7 +46,7 @@ onUnmounted(() => {
 
 const LINKS = [
   { href: '#professionals', label: 'The People' },
-  { href: '#talent', label: 'Why HiveMind' },
+  { href: '#talent', label: 'Why BuzzyHive' },
   { href: '#platform', label: 'Platform' },
   { href: '#how', label: 'How It Works' }
 ]
@@ -63,8 +63,8 @@ const ctaHref = formToken ? `/f/${formToken}` : 'mailto:hello@hivemind.co'
   <header class="ln-root fixed inset-x-0 top-0 z-50" :class="{ 'is-scrolled': scrolled }">
     <div class="ln-shell mx-auto flex items-center justify-between" :class="[scrolled ? 'is-pill' : 'is-flush', { 'is-flush-dark': flushDark && !scrolled }]">
       <a href="/" class="flex items-center gap-2 shrink-0">
-        <img :src="markSrc" alt="HiveMind" class="w-7 h-auto" />
-        <span class="ln-brand text-base font-semibold tracking-tight">HiveMind</span>
+        <img :src="markSrc" alt="BuzzyHive" class="w-7 h-auto" />
+        <span class="ln-brand text-base font-semibold tracking-tight">BuzzyHive</span>
       </a>
 
       <nav class="hidden md:flex items-center gap-7 text-[13px]" aria-label="Primary">

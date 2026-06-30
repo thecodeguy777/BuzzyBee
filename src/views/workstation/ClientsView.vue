@@ -260,7 +260,7 @@ const GRID = 'minmax(230px,1.5fr) 130px 130px minmax(150px,1fr) 110px 170px'
         <div class="cl-kpi-sub">from active clients</div>
       </div>
       <div class="cl-kpi">
-        <div class="cl-kpi-label"><Sparkles class="w-3.5 h-3.5" :stroke-width="1.75" /> HiveMind AI</div>
+        <div class="cl-kpi-label"><Sparkles class="w-3.5 h-3.5" :stroke-width="1.75" /> BuzzyHive AI</div>
         <div class="cl-kpi-value text-primary">{{ kpis.ai }}</div>
         <div class="cl-kpi-sub">clients with AI on</div>
       </div>
@@ -354,7 +354,7 @@ const GRID = 'minmax(230px,1.5fr) 130px 130px minmax(150px,1fr) 110px 170px'
                 <span
                   v-if="c.hivemind_enabled"
                   class="inline-flex items-center gap-1 px-1.5 py-px rounded-md bg-primary text-primary-content text-[0.62rem] font-bold shrink-0"
-                  title="HiveMind AI enabled"
+                  title="BuzzyHive AI enabled"
                 >
                   <Sparkles class="w-2.5 h-2.5" :stroke-width="2" /> AI
                 </span>

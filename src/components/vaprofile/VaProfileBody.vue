@@ -91,7 +91,7 @@ const statCards = computed(() => {
     cards.push({ label: 'On-time rate', value: s.ontime_90d_pct + '%', sub: 'last 90 days', icon: Gauge, accent: '#15803d' })
   }
   if (s.member_since) {
-    cards.push({ label: 'Member since', value: s.member_since, sub: 'on HiveMind', icon: Star, accent: '#c2700c' })
+    cards.push({ label: 'Member since', value: s.member_since, sub: 'on BuzzyHive', icon: Star, accent: '#c2700c' })
   }
   return cards
 })
@@ -107,7 +107,7 @@ const badges = computed(() => {
   if (hours >= 1000) out.push({ name: '1,000+ hours delivered', issuer: 'Last 12 months', icon: Clock, color: '#2f6fed' })
   else if (hours >= 500) out.push({ name: '500+ hours delivered', issuer: 'Last 12 months', icon: Clock, color: '#2f6fed' })
   if (s.ontime_90d_pct != null && s.ontime_90d_pct >= 95) out.push({ name: 'On-time machine', issuer: `${s.ontime_90d_pct}% on-time, last 90 days`, icon: Trophy, color: '#c2700c' })
-  if (s.member_since) out.push({ name: `Since ${s.member_since}`, issuer: 'HiveMind Agency', icon: BadgeCheck, color: '#7b2d86' })
+  if (s.member_since) out.push({ name: `Since ${s.member_since}`, issuer: 'BuzzyHive Agency', icon: BadgeCheck, color: '#7b2d86' })
   return out
 })
 
@@ -181,7 +181,7 @@ function commitLanguages(e: Event) {
           <div class="flex-1 min-w-0 pb-1">
             <div class="flex items-center gap-2.5 mt-3.5 flex-wrap">
               <h1 class="text-2xl font-extrabold tracking-tight whitespace-nowrap">{{ identity.name }}</h1>
-              <BadgeCheck class="w-5 h-5 shrink-0" style="color: #2f6fed" :stroke-width="2" title="Verified by HiveMind" />
+              <BadgeCheck class="w-5 h-5 shrink-0" style="color: #2f6fed" :stroke-width="2" title="Verified by BuzzyHive" />
               <input
                 v-if="editing"
                 class="vap-edit text-sm w-24"

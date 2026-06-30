@@ -6,7 +6,7 @@ import {
 } from 'lucide-vue-next'
 
 // Each industry shows the kind of work a screened VA already handles there —
-// concrete, people-first, real-estate first (the core audience).
+// concrete, people-first, one vertical among many.
 const industries = [
   { name: 'Real Estate', icon: Building2, work: 'Listing coordination, CRM follow-up, transaction docs' },
   { name: 'E-commerce', icon: ShoppingBag, work: 'Order support, product listings, returns & reviews' },

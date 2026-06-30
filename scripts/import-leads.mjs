@@ -1,4 +1,4 @@
-// One-shot lead import for HiveMind dialer.
+// One-shot lead import for BuzzyHive dialer.
 //
 // Reads three CSV files (realtor / enterprise construction / commercial retail),
 // normalizes each per-format, dedupes by phone, and bulk-inserts into

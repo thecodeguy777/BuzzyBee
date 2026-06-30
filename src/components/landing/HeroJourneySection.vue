@@ -157,7 +157,7 @@ const beatClass = (i: number) => ({
         <h1 class="hj-headline">
           <span>Your VA</span><span>does the work.</span><span class="hj-accent">You get your time back.</span>
         </h1>
-        <p class="hj-sub">A trained assistant handles the day-to-day, from first message to closed deal. You spend your time on clients and closings, not admin.</p>
+        <p class="hj-sub">A trained assistant handles the day-to-day, from first message to finished work. You spend your time on your clients and your business, not admin.</p>
         <div class="hj-cue"><span>Scroll</span><ArrowDown class="hj-cue-icon" :size="16" :stroke-width="2" /></div>
       </div>
 

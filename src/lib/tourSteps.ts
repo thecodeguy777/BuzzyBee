@@ -97,7 +97,7 @@ export const cinematicTourSteps: TourStep[] = [
     route: 'workstation-crm',
     selector: '[data-tour="crm-deal"]',
     title: 'Drag to Won — loop closed',
-    body: 'Move a deal to Won and the whole journey — message, task, handoff, close — lived in one system. That’s HiveMind. You’re ready to fly. 🐝',
+    body: 'Move a deal to Won and the whole journey — message, task, handoff, close — lived in one system. That’s BuzzyHive. You’re ready to fly. 🐝',
     placement: 'right',
     timeout: 6000,
   },

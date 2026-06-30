@@ -196,8 +196,8 @@ const layer = (depth: number) => ({
       />
 
       <div class="flex items-center gap-2.5 relative z-10">
-        <img :src="hivemindMark" alt="HiveMind" class="w-8 h-auto" />
-        <span class="font-display text-2xl font-semibold text-white">HiveMind</span>
+        <img :src="hivemindMark" alt="BuzzyHive" class="w-8 h-auto" />
+        <span class="font-display text-2xl font-semibold text-white">BuzzyHive</span>
       </div>
 
       <div class="relative z-10 max-w-md">
@@ -223,7 +223,7 @@ const layer = (depth: number) => ({
             {{
               mode === 'signin'
                 ? 'Sign in to start your shift.'
-                : 'Set up your HiveMind profile.'
+                : 'Set up your BuzzyHive profile.'
             }}
           </p>
         </div>
@@ -305,7 +305,7 @@ const layer = (depth: number) => ({
         </button>
 
         <p class="text-xs text-base-content/60 text-center">
-          {{ mode === 'signin' ? 'New to HiveMind?' : 'Already have an account?' }}
+          {{ mode === 'signin' ? 'New to BuzzyHive?' : 'Already have an account?' }}
           <button
             type="button"
             class="link link-primary"

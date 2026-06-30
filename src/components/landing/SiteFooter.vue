@@ -33,11 +33,11 @@ const columns = [
         <!-- Brand -->
         <div class="sm:col-span-4 md:col-span-1">
           <a href="/" class="flex items-center gap-2 mb-3">
-            <img :src="hivemindMark" alt="HiveMind" class="w-6 h-auto" />
-            <span class="text-sm font-semibold tracking-tight">HiveMind</span>
+            <img :src="hivemindMark" alt="BuzzyHive" class="w-6 h-auto" />
+            <span class="text-sm font-semibold tracking-tight">BuzzyHive</span>
           </a>
           <p class="text-xs text-base-content/50 leading-relaxed max-w-xs">
-            Pre-screened virtual assistants for real estate professionals. Managed on a platform built for the job.
+            Pre-screened virtual assistants for your business. Managed on a platform built for the job.
           </p>
         </div>
 
@@ -56,8 +56,8 @@ const columns = [
            until they point at real pages — add them back here before public launch. -->
       <div class="mt-8 pt-5 border-t border-base-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-[11px] text-base-content/40">
         <div class="flex items-center gap-2.5">
-          <img :src="hivemindMark" alt="HiveMind" class="w-5 h-auto opacity-80" />
-          <span>&copy; {{ year }} HiveMind. All rights reserved.</span>
+          <img :src="hivemindMark" alt="BuzzyHive" class="w-5 h-auto opacity-80" />
+          <span>&copy; {{ year }} BuzzyHive. All rights reserved.</span>
         </div>
         <a href="#contact" class="inline-block py-1 hover:text-primary transition-colors">Book a discovery call &rarr;</a>
       </div>

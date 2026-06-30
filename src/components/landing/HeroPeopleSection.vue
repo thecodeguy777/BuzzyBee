@@ -2,8 +2,8 @@
 import { ref, computed } from 'vue'
 
 // Budget calculator — reframed (per the design) as the customer's OWN spend, not
-// HiveMind's price: drag the slider and every figure updates live, so "$4,500"
-// can never read as a fixed fee. Tools & PM are $0 with HiveMind, so the ~46%
+// BuzzyHive's price: drag the slider and every figure updates live, so "$4,500"
+// can never read as a fixed fee. Tools & PM are $0 with BuzzyHive, so the ~46%
 // that usually leaks to software now buys real work.
 const MIN = 2000
 const MAX = 12000
@@ -33,7 +33,7 @@ const fillPct = computed(() => ((budget.value - MIN) / (MAX - MIN)) * 100)
 
           <p class="lede">
             Most services charge you for the assistant, then you bolt on Slack, Asana, and a time
-            tracker. <b>HiveMind includes all of it</b> &mdash; so 100% of your budget pays for
+            tracker. <b>BuzzyHive includes all of it</b> &mdash; so 100% of your budget pays for
             people, not per-seat fees.
           </p>
 
@@ -94,7 +94,7 @@ const fillPct = computed(() => ((budget.value - MIN) / (MAX - MIN)) * 100)
           </div>
 
           <div class="blk-label">
-            <span>With HiveMind</span>
+            <span>With BuzzyHive</span>
             <span class="tag">tools &amp; PM included</span>
           </div>
           <div class="bar hm">
@@ -104,7 +104,7 @@ const fillPct = computed(() => ((budget.value - MIN) / (MAX - MIN)) * 100)
 
           <div class="card-note">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#15803d" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7L9 18l-5-5" /></svg>
-            <span>HiveMind's tools &amp; PM cost <b>$0</b> &mdash; so <b>${{ fmt(lost) }}</b> that used to vanish now buys real work.</span>
+            <span>BuzzyHive's tools &amp; PM cost <b>$0</b> &mdash; so <b>${{ fmt(lost) }}</b> that used to vanish now buys real work.</span>
           </div>
         </div>
       </div>
@@ -122,7 +122,7 @@ const fillPct = computed(() => ((budget.value - MIN) / (MAX - MIN)) * 100)
 
 <style scoped>
 .hps {
-  /* HiveMind brand palette (aubergine + indigo→violet) — scoped to this section. */
+  /* BuzzyHive brand palette (aubergine + indigo→violet) — scoped to this section. */
   --ink: #1a1722;
   --ink-2: #56525f;
   --ink-3: #8b8794;

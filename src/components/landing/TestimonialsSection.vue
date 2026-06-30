@@ -48,7 +48,7 @@ const testimonials = [
           <span class="text-xs font-medium uppercase tracking-wider text-primary">What good looks like</span>
         </div>
         <h2 class="font-display text-3xl md:text-4xl tracking-tight leading-tight text-base-content">
-          Agents who got their weekends back.
+          Owners who got their weekends back.
         </h2>
         <p class="mt-4 text-base text-base-content/60 leading-relaxed">
           Illustrative of what a dedicated VA changes in the first 60 days.

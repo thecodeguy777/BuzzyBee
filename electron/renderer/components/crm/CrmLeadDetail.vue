@@ -750,7 +750,7 @@ const { order: sectionOrder, isCustomized, reset: resetLayout } = useSortableLay
       <section class="border border-dashed border-primary/30 rounded-lg p-3 text-center">
         <Sparkles class="w-4 h-4 mx-auto mb-1 text-primary/60" />
         <p class="text-[11px] text-base-content/60 leading-relaxed">
-          Future: HiveMind AI auto-summarizes the timeline + extracts action items from call recordings.
+          Future: BuzzyHive AI auto-summarizes the timeline + extracts action items from call recordings.
         </p>
       </section>
       </div>

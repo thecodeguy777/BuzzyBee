@@ -194,7 +194,7 @@ function renderPdfHtml(meeting: any, clientName: string | null): string {
 </head>
 <body>
   <div class="header">
-    <h1>HiveMind AI · Meeting Report</h1>
+    <h1>BuzzyHive AI · Meeting Report</h1>
     <div class="meta">
       ${clientName ? `<span><strong>Client:</strong> ${escapeHtml(clientName)}</span>` : ''}
       <span><strong>Date:</strong> ${fmtDate(meeting.started_at)}</span>
@@ -238,7 +238,7 @@ function renderPdfHtml(meeting: any, clientName: string | null): string {
   ` : '<h2>Transcript</h2><p class="empty">No transcript captured.</p>'}
 
   <div class="footer">
-    HiveMind AI · Meeting captured ${fmtDate(meeting.created_at)}
+    BuzzyHive AI · Meeting captured ${fmtDate(meeting.created_at)}
   </div>
 </body>
 </html>`

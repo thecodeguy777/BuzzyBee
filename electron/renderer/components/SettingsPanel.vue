@@ -358,7 +358,7 @@ async function testGeminiKey() {
               max="300"
               class="w-32 border border-base-300 rounded-md px-3 py-2 text-sm bg-base-100 focus:border-primary focus:outline-none transition-colors"
             />
-            <p class="text-[10px] text-base-content/40 mt-1">How often HiveMind generates a coaching prompt during a live meeting.</p>
+            <p class="text-[10px] text-base-content/40 mt-1">How often BuzzyHive generates a coaching prompt during a live meeting.</p>
           </div>
 
           <label class="flex items-center gap-3 cursor-pointer">

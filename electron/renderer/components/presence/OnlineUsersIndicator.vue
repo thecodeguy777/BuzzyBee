@@ -7,7 +7,7 @@ import PresenceAvatars from './PresenceAvatars.vue'
 
 const profiles = useProfiles()
 
-// Global "who's online in HiveMind right now" indicator for the main
+// Global "who's online in BuzzyHive right now" indicator for the main
 // window header. Joins the `ops:online` presence channel — every signed-in
 // user lands here regardless of which window they're working from.
 

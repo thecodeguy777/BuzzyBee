@@ -23,7 +23,7 @@ const targets = {
   'how-discovery-call.png':      { width: 800,  quality: 80 },
   'how-managed-call.png':        { width: 800,  quality: 80 },
   'how-team-call.png':           { width: 800,  quality: 80 },
-  // Why HiveMind: side card ~360, 2x = 720
+  // Why BuzzyHive: side card ~360, 2x = 720
   'why-team-network.png':        { width: 800,  quality: 80 },
 }
 

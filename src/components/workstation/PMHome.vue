@@ -12,7 +12,7 @@ import { formatHours } from '@/lib/format'
 import AmbientHive from '@/components/workstation/home/AmbientHive.vue'
 import PulseStatCard from '@/components/workstation/home/PulseStatCard.vue'
 import NeedsAttention from '@/components/workstation/home/NeedsAttention.vue'
-import HiveMindBrief from '@/components/workstation/home/HiveMindBrief.vue'
+import BuzzyHiveBrief from '@/components/workstation/home/BuzzyHiveBrief.vue'
 import VaRoster from '@/components/workstation/home/VaRoster.vue'
 import ClientRoster from '@/components/workstation/home/ClientRoster.vue'
 
@@ -140,9 +140,9 @@ function planMyWeek() {
     <!-- Needs attention — highest-value block, promoted full-width -->
     <NeedsAttention :alerts="alerts" :loading="loading" />
 
-    <!-- HiveMindAI brief -->
+    <!-- BuzzyHiveAI brief -->
     <div ref="briefAnchor" class="scroll-mt-4">
-      <HiveMindBrief :headline="headline" :suggestions="suggestions" :loading="loading" />
+      <BuzzyHiveBrief :headline="headline" :suggestions="suggestions" :loading="loading" />
     </div>
 
     <!-- Rosters -->

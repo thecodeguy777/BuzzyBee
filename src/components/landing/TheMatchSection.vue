@@ -27,7 +27,7 @@ const p = computed(() => (prefersReduced ? 1 : progress.value))
 // Candidates the matching process filters out — neutral fit/mismatch reasons,
 // not character verdicts. They're capable people who don't fit THIS role.
 const rejects = [
-  { name: 'Jordan P.', role: 'General VA', flaw: 'New to real estate' },
+  { name: 'Jordan P.', role: 'General VA', flaw: 'New to your industry' },
   { name: 'Alex R.', role: 'Admin assistant', flaw: 'Time-zone mismatch' },
   { name: 'Sam T.', role: 'Freelancer', flaw: 'Different specialty' },
   { name: 'Casey M.', role: 'Generalist', flaw: 'Outside your budget' },
@@ -87,11 +87,11 @@ const skipDone = (at: number) => p.value >= at
 
 // ── Part 2: the 7-day path timeline ────────────────────────────────
 const steps = [
-  { num: '01', title: 'Discovery call', body: 'A 20-minute call to understand your business: team size, transaction volume, tools you use, and what\'s eating your time.', icon: Phone },
-  { num: '02', title: 'Your best-fit match', body: 'Within 72 hours, we hand you your one best-fit VA, pre-screened, and already fluent in real-estate workflows, your CRM, and your time zone.', icon: Users },
-  { num: '03', title: '7-day onboarding', body: 'Your VA learns your playbook, brokerage systems, and communication style. By day 7, they\'re handling tasks independently.', icon: Rocket },
+  { num: '01', title: 'Discovery call', body: 'A 20-minute call to understand your business: team size, workload, tools you use, and what\'s eating your time.', icon: Phone },
+  { num: '02', title: 'Your best-fit match', body: 'Within 72 hours, we hand you your one best-fit VA, pre-screened, and already fluent in your industry\'s workflows, your CRM, and your time zone.', icon: Users },
+  { num: '03', title: '7-day onboarding', body: 'Your VA learns your playbook, your tools, and communication style. By day 7, they\'re handling tasks independently.', icon: Rocket },
   { num: '04', title: 'Managed support', body: 'A project manager runs daily check-ins, weekly reports, and quarterly reviews. Problems get caught before you feel them.', icon: Headphones },
-  { num: '05', title: 'Scale your team', body: 'Add a transaction coordinator, a marketing VA, or a second admin as your production grows. One platform, unlimited growth.', icon: TrendingUp }
+  { num: '05', title: 'Scale your team', body: 'Add a marketing VA, an ops specialist, or a second admin as your workload grows. One platform, unlimited growth.', icon: TrendingUp }
 ]
 
 const stepsEl = ref<HTMLElement | null>(null)

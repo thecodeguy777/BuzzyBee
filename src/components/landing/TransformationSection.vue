@@ -49,7 +49,7 @@ const phase = computed(() => (p.value < 0.45 ? 'Before' : 'After'))
             Finally, your business in color.
           </h2>
           <p class="mt-5 text-base text-base-content/60 leading-relaxed max-w-md">
-            For months it ran in grayscale &mdash; a dozen tabs, scattered tools, busywork with no end. The week your HiveMind team and platform click into place, the color comes back.
+            For months it ran in grayscale &mdash; a dozen tabs, scattered tools, busywork with no end. The week your BuzzyHive team and platform click into place, the color comes back.
           </p>
 
           <!-- Before → After indicator -->

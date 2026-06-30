@@ -47,7 +47,7 @@ const pillars = [
         <div v-reveal class="max-w-2xl">
         <div class="flex items-center gap-3 mb-3">
           <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-purple-500"></div>
-          <span class="text-xs font-medium uppercase tracking-wider text-primary">Why HiveMind</span>
+          <span class="text-xs font-medium uppercase tracking-wider text-primary">Why BuzzyHive</span>
         </div>
         <h2 class="font-display text-3xl md:text-4xl tracking-tight leading-tight text-base-content">
           Not just a VA. A real estate machine.

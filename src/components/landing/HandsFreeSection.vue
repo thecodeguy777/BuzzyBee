@@ -74,7 +74,7 @@ const phase = computed(() => (cp.value < 0.45 ? 'Before' : 'After'))
             You were closing. Maria was clearing.
           </h2>
           <p class="mt-5 text-base text-base-content/60 leading-relaxed max-w-md">
-            Your whole to-do list, handled while you were out closing deals. You delegate once. Your VA and the platform take it from there. No nudging, no following up, no "did you get to this?"
+            Your whole to-do list, handled while you were running your business. You delegate once. Your VA and the platform take it from there. No nudging, no following up, no "did you get to this?"
           </p>
           <div class="mt-7 inline-flex items-center gap-2 rounded-full border border-base-300 bg-base-100 px-3.5 py-1.5 text-[13px] font-medium text-base-content/60">
             <span class="w-1.5 h-1.5 rounded-full bg-green-500" :class="{ 'animate-pulse': !allDone }"></span>
@@ -132,7 +132,7 @@ const phase = computed(() => (cp.value < 0.45 ? 'Before' : 'After'))
             Finally, your business in color.
           </h3>
           <p class="mt-5 text-base text-base-content/60 leading-relaxed max-w-md">
-            For months it ran in grayscale: a dozen tabs, scattered tools, busywork with no end. The week your HiveMind team and platform click into place, the color comes back.
+            For months it ran in grayscale: a dozen tabs, scattered tools, busywork with no end. The week your BuzzyHive team and platform click into place, the color comes back.
           </p>
 
           <!-- Before → After indicator -->

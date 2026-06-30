@@ -207,7 +207,7 @@ Decisions captured from Jayson during audit handoff:
 | **Asana sync** | **Two-way.** Read tasks AND mark-complete syncs back to Asana. Higher integration cost but right long-term — VAs should not bounce back to Asana to update status. |
 | **Activity tracking default** | **Off by default, opt-in per client.** Wording: "Activity log," never "monitoring." Screenshot capture off regardless. Position privacy-first stance as a differentiator vs. NexusPoint/Cyberbacker. |
 | **Supabase region** | **US-East (Virginia).** Optimizes for US client trust + finance/compliance comfort. PH latency (~200ms) is acceptable since real-time pieces (Deepgram transcription, Slack webhooks) sit outside Supabase. |
-| **HiveMind consent disclosure** | **Deferred to Phase 2 prep.** Revisit Week 6–7 when HiveMind build starts. ⚠️ Hard gate: nothing records a real client call until VA consent script + MSA recording clause are drafted and legally reviewed. Flag this on the Phase 2 kickoff. |
+| **BuzzyHive consent disclosure** | **Deferred to Phase 2 prep.** Revisit Week 6–7 when BuzzyHive build starts. ⚠️ Hard gate: nothing records a real client call until VA consent script + MSA recording clause are drafted and legally reviewed. Flag this on the Phase 2 kickoff. |
 
 ---
 

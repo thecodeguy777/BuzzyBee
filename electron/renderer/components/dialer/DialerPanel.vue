@@ -181,7 +181,7 @@ function onKey(e: KeyboardEvent) {
 onMounted(() => {
   window.addEventListener('keydown', onKey)
   // Bootstrap the embedded softphone — registers to SignalWire so the
-  // rep leg of click-to-call rings inside HiveMind itself instead of Zoiper.
+  // rep leg of click-to-call rings inside BuzzyHive itself instead of Zoiper.
   softphone.start().catch((err) => console.error('[DialerPanel] softphone start:', err))
 })
 onBeforeUnmount(() => {

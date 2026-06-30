@@ -448,7 +448,7 @@ onBeforeUnmount(() => { if (debugTimer) clearInterval(debugTimer) })
         <div class="jm-preview">
           <div class="jm-brand">
             <img :src="hivemindMark" alt="" class="jm-logo" />
-            <span class="jm-bn">HiveMind<span> Meet</span></span>
+            <span class="jm-bn">BuzzyHive<span> Meet</span></span>
           </div>
 
           <div class="jm-stage">

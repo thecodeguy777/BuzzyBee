@@ -1,9 +1,9 @@
 {
   "name": "hivemind-ai",
-  "productName": "HiveMind AI",
+  "productName": "BuzzyHive AI",
   "version": "1.0.0",
-  "description": "HiveMind AI — Meeting intelligence for VA-client partnerships",
-  "author": "HiveMind",
+  "description": "BuzzyHive AI — Meeting intelligence for VA-client partnerships",
+  "author": "BuzzyHive",
   "main": "dist-main/main/index.js",
   "scripts": {
     "dev": "concurrently -n main,renderer -c blue,green \"npm run dev:main\" \"npm run dev:renderer\"",
@@ -14,7 +14,7 @@
     "build:renderer": "vite build --config ../vite.config.electron.ts",
     "dist": "npm run build && electron-builder --win --x64",
     "dist:portable": "npm run build && electron-builder --win portable --x64",
-    "package:win": "npm run build && electron-packager . \"HiveMind AI\" --platform=win32 --arch=x64 --out=release --overwrite --asar --prune --ignore=\"^/(release|main|preload|shared|renderer|tsconfig\\\\.json|electron-builder.*)\""
+    "package:win": "npm run build && electron-packager . \"BuzzyHive AI\" --platform=win32 --arch=x64 --out=release --overwrite --asar --prune --ignore=\"^/(release|main|preload|shared|renderer|tsconfig\\\\.json|electron-builder.*)\""
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
@@ -42,7 +42,7 @@
   },
   "build": {
     "appId": "co.hivemind.ai",
-    "productName": "HiveMind AI",
+    "productName": "BuzzyHive AI",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -61,14 +61,14 @@
           ]
         }
       ],
-      "artifactName": "HiveMind-AI-Setup-${version}.${ext}"
+      "artifactName": "BuzzyHive-AI-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "HiveMind AI"
+      "shortcutName": "BuzzyHive AI"
     },
     "asar": true
   }

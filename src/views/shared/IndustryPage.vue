@@ -115,7 +115,7 @@ const services = computed(() =>
       <section v-if="industry.outcomes.length" class="py-16 px-6" style="background: var(--hc-surface-warm)">
         <div class="max-w-5xl mx-auto">
           <p class="text-[0.7rem] uppercase tracking-[0.12em] font-semibold text-base-content/50 mb-2">
-            With HiveMind
+            With BuzzyHive
           </p>
           <h2 class="font-display text-3xl font-medium leading-tight max-w-2xl">
             Here's what changes inside two weeks.

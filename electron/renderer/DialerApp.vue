@@ -113,7 +113,7 @@ function togglePin() {
       <div class="w-5 h-5 hc-hex bg-hivemind flex items-center justify-center shrink-0">
         <Phone class="w-3 h-3 text-white" />
       </div>
-      <span class="text-[11px] font-semibold tracking-wide text-base-content">HiveMind Dialer</span>
+      <span class="text-[11px] font-semibold tracking-wide text-base-content">BuzzyHive Dialer</span>
 
       <span
         class="text-[8px] font-medium uppercase tracking-wider px-1 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center gap-1"

@@ -120,7 +120,7 @@ function relTime(ts: number) {
   return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-// HiveMindAI brief — same rule-based recipe as PMHome but project-scoped
+// BuzzyHiveAI brief — same rule-based recipe as PMHome but project-scoped
 const projectTasks = computed(() =>
   tasks.tasks.filter((t) => t.project_id === projects.currentProjectId)
 )
@@ -176,7 +176,7 @@ const briefHeadline = computed(() => {
       </div>
     </div>
 
-    <!-- HiveMindAI mini brief -->
+    <!-- BuzzyHiveAI mini brief -->
     <div
       class="px-4 py-3 border-b border-base-300/60 shrink-0"
       style="background: var(--hc-accent-bg)"
@@ -187,7 +187,7 @@ const briefHeadline = computed(() => {
           class="text-[0.6rem] uppercase tracking-[0.08em] font-semibold"
           style="color: var(--hc-accent)"
         >
-          HiveMindAI brief
+          BuzzyHiveAI brief
         </span>
       </div>
       <p class="text-xs leading-snug text-base-content/85">

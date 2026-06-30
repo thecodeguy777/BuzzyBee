@@ -211,7 +211,7 @@ async function message() {
         @message="message"
         @change-photo="photoInput?.click()"
       />
-      <p class="text-center text-xs text-base-content/40 pb-6 pt-2">Verified profile · Powered by HiveMind</p>
+      <p class="text-center text-xs text-base-content/40 pb-6 pt-2">Verified profile · Powered by BuzzyHive</p>
     </template>
     <input ref="photoInput" type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="hidden" @change="onPhoto" />
   </div>

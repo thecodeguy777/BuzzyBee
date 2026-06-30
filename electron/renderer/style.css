@@ -3,7 +3,7 @@
 
 /* Drive `dark:` utilities off the in-app theme toggle (data-theme), NOT the
    OS prefers-color-scheme. ~16 components already use dark: variants; this
-   makes them follow the HiveMind toggle instead of the user's system setting. */
+   makes them follow the BuzzyHive toggle instead of the user's system setting. */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @plugin "daisyui" {
@@ -50,7 +50,7 @@
   default: false;
   prefersdark: false;
   color-scheme: "dark";
-  /* Deep indigo-charcoal surfaces — keeps the HiveMind brand hue, not flat black */
+  /* Deep indigo-charcoal surfaces — keeps the BuzzyHive brand hue, not flat black */
   --color-base-100: oklch(21% 0.018 264);
   --color-base-200: oklch(25% 0.02 264);
   --color-base-300: oklch(31% 0.022 264);

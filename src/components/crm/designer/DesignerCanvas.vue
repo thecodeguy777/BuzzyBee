@@ -286,7 +286,7 @@ const isDragging = (id: string) =>
                 <DesignerEditable :html="b.props.company" placeholder="Company" :style="{ fontWeight: 700, color: g.text }" @commit="(v: string) => up(b, { company: v })" />
                 <DesignerEditable :html="b.props.address" placeholder="Address (optional)" @commit="(v: string) => up(b, { address: v })" />
                 <div v-if="b.props.unsub" class="mt-1.5">
-                  You're receiving this from <span v-html="b.props.company" /> via HiveMind.
+                  You're receiving this from <span v-html="b.props.company" /> via BuzzyHive.
                   <span class="underline" :style="{ color: g.accent }">Unsubscribe</span>
                 </div>
               </div>
@@ -295,7 +295,7 @@ const isDragging = (id: string) =>
         </template>
         <div v-if="isMoveDrag()" class="crm-dz-indicator" :class="dropIndex === doc.blocks.length && 'active'" />
       </div>
-      <div class="text-center text-[11px] mt-3.5 opacity-70" style="color: #9a98a3">Sent via HiveMind · {{ width }}px wide</div>
+      <div class="text-center text-[11px] mt-3.5 opacity-70" style="color: #9a98a3">Sent via BuzzyHive · {{ width }}px wide</div>
     </div>
   </div>
 </template>

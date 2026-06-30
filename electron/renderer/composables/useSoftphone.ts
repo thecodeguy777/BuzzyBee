@@ -5,7 +5,7 @@ import { UserAgent, Registerer, Invitation, SessionState, RegistererState } from
 //
 // We register a SIP client to SignalWire over secure WebSocket and auto-answer
 // incoming INVITEs. This is the rep-leg endpoint that SignalWire bridges to
-// when HiveMind kicks off a click-to-call REST request.
+// when BuzzyHive kicks off a click-to-call REST request.
 //
 // Architecture:
 //   • UserAgent: long-lived SIP stack, registered for the session
@@ -97,7 +97,7 @@ function onInvitation(invitation: Invitation): void {
     }
   })
 
-  // Auto-answer: HiveMind initiated the click-to-call, so the rep is already
+  // Auto-answer: BuzzyHive initiated the click-to-call, so the rep is already
   // expecting this leg to come in. No user prompt needed.
   invitation.accept({
     sessionDescriptionHandlerOptions: {

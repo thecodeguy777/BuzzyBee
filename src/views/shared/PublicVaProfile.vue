@@ -24,8 +24,8 @@ onMounted(async () => {
   const d = data as { profile: VaProfile; name: string | null; avatar_url: string | null; timezone: string | null; stats: VaStats }
   profile.value = d.profile
   stats.value = d.stats
-  identity.value = { name: d.name ?? 'HiveMind VA', avatarUrl: d.avatar_url, timezone: d.timezone }
-  document.title = `${identity.value.name} — HiveMind`
+  identity.value = { name: d.name ?? 'BuzzyHive VA', avatarUrl: d.avatar_url, timezone: d.timezone }
+  document.title = `${identity.value.name} — BuzzyHive`
 })
 
 function contact() {
@@ -40,7 +40,7 @@ function contact() {
     <!-- minimal public header -->
     <header class="h-14 px-5 flex items-center gap-2.5 bg-base-100 border-b border-base-300">
       <Hexagon class="w-5 h-5 text-primary" :stroke-width="2" />
-      <span class="font-display font-bold text-[0.95rem]">HiveMind</span>
+      <span class="font-display font-bold text-[0.95rem]">BuzzyHive</span>
       <span class="text-xs text-base-content/40">· Verified team profile</span>
     </header>
 
@@ -62,7 +62,7 @@ function contact() {
           @message="contact"
         />
         <p class="text-center text-xs text-base-content/40 py-8">
-          Verified profile · Powered by <a href="/" class="font-semibold text-primary hover:underline">HiveMind</a>
+          Verified profile · Powered by <a href="/" class="font-semibold text-primary hover:underline">BuzzyHive</a>
         </p>
       </template>
     </main>

@@ -99,7 +99,7 @@ onMounted(async () => {
         <div class="w-7 h-7 hc-hex bg-hivemind flex items-center justify-center">
           <Layers class="w-3.5 h-3.5 text-white" />
         </div>
-        <span class="text-sm font-semibold tracking-tight">HiveMind AI</span>
+        <span class="text-sm font-semibold tracking-tight">BuzzyHive AI</span>
       </div>
       <div class="flex items-center gap-3">
         <button
@@ -158,7 +158,7 @@ onMounted(async () => {
           : 'text-base-content/70'"
     >
       <component :is="syncStatus.status === 'synced' ? CheckCircle2 : AlertCircle" class="w-3.5 h-3.5" />
-      <span v-if="syncStatus.status === 'synced'">Meeting synced to HiveMind cloud</span>
+      <span v-if="syncStatus.status === 'synced'">Meeting synced to BuzzyHive cloud</span>
       <span v-else-if="syncStatus.status === 'error'">Sync failed: {{ syncStatus.error }}</span>
       <span v-else>Syncing…</span>
     </div>
@@ -184,7 +184,7 @@ onMounted(async () => {
 
     <!-- Footer -->
     <div class="px-6 pt-0.5 text-[10px] text-base-content/30 text-center flex items-center justify-center gap-3 shrink-0">
-      <span>HiveMind AI v1.0 — Powered by Gemini + ElevenLabs Scribe</span>
+      <span>BuzzyHive AI v1.0 — Powered by Gemini + ElevenLabs Scribe</span>
       <span class="text-base-content/20">·</span>
       <span class="flex items-center gap-1">
         <Phone class="w-2.5 h-2.5" />

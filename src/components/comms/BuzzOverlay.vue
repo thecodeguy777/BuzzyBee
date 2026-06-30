@@ -48,7 +48,7 @@ watch(incoming, (b) => {
   // we never interrupt a buzz with a permission prompt).
   if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
     try {
-      new Notification(`${b.fromName} is buzzing you`, { body: 'They need you in HiveMind right now.' })
+      new Notification(`${b.fromName} is buzzing you`, { body: 'They need you in BuzzyHive right now.' })
     } catch {
       /* ignore */
     }

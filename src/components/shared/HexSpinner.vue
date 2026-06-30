@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Hexagonal loading spinner — a honey-colored arc tracing a hexagon outline.
-// On-brand for HiveMind (honeycomb). Used while the background-blur pipeline
+// On-brand for BuzzyHive (honeycomb). Used while the background-blur pipeline
 // loads (dynamic import + WASM + model).
 defineProps<{ size?: number }>()
 </script>
@@ -31,7 +31,7 @@ defineProps<{ size?: number }>()
 }
 .hex-track { stroke: rgba(255, 255, 255, 0.16); }
 .hex-arc {
-  stroke: #e8b84d; /* HiveMind honey */
+  stroke: #e8b84d; /* BuzzyHive honey */
   stroke-dasharray: 72 198; /* visible arc of the ~270 perimeter */
   animation: hex-trace 1.3s linear infinite;
 }

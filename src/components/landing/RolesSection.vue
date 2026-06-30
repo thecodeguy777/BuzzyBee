@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // "Hire the talent, skip the overhead" — the roles catalog. Shows the breadth
-// of positions HiveMind staffs (the people cluster shows *who/quality*; this
-// shows *what roles*). Ported from the Claude Design "HiveMind Landing" handoff
+// of positions BuzzyHive staffs (the people cluster shows *who/quality*; this
+// shows *what roles*). Ported from the Claude Design "BuzzyHive Landing" handoff
 // into the landing design system: plum tokens, font-display, v-reveal stagger,
 // and the same discovery-form CTA seam as FinalCtaSection (no dead links).
 import { ref, computed } from 'vue'
@@ -73,7 +73,7 @@ const filtered = computed(() =>
           Hire the <span class="bg-gradient-to-r from-primary to-plum bg-clip-text text-transparent">talent</span>, skip the overhead.
         </h2>
         <p class="mt-4 text-base text-base-content/60 leading-relaxed">
-          Every HiveMind VA is pre-screened, fluent in English, and backed by the platform and a dedicated
+          Every BuzzyHive VA is pre-screened, fluent in English, and backed by the platform and a dedicated
           project manager. Tell us the role. We bring the right person.
         </p>
 

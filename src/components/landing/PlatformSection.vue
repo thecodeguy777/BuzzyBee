@@ -342,7 +342,7 @@ const sparkStyle = computed(() => ({
               <!-- ─────────── COMMS (HiveChat) ─────────── -->
               <div class="ps-panel ps-comms" :style="panelStyle(1)">
                 <div class="ps-chrail">
-                  <div class="ps-ws"><span class="ps-online-dot" /><div><div class="ps-ws-name">HiveMind</div><div class="ps-ws-on">8 online</div></div></div>
+                  <div class="ps-ws"><span class="ps-online-dot" /><div><div class="ps-ws-name">BuzzyHive</div><div class="ps-ws-on">8 online</div></div></div>
                   <div class="ps-chlabel">Channels</div>
                   <div class="ps-ch is-on"><Hash :size="13" :stroke-width="2.2" /> general</div>
                   <div class="ps-ch ps-ch-unread"><Hash :size="13" :stroke-width="2.2" /> ops-floor <span class="ps-ch-badge">3</span></div>
@@ -417,7 +417,7 @@ const sparkStyle = computed(() => ({
                 </div>
                 <div class="ps-sess-h">Sessions</div>
                 <div class="ps-sess" :style="stagger(3, 0)">
-                  <div class="ps-sess-l"><div class="ps-sess-c">HiveMind · Daily wrap-up + tomorrow prep</div><div class="ps-sess-t">Jun 15, 4:40 PM → running</div></div>
+                  <div class="ps-sess-l"><div class="ps-sess-c">BuzzyHive · Daily wrap-up + tomorrow prep</div><div class="ps-sess-t">Jun 15, 4:40 PM → running</div></div>
                   <div class="ps-sess-r"><span class="ps-dur">{{ runClock }}</span><span class="ps-badge-run">Running</span></div>
                 </div>
                 <div class="ps-sess" :style="stagger(3, 1)">

@@ -99,7 +99,7 @@ function onLeadClick(leadId: string) {
         <div>
           <h3 class="text-sm font-semibold text-base-content">Team activity</h3>
           <div class="text-[10px] text-base-content/50">
-            Every event flowing through HiveMind in real time
+            Every event flowing through BuzzyHive in real time
           </div>
         </div>
         <div class="flex-1"></div>

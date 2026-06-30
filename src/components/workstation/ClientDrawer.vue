@@ -509,7 +509,7 @@ watch(open, (is) => {
             </div>
           </div>
 
-          <!-- HiveMind feature card -->
+          <!-- BuzzyHive feature card -->
           <button
             type="button"
             class="w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left"
@@ -527,7 +527,7 @@ watch(open, (is) => {
               <Sparkles class="w-4 h-4" :stroke-width="1.75" />
             </div>
             <div class="flex-1 min-w-0">
-              <div class="text-sm font-medium">HiveMind AI</div>
+              <div class="text-sm font-medium">BuzzyHive AI</div>
               <div class="text-[0.7rem] text-base-content/60 leading-snug mt-0.5">
                 Live transcription, in-call Q&amp;A, auto-MoM. Charged separately.
               </div>

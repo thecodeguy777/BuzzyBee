@@ -79,7 +79,7 @@ onMounted(() => {
       style="-webkit-app-region: drag; background: linear-gradient(135deg, rgba(37, 99, 235, 0.3), rgba(168, 85, 247, 0.3));"
     >
       <Layers class="w-3.5 h-3.5 text-white/70" />
-      <span class="text-[11px] font-medium text-white/70 tracking-wide">HiveMind AI</span>
+      <span class="text-[11px] font-medium text-white/70 tracking-wide">BuzzyHive AI</span>
       <div class="flex-1"></div>
       <div
         v-if="meetingStatus === 'active'"

@@ -15,7 +15,7 @@ import { Mic, Sparkles, Shield, Search, Zap, ListChecks, Layers, X, MousePointer
       <div v-reveal class="text-center max-w-2xl mx-auto mb-12">
         <div class="flex items-center gap-3 mb-3 justify-center">
           <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-purple-500"></div>
-          <span class="text-xs font-medium uppercase tracking-wider text-primary">HiveMind AI</span>
+          <span class="text-xs font-medium uppercase tracking-wider text-primary">BuzzyHive AI</span>
           <div class="w-8 h-0.5 rounded-full bg-gradient-to-l from-primary to-purple-500"></div>
         </div>
         <h2 class="font-display text-3xl md:text-4xl tracking-tight leading-tight text-base-content">
@@ -38,7 +38,7 @@ import { Mic, Sparkles, Shield, Search, Zap, ListChecks, Layers, X, MousePointer
           </div>
           <div class="flex-1 ml-3 flex items-center gap-2">
             <Layers class="w-3.5 h-3.5 text-primary" />
-            <span class="text-[11px] font-semibold tracking-tight">HiveMind AI</span>
+            <span class="text-[11px] font-semibold tracking-tight">BuzzyHive AI</span>
             <span class="ml-2 inline-flex items-center gap-1 text-[10px] text-red-500 font-medium">
               <span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
               Recording · 14:32
@@ -224,9 +224,9 @@ import { Mic, Sparkles, Shield, Search, Zap, ListChecks, Layers, X, MousePointer
 
       <!-- CTA -->
       <div v-reveal="300" class="mt-10 text-center">
-        <p class="text-base-content/70 mb-4 text-sm">Available exclusively to HiveMind clients. No extra cost.</p>
+        <p class="text-base-content/70 mb-4 text-sm">Available exclusively to BuzzyHive clients. No extra cost.</p>
         <a href="#contact" class="inline-flex items-center gap-2 bg-gradient-to-r from-primary to-purple-600 text-white font-medium px-6 py-3 rounded-md hover:opacity-90 transition-opacity text-sm">
-          Book a HiveMind AI demo
+          Book a BuzzyHive AI demo
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M5 12h14M13 5l7 7-7 7" />
           </svg>

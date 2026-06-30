@@ -1,4 +1,4 @@
-// HiveMind Dialer — IPC channel names + type contracts.
+// BuzzyHive Dialer — IPC channel names + type contracts.
 // Kept in a separate file from ipc-channels.ts so the dialer work doesn't
 // conflict with the in-flight meeting/coaching changes.
 //

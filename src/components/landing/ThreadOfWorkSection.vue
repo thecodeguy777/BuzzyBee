@@ -232,7 +232,7 @@ const nodeLit = (i: number) => sp(i) > 0.08
             <div class="mx-3.5 mb-3 flex items-center gap-2 rounded-lg px-2.5 py-1.5 transition-all duration-500"
               :class="wonStage === 2 ? 'bg-[#a85be0]/10 opacity-100 translate-y-0' : 'opacity-0 translate-y-1'">
               <span class="thr-hex !w-[18px] !h-[18px] !text-[8px] bg-gradient-to-br from-[#a85be0] to-[#6a4cdd] !text-white">🐝</span>
-              <span class="text-[11.5px] text-[#d4b3f2]/90 font-medium">🏆 Deal won: Henderson Group, posted to #general by HiveMind</span>
+              <span class="text-[11.5px] text-[#d4b3f2]/90 font-medium">🏆 Deal won: Henderson Group, posted to #general by BuzzyHive</span>
             </div>
           </div>
 

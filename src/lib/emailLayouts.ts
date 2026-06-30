@@ -23,7 +23,7 @@ export const DEFAULT_ACCENT = '#611f69'
 const FONT = "Arial, Helvetica, sans-serif"
 
 function footer(fromName: string) {
-  const sender = fromName ? `${fromName} via HiveMind` : 'HiveMind'
+  const sender = fromName ? `${fromName} via BuzzyHive` : 'BuzzyHive'
   return `<p style="font-size:11px;color:#a3a1a9;line-height:1.6;margin:0;text-align:center">`
     + `You're receiving this email from ${sender}. Reply with &ldquo;unsubscribe&rdquo; to opt out.</p>`
 }
@@ -52,7 +52,7 @@ export function renderEmailHtml(opts: {
 
   const header = opts.layout === 'branded'
     ? `<tr><td style="background:${accent};padding:18px 32px">`
-      + `<span style="font-family:${FONT};font-size:17px;font-weight:bold;color:#ffffff;letter-spacing:.2px">${opts.fromName || 'HiveMind'}</span>`
+      + `<span style="font-family:${FONT};font-size:17px;font-weight:bold;color:#ffffff;letter-spacing:.2px">${opts.fromName || 'BuzzyHive'}</span>`
       + `</td></tr>`
     : ''
 

@@ -61,7 +61,7 @@ export function createControlWindow(): BrowserWindow {
     height: 650,
     minWidth: 700,
     minHeight: 500,
-    title: 'HiveMind AI',
+    title: 'BuzzyHive AI',
     backgroundColor: '#f8fafc',
     webPreferences: {
       preload: preloadPath,
@@ -170,7 +170,7 @@ export function createDialerWindow(): BrowserWindow {
     resizable: true,
     hasShadow: false,
     backgroundColor: '#00000000',
-    title: 'HiveMind Dialer',
+    title: 'BuzzyHive Dialer',
     webPreferences: {
       preload: getPreloadPath('dialer'),
       contextIsolation: true,

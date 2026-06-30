@@ -121,7 +121,7 @@ function submit() {
           <div class="flex items-center gap-2 px-2.5 py-2 rounded-lg" style="background: var(--accent-soft)">
             <Bell class="w-3.5 h-3.5 text-primary shrink-0" :stroke-width="1.75" />
             <div class="text-[0.7rem] text-base-content/60">
-              HiveMind posts this <span class="font-semibold text-base-content">{{ whenLabel }}</span> and @mentions you.
+              BuzzyHive posts this <span class="font-semibold text-base-content">{{ whenLabel }}</span> and @mentions you.
             </div>
           </div>
 

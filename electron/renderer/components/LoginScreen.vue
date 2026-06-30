@@ -30,11 +30,11 @@ async function submit() {
         <div class="w-10 h-10 rounded-md bg-hivemind flex items-center justify-center">
           <Layers class="w-5 h-5 text-white" />
         </div>
-        <span class="text-xl font-semibold tracking-tight">HiveMind AI</span>
+        <span class="text-xl font-semibold tracking-tight">BuzzyHive AI</span>
       </div>
 
       <h1 class="text-lg font-semibold text-center mb-1">Sign in to continue</h1>
-      <p class="text-xs text-base-content/50 text-center mb-7">Use your BuzzyBee/HiveMind account.</p>
+      <p class="text-xs text-base-content/50 text-center mb-7">Use your BuzzyBee/BuzzyHive account.</p>
 
       <form @submit.prevent="submit" class="space-y-3">
         <div>
@@ -80,7 +80,7 @@ async function submit() {
       </form>
 
       <p class="text-[10px] text-base-content/40 text-center mt-6">
-        Your meeting transcripts and summaries sync to the HiveMind platform.
+        Your meeting transcripts and summaries sync to the BuzzyHive platform.
       </p>
     </div>
   </div>

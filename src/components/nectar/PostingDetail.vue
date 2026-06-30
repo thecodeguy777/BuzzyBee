@@ -121,10 +121,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onEsc))
       <div class="flex-1 overflow-y-auto px-5 py-4">
         <!-- title -->
         <div class="flex items-start gap-3.5">
-          <HexAvatar :name="posting.client_name || 'HiveMind'" :size="48" tint="primary" />
+          <HexAvatar :name="posting.client_name || 'BuzzyHive'" :size="48" tint="primary" />
           <div class="flex-1 min-w-0">
             <h2 class="text-lg font-bold leading-snug">{{ posting.role_title }}</h2>
-            <div class="text-[0.84rem] font-semibold text-base-content/60 mt-0.5">{{ posting.client_name || 'HiveMind' }}</div>
+            <div class="text-[0.84rem] font-semibold text-base-content/60 mt-0.5">{{ posting.client_name || 'BuzzyHive' }}</div>
           </div>
           <div v-if="match != null && tone" class="relative shrink-0" :style="{ width: RING + 'px', height: RING + 'px' }">
             <svg :width="RING" :height="RING" class="-rotate-90">
@@ -207,7 +207,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onEsc))
           <HexAvatar :avatar-url="poster.avatar_url" :name="poster.full_name" :email="poster.email" :size="32" />
           <div class="min-w-0">
             <div class="text-[0.8rem] font-semibold truncate">Posted by {{ poster.full_name || poster.email }}</div>
-            <div class="text-[0.7rem] text-base-content/45">{{ posting.client_name || 'HiveMind' }}</div>
+            <div class="text-[0.7rem] text-base-content/45">{{ posting.client_name || 'BuzzyHive' }}</div>
           </div>
         </div>
 

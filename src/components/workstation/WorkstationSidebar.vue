@@ -175,7 +175,7 @@ const fmtBadge = (n: number) => (n > 99 ? '99+' : String(n))
             effectiveOpen ? 'opacity-100 delay-100' : 'opacity-0'
           ]"
         >
-          <div class="font-display text-base font-semibold">HiveMind</div>
+          <div class="font-display text-base font-semibold">BuzzyHive</div>
           <div class="text-xs text-base-content/60">Workstation</div>
         </div>
       </div>
