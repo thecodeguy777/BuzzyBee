@@ -135,7 +135,7 @@ function panelStyle(i: number) {
 }
 
 // Comms (tab 1): messages reveal one-by-one, then the composer types itself.
-const PHRASE = 'Flag the 3 hot Acme deals for the US reps'
+const PHRASE = 'Flag the 3 hot Tidewater deals for the US reps'
 const typed = computed(() => {
   if (reduced.value) return PHRASE
   if (active.value !== 1) return ''
@@ -346,8 +346,8 @@ const sparkStyle = computed(() => ({
                   <div class="ps-chlabel">Channels</div>
                   <div class="ps-ch is-on"><Hash :size="13" :stroke-width="2.2" /> general</div>
                   <div class="ps-ch ps-ch-unread"><Hash :size="13" :stroke-width="2.2" /> ops-floor <span class="ps-ch-badge">3</span></div>
-                  <div class="ps-ch"><Hash :size="13" :stroke-width="2.2" /> listings</div>
-                  <div class="ps-ch"><Hash :size="13" :stroke-width="2.2" /> client-acme <span class="ps-ch-badge ps-ch-at">@2</span></div>
+                  <div class="ps-ch"><Hash :size="13" :stroke-width="2.2" /> launches</div>
+                  <div class="ps-ch"><Hash :size="13" :stroke-width="2.2" /> client-tidewater <span class="ps-ch-badge ps-ch-at">@2</span></div>
                   <div class="ps-ch"><Hash :size="13" :stroke-width="2.2" /> dialer-room <Headphones :size="12" :stroke-width="2.2" class="ps-huddle" /> 4</div>
                   <div class="ps-ch"><Hash :size="13" :stroke-width="2.2" /> wins</div>
                 </div>
@@ -357,7 +357,7 @@ const sparkStyle = computed(() => ({
                     <div class="ps-div"><span>Today · June 15</span></div>
                     <div class="ps-msg" :style="msgStyle(0)">
                       <span class="ps-hx" style="background:#12A594">MS</span>
-                      <div class="ps-msg-b"><div class="ps-msg-h"><span class="ps-name" style="color:#3ec9b6">Maria Santos</span><span class="ps-time">9:02 AM</span></div><div class="ps-text">Morning team 🐝 pulling the new Acme listings into the CRM now, done before the US reps log on.</div></div>
+                      <div class="ps-msg-b"><div class="ps-msg-h"><span class="ps-name" style="color:#3ec9b6">Maria Santos</span><span class="ps-time">9:02 AM</span></div><div class="ps-text">Morning team 🐝 pulling the new Tidewater leads into the CRM now, done before the US reps log on.</div></div>
                     </div>
                     <div class="ps-msg ps-msg-group" :style="msgStyle(1)"><span class="ps-gutter">9:03</span><div class="ps-msg-b"><div class="ps-text">Found 6 duplicate contacts. Merging them now.</div></div></div>
                     <div class="ps-msg ps-msg-hover" :style="msgStyle(2)">
@@ -367,7 +367,7 @@ const sparkStyle = computed(() => ({
                     </div>
                     <div class="ps-msg" :style="msgStyle(3)">
                       <span class="ps-hx" style="background:#0090FF">DP</span>
-                      <div class="ps-msg-b"><div class="ps-msg-h"><span class="ps-name" style="color:#5bb0ff">Dwayne Pereda</span><span class="ps-time">9:18 AM</span></div><div class="ps-text">Reps are dialing the Riverside batch. 42 connected, 5 callbacks booked so far.</div><div class="ps-react"><span class="ps-rpill">🔥 4</span><span class="ps-rpill">🚀 2</span></div></div>
+                      <div class="ps-msg-b"><div class="ps-msg-h"><span class="ps-name" style="color:#5bb0ff">Dwayne Pereda</span><span class="ps-time">9:18 AM</span></div><div class="ps-text">Reps are dialing the Northbound batch. 42 connected, 5 callbacks booked so far.</div><div class="ps-react"><span class="ps-rpill">🔥 4</span><span class="ps-rpill">🚀 2</span></div></div>
                     </div>
                   </div>
                   <div v-if="!typed" class="ps-typing"><span class="ps-hx ps-hx--xs" style="background:#0090FF">DP</span> Dwayne is typing<span class="ps-dots"><i /><i /><i /></span></div>
@@ -381,24 +381,24 @@ const sparkStyle = computed(() => ({
                 <div class="ps-board">
                   <div class="ps-col">
                     <div class="ps-colh" style="background:rgba(143,176,247,0.13)"><span class="ps-d" style="background:#2f6fed" /> Contacted <b>3</b></div>
-                    <div class="ps-dcard"><div class="ps-dtop"><span class="ps-sq" style="background:#3E63DD">RV</span><span class="ps-co">Riverside Homes</span></div><div class="ps-dt">Buyer rep agreement</div><div class="ps-dfoot"><b class="ps-val">$6,200</b><span class="ps-date"><CalendarDays :size="11" :stroke-width="2" /> Jun 22</span></div></div>
+                    <div class="ps-dcard"><div class="ps-dtop"><span class="ps-sq" style="background:#3E63DD">CK</span><span class="ps-co">Cedar &amp; Key Realty</span></div><div class="ps-dt">Listing services agreement</div><div class="ps-dfoot"><b class="ps-val">$6,200</b><span class="ps-date"><CalendarDays :size="11" :stroke-width="2" /> Jun 22</span></div></div>
                   </div>
                   <div class="ps-col">
                     <div class="ps-colh" style="background:rgba(227,162,74,0.13)"><span class="ps-d" style="background:#c2700c" /> Proposal <b>4</b></div>
                     <div class="ps-dcard ps-hot ps-crm-hero">
                       <span v-if="crmWon" class="ps-burst" />
-                      <div class="ps-dtop"><span class="ps-sq" style="background:#46A758">SM</span><span class="ps-co">Summit Lending</span><span class="ps-stagechip" :style="crmStageChip"><span class="ps-d" style="background:currentColor" />{{ CRM_STAGES[crmStage].label }}</span></div>
-                      <div class="ps-dt">Refi package, 12 units</div>
+                      <div class="ps-dtop"><span class="ps-sq" style="background:#46A758">NG</span><span class="ps-co">Northbound Goods Co.</span><span class="ps-stagechip" :style="crmStageChip"><span class="ps-d" style="background:currentColor" />{{ CRM_STAGES[crmStage].label }}</span></div>
+                      <div class="ps-dt">Annual retainer, 12 months</div>
                       <div class="ps-dfoot"><b class="ps-val" :class="{ 'ps-val-won': crmWon }">{{ heroVal }}</b><span class="ps-date"><CalendarDays :size="11" :stroke-width="2" /> Jun 27</span></div>
                     </div>
                   </div>
                   <div class="ps-col">
                     <div class="ps-colh" style="background:rgba(178,102,187,0.15)"><span class="ps-d" style="background:#a24fae" /> Negotiation <b>2</b></div>
-                    <div class="ps-dcard"><div class="ps-dtop"><span class="ps-sq" style="background:#E5484D">GX</span><span class="ps-co">Globex Realty</span></div><div class="ps-dt">Annual contract</div><div class="ps-dfoot"><b class="ps-val">$12,000</b><span class="ps-date"><CalendarDays :size="11" :stroke-width="2" /> Jun 30</span></div></div>
+                    <div class="ps-dcard"><div class="ps-dtop"><span class="ps-sq" style="background:#E5484D">TC</span><span class="ps-co">Tidewater Creative</span></div><div class="ps-dt">Annual contract</div><div class="ps-dfoot"><b class="ps-val">$12,000</b><span class="ps-date"><CalendarDays :size="11" :stroke-width="2" /> Jun 30</span></div></div>
                   </div>
                   <div class="ps-col ps-col-peek">
                     <div class="ps-colh" style="background:rgba(34,163,90,0.15)"><span class="ps-d" style="background:#22a35a" /> Won <b>1</b></div>
-                    <div class="ps-dcard ps-dwon"><div class="ps-dtop"><span class="ps-sq" style="background:#12A594">AC</span><span class="ps-co">Acme Co</span><span class="ps-won"><Trophy :size="11" :stroke-width="2" /> Won</span></div><div class="ps-dt">Full-service retainer</div><div class="ps-dfoot"><b class="ps-val ps-val-won">$9,500</b></div></div>
+                    <div class="ps-dcard ps-dwon"><div class="ps-dtop"><span class="ps-sq" style="background:#12A594">CC</span><span class="ps-co">Clearstep Coaching</span><span class="ps-won"><Trophy :size="11" :stroke-width="2" /> Won</span></div><div class="ps-dt">Full-service retainer</div><div class="ps-dfoot"><b class="ps-val ps-val-won">$9,500</b></div></div>
                   </div>
                 </div>
               </div>
@@ -410,9 +410,9 @@ const sparkStyle = computed(() => ({
                 <div class="ps-stats2">
                   <div class="ps-stat"><div class="ps-stat-l">Today total</div><div class="ps-stat-v">{{ todayTotal }}</div><div class="ps-stat-s">4 sessions</div></div>
                   <div class="ps-stat"><div class="ps-stat-l">By client</div>
-                    <div class="ps-byc"><span>Coastal Realty</span><b>3h 12m</b></div>
-                    <div class="ps-byc"><span>Bridgepoint Mortgage</span><b>1h 48m</b></div>
-                    <div class="ps-byc"><span>Summit Property</span><b>1h 02m</b></div>
+                    <div class="ps-byc"><span>Northbound Goods Co.</span><b>3h 12m</b></div>
+                    <div class="ps-byc"><span>Cedar &amp; Key Realty</span><b>1h 48m</b></div>
+                    <div class="ps-byc"><span>Clearstep Coaching</span><b>1h 02m</b></div>
                   </div>
                 </div>
                 <div class="ps-sess-h">Sessions</div>
@@ -421,11 +421,11 @@ const sparkStyle = computed(() => ({
                   <div class="ps-sess-r"><span class="ps-dur">{{ runClock }}</span><span class="ps-badge-run">Running</span></div>
                 </div>
                 <div class="ps-sess" :style="stagger(3, 1)">
-                  <div class="ps-sess-l"><div class="ps-sess-c">Coastal Realty <StickyNote :size="11" :stroke-width="2" class="ps-mut" /> Skip-traced 60 leads, updated dispositions</div><div class="ps-sess-t">Jun 15, 9:02 AM → 1:14 PM</div></div>
+                  <div class="ps-sess-l"><div class="ps-sess-c">Northbound Goods Co. <StickyNote :size="11" :stroke-width="2" class="ps-mut" /> Pushed 6 new SKUs live, cleared support queue</div><div class="ps-sess-t">Jun 15, 9:02 AM → 1:14 PM</div></div>
                   <div class="ps-sess-r"><span class="ps-dur">04:12:03</span></div>
                 </div>
                 <div class="ps-sess" :style="stagger(3, 2)">
-                  <div class="ps-sess-l"><div class="ps-sess-c">Bridgepoint Mortgage <StickyNote :size="11" :stroke-width="2" class="ps-mut" /> Follow-up sequence + booked 2 callbacks</div><div class="ps-sess-t">Jun 15, 1:30 PM → 3:18 PM</div></div>
+                  <div class="ps-sess-l"><div class="ps-sess-c">Cedar &amp; Key Realty <StickyNote :size="11" :stroke-width="2" class="ps-mut" /> Follow-up sequence + booked 2 callbacks</div><div class="ps-sess-t">Jun 15, 1:30 PM → 3:18 PM</div></div>
                   <div class="ps-sess-r"><span class="ps-dur">01:48:11</span></div>
                 </div>
               </div>
@@ -454,8 +454,8 @@ const sparkStyle = computed(() => ({
                 </div>
                 <div class="ps-attn">
                   <div class="ps-attn-h"><AlertTriangle :size="13" :stroke-width="2" class="ps-mut" /> Needs attention <span class="ps-grow" /><span class="ps-attn-n">4 items</span></div>
-                  <div class="ps-attn-row" :style="stagger(4, 8, 0.06)"><span class="ps-attn-i ps-attn-err"><AlertTriangle :size="13" :stroke-width="2" /></span><div><div class="ps-attn-t">Update buyer comps deck</div><div class="ps-attn-s">Overdue · Marwin · Coastal Realty</div></div><ArrowRight :size="14" :stroke-width="2" class="ps-mut3" /></div>
-                  <div class="ps-attn-row" :style="stagger(4, 9, 0.06)"><span class="ps-attn-i ps-attn-warn"><ListChecks :size="13" :stroke-width="2" /></span><div><div class="ps-attn-t">Draft listing description</div><div class="ps-attn-s">Unassigned · Summit Lending</div></div><ArrowRight :size="14" :stroke-width="2" class="ps-mut3" /></div>
+                  <div class="ps-attn-row" :style="stagger(4, 8, 0.06)"><span class="ps-attn-i ps-attn-err"><AlertTriangle :size="13" :stroke-width="2" /></span><div><div class="ps-attn-t">Build the monthly client reporting deck</div><div class="ps-attn-s">Overdue · Marwin · Tidewater Creative</div></div><ArrowRight :size="14" :stroke-width="2" class="ps-mut3" /></div>
+                  <div class="ps-attn-row" :style="stagger(4, 9, 0.06)"><span class="ps-attn-i ps-attn-warn"><ListChecks :size="13" :stroke-width="2" /></span><div><div class="ps-attn-t">Push 6 new SKUs from draft to live</div><div class="ps-attn-s">Unassigned · Northbound Goods Co.</div></div><ArrowRight :size="14" :stroke-width="2" class="ps-mut3" /></div>
                 </div>
               </div>
             </main>

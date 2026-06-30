@@ -122,9 +122,7 @@ const nodeLit = (i: number) => sp(i) > 0.08
       <!-- header -->
       <div class="relative pt-10 md:pt-14 pb-4 text-center px-6">
         <div class="flex items-center gap-3 justify-center mb-3">
-          <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-[#a85be0]/0 to-[#a85be0]" />
           <span class="font-mono text-[11px] font-medium uppercase tracking-[0.25em] text-[#a85be0]">One request, start to finish</span>
-          <div class="w-8 h-0.5 rounded-full bg-gradient-to-l from-[#a85be0]/0 to-[#a85be0]" />
         </div>
         <h2 class="font-display text-2xl md:text-4xl tracking-tight text-white">
           Watch one request go from message to closed deal.

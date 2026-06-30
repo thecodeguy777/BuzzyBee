@@ -19,7 +19,7 @@ const stats = [
       <div class="grid lg:grid-cols-2 gap-10 lg:gap-14 items-center">
         <!-- Visual -->
         <div v-reveal class="relative aspect-[4/3] rounded-2xl overflow-hidden border border-base-300 shadow-lg order-last lg:order-first">
-          <img :src="vaImg" alt="Maria Santos, a BuzzyHive real estate virtual assistant, on a call" width="700" height="467" class="w-full h-full object-cover" loading="lazy" decoding="async" />
+          <img :src="vaImg" alt="Maria Santos, a BuzzyHive virtual assistant, on a call" width="700" height="467" class="w-full h-full object-cover" loading="lazy" decoding="async" />
           <div class="absolute inset-0 bg-gradient-to-tr from-primary/15 via-transparent to-plum/10 pointer-events-none"></div>
           <!-- Recruiter-approved badge -->
           <div class="absolute top-4 left-4 inline-flex items-center gap-1.5 bg-white/95 backdrop-blur-sm border border-base-300 rounded-full px-3 py-1.5 shadow-lg">
@@ -32,14 +32,13 @@ const stats = [
           <div class="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/65 to-transparent pointer-events-none"></div>
           <div class="absolute bottom-3.5 left-4">
             <div class="text-white font-semibold text-sm drop-shadow-sm">Maria Santos</div>
-            <div class="text-white/85 text-[11px] drop-shadow-sm">Real Estate VA · 6 yrs · Follow Up Boss, Dotloop</div>
+            <div class="text-white/85 text-[11px] drop-shadow-sm">Executive VA · 6 yrs · Slack, HubSpot, Notion</div>
           </div>
         </div>
 
         <!-- Copy -->
         <div v-reveal="100">
           <div class="flex items-center gap-3 mb-3">
-            <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-plum"></div>
             <span class="text-xs font-medium uppercase tracking-wider text-primary">Meet your VA</span>
           </div>
           <h2 class="font-display text-3xl md:text-4xl tracking-tight leading-tight text-base-content">

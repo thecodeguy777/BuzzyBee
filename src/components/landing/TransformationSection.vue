@@ -42,7 +42,6 @@ const phase = computed(() => (p.value < 0.45 ? 'Before' : 'After'))
         <!-- Copy -->
         <div v-reveal>
           <div class="flex items-center gap-3 mb-3">
-            <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-plum"></div>
             <span class="text-xs font-medium uppercase tracking-wider text-primary">Before &amp; after</span>
           </div>
           <h2 class="font-display text-3xl md:text-4xl lg:text-5xl tracking-tight leading-[1.1] text-base-content">

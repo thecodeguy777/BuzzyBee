@@ -81,9 +81,7 @@ const services = [
       <!-- Header -->
       <div v-reveal class="text-center max-w-2xl mx-auto mb-14">
         <div class="flex items-center gap-3 mb-3 justify-center">
-          <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-purple-500"></div>
           <span class="text-xs font-medium uppercase tracking-wider text-primary">What Your VA Does</span>
-          <div class="w-8 h-0.5 rounded-full bg-gradient-to-l from-primary to-purple-500"></div>
         </div>
         <h2 class="font-display text-3xl md:text-4xl tracking-tight leading-tight text-base-content">
           Everything that's not selling.

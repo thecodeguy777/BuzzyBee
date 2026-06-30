@@ -43,7 +43,6 @@ const stepActive = (i: number) => p.value > (i + 0.35) / steps.length
       <!-- Header -->
       <div v-reveal class="max-w-2xl mb-14">
         <div class="flex items-center gap-3 mb-3">
-          <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-plum"></div>
           <span class="text-xs font-medium uppercase tracking-wider text-primary">How It Works</span>
         </div>
         <h2 class="font-display text-3xl md:text-4xl tracking-tight leading-tight text-base-content">

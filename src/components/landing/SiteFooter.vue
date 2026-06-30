@@ -37,7 +37,7 @@ const columns = [
             <span class="text-sm font-semibold tracking-tight">BuzzyHive</span>
           </a>
           <p class="text-xs text-base-content/50 leading-relaxed max-w-xs">
-            Pre-screened virtual assistants for your business. Managed on a platform built for the job.
+            Virtual assistants for your business. Managed on a platform built for the job.
           </p>
         </div>
 

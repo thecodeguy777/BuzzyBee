@@ -7,29 +7,29 @@ import AmbientGradient from './AmbientGradient.vue'
 // real, attributable testimonials once they exist.
 const testimonials = [
   {
-    quote: 'My VA took over lead follow-up and transaction coordination in week one. I stopped drowning in paperwork, and I\'m finally home for dinner.',
+    quote: 'My VA took over lead follow-up and the Gorgias queue in week one. New SKUs go live with clean copy, refunds get answered, and the launch ships on time, not next week.',
+    name: 'Nina P.',
+    role: 'E-commerce Founder, Denver CO'
+  },
+  {
+    quote: 'My VA replies while leads are still hot, audits our MLS listings every week, and runs the FSBO list. By the time a lead cools, she\'s already called twice.',
     name: 'Alana J.',
     role: 'Real Estate Broker, Austin TX'
   },
   {
-    quote: 'My VA handles far more than the part-time coordinator I used to juggle, and the end-of-day reports keep me more organized than I\'ve ever been.',
+    quote: 'She knew Clio and QuickBooks on day one. Now she chases every aged invoice and keeps our compliance calendar clean, so I bill more hours instead of hunting receivables.',
     name: 'Marcus T.',
-    role: 'Team Lead, Phoenix AZ'
+    role: 'Accounting Firm Owner, Columbus OH'
   },
   {
-    quote: 'She knew Dotloop and Follow Up Boss on day one. I didn\'t have to explain what a listing agreement was. She already spoke real estate.',
-    name: 'Sarah K.',
-    role: 'Solo Agent, Charlotte NC'
+    quote: 'Our strategists stopped making screenshots. Our VA builds the monthly reporting decks from live ad data and ships them same-day, under our brand, on our tools.',
+    name: 'Renee K.',
+    role: 'Agency Owner, Chicago IL'
   },
   {
-    quote: 'We brought on two VAs for our team. They handle the CRM, social, and transaction files, so our agents finally spend their time on dollar-productive work.',
-    name: 'David R.',
-    role: 'Brokerage Owner, Denver CO'
-  },
-  {
-    quote: 'The speed-to-lead difference is night and day. My VA replies while leads are still hot, so far more of them turn into appointments.',
-    name: 'Jennifer M.',
-    role: 'Luxury Agent, Miami FL'
+    quote: 'I record six episodes and used to ship two. Now every one becomes the newsletter, four short-form posts, and the show notes. My best work stopped dying in Drive.',
+    name: 'David S.',
+    role: 'Business Coach, Nashville TN'
   }
 ]
 </script>
@@ -44,7 +44,6 @@ const testimonials = [
       <!-- Header -->
       <div v-reveal class="max-w-2xl mb-14">
         <div class="flex items-center gap-3 mb-3">
-          <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-plum"></div>
           <span class="text-xs font-medium uppercase tracking-wider text-primary">What good looks like</span>
         </div>
         <h2 class="font-display text-3xl md:text-4xl tracking-tight leading-tight text-base-content">

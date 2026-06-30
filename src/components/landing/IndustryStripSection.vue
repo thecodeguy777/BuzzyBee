@@ -28,9 +28,7 @@ const industries = [
     <div class="relative max-w-6xl mx-auto px-6">
       <div v-reveal class="text-center max-w-2xl mx-auto mb-12">
         <div class="flex items-center gap-3 mb-3 justify-center">
-          <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-plum"></div>
           <span class="text-xs font-medium uppercase tracking-wider text-primary">Who it's for</span>
-          <div class="w-8 h-0.5 rounded-full bg-gradient-to-l from-primary to-plum"></div>
         </div>
         <h2 class="font-display text-2xl md:text-3xl tracking-tight leading-tight text-base-content">
           A professional who already knows your world.

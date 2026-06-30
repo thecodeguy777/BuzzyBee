@@ -123,7 +123,6 @@ const stepActive = (i: number) => sp.value > (i + 0.35) / steps.length
         <!-- Left: copy + "what you skip" checklist -->
         <div>
           <div class="flex items-center gap-3 mb-3">
-            <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-plum"></div>
             <span class="text-xs font-medium uppercase tracking-wider text-primary">Done for you</span>
           </div>
           <h2 class="font-display text-3xl md:text-4xl lg:text-5xl tracking-tight leading-[1.1] text-base-content">
@@ -181,13 +180,13 @@ const stepActive = (i: number) => sp.value > (i + 0.35) / steps.length
                 </div>
                 <div class="min-w-0">
                   <div class="text-sm font-semibold text-base-content">Maria Santos</div>
-                  <div class="text-[11px] text-base-content/55">Real Estate VA · 6 yrs</div>
+                  <div class="text-[11px] text-base-content/55">Executive VA · 6 yrs</div>
                 </div>
                 <span class="ml-auto text-[9px] font-bold uppercase tracking-wider bg-primary/10 text-primary px-2 py-1 rounded">98% fit</span>
               </div>
 
               <div class="mt-4 space-y-2">
-                <div v-for="t in ['Knows Follow Up Boss & Dotloop', '9am-5pm PST overlap', 'Top 3% · skills-tested']" :key="t" class="flex items-center gap-2 text-xs text-base-content/70">
+                <div v-for="t in ['Fluent in your CRM and tools', '9am-5pm PST overlap', 'Top 3% · skills-tested']" :key="t" class="flex items-center gap-2 text-xs text-base-content/70">
                   <svg class="w-3.5 h-3.5 shrink-0 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
                   {{ t }}
                 </div>
@@ -250,7 +249,6 @@ const stepActive = (i: number) => sp.value > (i + 0.35) / steps.length
       <!-- Header -->
       <div v-reveal class="max-w-2xl mb-14">
         <div class="flex items-center gap-3 mb-3">
-          <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-plum"></div>
           <span class="text-xs font-medium uppercase tracking-wider text-primary">How it works</span>
         </div>
         <h2 class="font-display text-3xl md:text-4xl tracking-tight leading-tight text-base-content">

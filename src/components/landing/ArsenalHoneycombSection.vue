@@ -109,9 +109,7 @@ const lit = (i: number) => hovered.value === i || (hovered.value === -1 && spotl
       <!-- header -->
       <div v-reveal class="text-center max-w-2xl mx-auto mb-4">
         <div class="flex items-center gap-3 mb-4 justify-center">
-          <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-[#a85be0]/0 to-[#a85be0]" />
           <span class="font-mono text-[11px] font-medium uppercase tracking-[0.25em] text-[#a85be0]">What it replaces</span>
-          <div class="w-8 h-0.5 rounded-full bg-gradient-to-l from-[#a85be0]/0 to-[#a85be0]" />
         </div>
         <h2 class="font-display text-3xl md:text-5xl tracking-tight leading-[1.08] text-white">
           Stop paying for six subscriptions.

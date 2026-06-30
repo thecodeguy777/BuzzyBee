@@ -320,7 +320,7 @@ const beatClass = (i: number) => ({
 .hj-beat.is-past { opacity: 0; transform: translateY(-26px) scale(0.985); }
 
 .hj-eyebrow { font-size: 0.72rem; letter-spacing: 0.22em; text-transform: uppercase; color: #c79bef; font-weight: 600; }
-.hj-headline { font-family: 'Clash Display','Hanken Grotesk',system-ui,sans-serif; font-weight: 600; font-size: clamp(2rem,8.5vw,5.4rem); line-height: 0.98; letter-spacing: -0.02em; display: flex; flex-direction: column; }
+.hj-headline { font-family: 'Bricolage Grotesque','Satoshi','Hanken Grotesk',sans-serif; font-optical-sizing: auto; font-weight: 800; font-size: clamp(2rem,8.5vw,5.4rem); line-height: 0.98; letter-spacing: -0.02em; display: flex; flex-direction: column; }
 .hj-headline--sm { font-size: clamp(2rem,5.5vw,4rem); }
 .hj-beat--open .hj-headline { text-transform: uppercase; letter-spacing: -0.015em; }
 .hj-accent { background: linear-gradient(100deg,#b25cff,#e4c9ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
@@ -328,7 +328,7 @@ const beatClass = (i: number) => ({
 .hj-cue { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(243,236,250,0.5); margin-top: 0.5rem; }
 .hj-cue-icon { animation: hj-bob 1.8s ease-in-out infinite; }
 @keyframes hj-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
-.hj-step { font-family: 'Clash Display','Hanken Grotesk',system-ui,sans-serif; font-weight: 600; font-size: clamp(1.5rem,3.6vw,2.5rem); letter-spacing: -0.01em; }
+.hj-step { font-family: 'Satoshi','Hanken Grotesk',system-ui,sans-serif; font-weight: 700; font-size: clamp(1.5rem,3.6vw,2.5rem); letter-spacing: -0.01em; }
 
 /* ── faithful "real app" surfaces — the workstation's DARK palette ──
    tokens mirror src/style.css [data-theme="dark"]:

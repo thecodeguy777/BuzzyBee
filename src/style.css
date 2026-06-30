@@ -1,6 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&family=Hanken+Grotesk:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
-/* Clash Display (Fontshare) — premium display face for the landing hero. */
-@import url('https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&display=swap');
+/* Satoshi (Fontshare) — clean, premium display sans for the landing headings. */
+@import url('https://api.fontshare.com/v2/css?f[]=satoshi@500,700,900&display=swap');
+/* Bricolage Grotesque (Google) — characterful display grotesque for the landing HERO headline only. */
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&display=swap');
 @import "tailwindcss";
 @plugin "daisyui" {
   themes: light --default, dark;
@@ -210,14 +212,14 @@ body {
   letter-spacing: -0.02em;
 }
 
-/* Landing/marketing surface promotes headlines to Clash Display — the same
-   premium display face the hero uses inline — so every section matches the
-   hero instead of reading as a second brand. Scoped to .landing-surface (the
-   LandingPage root) so the app's dense UI headings are never affected.
-   Weight stays 800 → renders Clash 700 (its heaviest loaded weight, no faux-bold). */
+/* Landing/marketing surface promotes headlines to Satoshi — a clean, premium
+   display sans — so every section shares one heading voice, distinct from the
+   app's dense UI. Scoped to .landing-surface (the LandingPage root) so the
+   workstation headings are never affected.
+   Weight 800 → renders Satoshi 900 (nearest loaded weight, no faux-bold). */
 .landing-surface .font-display {
-  font-family: 'Clash Display', 'Hanken Grotesk', 'Inter', system-ui, sans-serif;
-  letter-spacing: -0.025em;
+  font-family: 'Satoshi', 'Hanken Grotesk', 'Inter', system-ui, sans-serif;
+  letter-spacing: -0.02em;
 }
 
 .font-mono {

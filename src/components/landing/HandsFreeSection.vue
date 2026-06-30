@@ -24,12 +24,12 @@ const { progress } = useInViewProgress(listEl)
 const p = computed(() => (prefersReduced ? 1 : progress.value))
 
 const tasks = [
-  'Follow up with 12 new leads',
-  'Update the CRM pipeline',
-  "Schedule Tuesday's showings",
-  'Draft & send the closing docs',
-  "Post this week's new listings",
-  "Reconcile last month's invoices"
+  'Clear the support inbox, keep replies under 4 hours',
+  'Follow up with every new lead within 5 minutes',
+  'Build this week\'s client report from live data',
+  'Chase 9 aged invoices, keep AR under 60 days',
+  'Schedule and queue the week\'s social posts',
+  'Confirm tomorrow\'s calls, absorb two reschedules'
 ]
 // Tasks check themselves off one by one as the list scrolls through.
 const done = (i: number) => p.value > 0.18 + i * (0.6 / tasks.length)
@@ -67,11 +67,10 @@ const phase = computed(() => (cp.value < 0.45 ? 'Before' : 'After'))
         <!-- Copy -->
         <div v-reveal>
           <div class="flex items-center gap-3 mb-3">
-            <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-plum"></div>
             <span class="text-xs font-medium uppercase tracking-wider text-primary">Off your plate</span>
           </div>
           <h2 class="font-display text-3xl md:text-4xl lg:text-5xl tracking-tight leading-[1.1] text-base-content">
-            You were closing. Maria was clearing.
+            You were running the business. Maria was clearing the list.
           </h2>
           <p class="mt-5 text-base text-base-content/60 leading-relaxed max-w-md">
             Your whole to-do list, handled while you were running your business. You delegate once. Your VA and the platform take it from there. No nudging, no following up, no "did you get to this?"
@@ -115,7 +114,7 @@ const phase = computed(() => (cp.value < 0.45 ? 'Before' : 'After'))
             class="mt-5 pt-4 border-t border-base-300 text-center text-xs transition-colors duration-300"
             :class="allDone ? 'text-primary font-medium' : 'text-base-content/45'"
           >
-            {{ allDone ? 'Inbox zero. Maria handled every one.' : 'Working through it…' }}
+            {{ allDone ? 'Cleared. Maria handled every one.' : 'Working through it…' }}
           </div>
         </div>
       </div>
@@ -125,7 +124,6 @@ const phase = computed(() => (cp.value < 0.45 ? 'Before' : 'After'))
         <!-- Copy -->
         <div v-reveal>
           <div class="flex items-center gap-3 mb-3">
-            <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-plum"></div>
             <span class="text-xs font-medium uppercase tracking-wider text-primary">Before &amp; after</span>
           </div>
           <h3 class="font-display text-2xl md:text-3xl lg:text-4xl tracking-tight leading-[1.1] text-base-content">
@@ -166,7 +164,7 @@ const phase = computed(() => (cp.value < 0.45 ? 'Before' : 'After'))
               </div>
               <div class="space-y-2">
                 <div class="flex items-center gap-2 text-xs text-base-content/70">
-                  <CheckSquare class="w-4 h-4 text-green-500 shrink-0" /> Listing photos live
+                  <CheckSquare class="w-4 h-4 text-green-500 shrink-0" /> Inbox cleared
                 </div>
                 <div class="flex items-center gap-2 text-xs text-base-content/70">
                   <CheckSquare class="w-4 h-4 text-green-500 shrink-0" /> Leads followed up
@@ -180,7 +178,7 @@ const phase = computed(() => (cp.value < 0.45 ? 'Before' : 'After'))
                 <div class="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-plum text-white flex items-center justify-center text-[11px] font-bold shrink-0">M</div>
                 <div>
                   <div class="text-[11px] font-semibold text-base-content">Maria Santos</div>
-                  <div class="mt-1 text-xs text-base-content/70 bg-base-200 rounded-lg rounded-tl-none px-3 py-2">Closed the Johnson deal 🎉</div>
+                  <div class="mt-1 text-xs text-base-content/70 bg-base-200 rounded-lg rounded-tl-none px-3 py-2">Inbox cleared, every lead followed up 🎉</div>
                 </div>
               </div>
             </div>
@@ -191,7 +189,7 @@ const phase = computed(() => (cp.value < 0.45 ? 'Before' : 'After'))
                 <TrendingUp class="w-4 h-4" />
                 <span class="text-2xl font-bold tracking-tight">+32%</span>
               </div>
-              <div class="text-[11px] text-base-content/50 mt-1">deals closed this month</div>
+              <div class="text-[11px] text-base-content/50 mt-1">more done this month</div>
             </div>
 
             <!-- Calendar card (bottom-right) — hidden on phones to declutter the collage -->
@@ -202,10 +200,10 @@ const phase = computed(() => (cp.value < 0.45 ? 'Before' : 'After'))
               </div>
               <div class="p-3 space-y-1.5">
                 <div class="flex items-center gap-2 text-[11px] text-base-content/70">
-                  <span class="w-1.5 h-1.5 rounded-full bg-secondary"></span> Showing · 2:00 PM
+                  <span class="w-1.5 h-1.5 rounded-full bg-secondary"></span> Client deck · 2:00 PM
                 </div>
                 <div class="flex items-center gap-2 text-[11px] text-base-content/70">
-                  <span class="w-1.5 h-1.5 rounded-full bg-plum"></span> Closing · 4:30 PM
+                  <span class="w-1.5 h-1.5 rounded-full bg-plum"></span> Promo launch · 4:30 PM
                 </div>
               </div>
             </div>

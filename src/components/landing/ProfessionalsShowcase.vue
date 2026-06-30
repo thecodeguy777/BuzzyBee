@@ -9,31 +9,31 @@ import { BadgeCheck, Check } from 'lucide-vue-next'
 
 const pros = [
   {
-    initials: 'MS',
+    initials: 'MR',
     color: '#8E4EC6',
-    name: 'Maria Santos',
+    name: 'Marisol Reyes',
     role: 'Real Estate VA',
     years: '6 yrs',
-    knows: ['Follow Up Boss', 'Dotloop', 'MLS', 'Canva'],
-    handles: ['Listing coordination & MLS entry', 'CRM hygiene + buyer follow-up', 'Listing photos & social posts'],
+    knows: ['Follow Up Boss', 'Flexmls', 'kvCORE', 'DocuSign'],
+    handles: ['Audit MLS listings for price & status drift', 'FSBO + expired outreach with notes back', 'Qualify new leads within five minutes'],
   },
   {
-    initials: 'DP',
+    initials: 'JC',
     color: '#0090FF',
-    name: 'Dwayne P.',
-    role: 'Inside Sales / Dialer',
+    name: 'Joban Cruz',
+    role: 'Shopify Operator VA',
     years: '4 yrs',
-    knows: ['PhoneBurner', 'Follow Up Boss', 'Calendly'],
-    handles: ['Cold + warm call campaigns', 'Booking callbacks & appointments', 'Lead qualification + notes'],
+    knows: ['Shopify', 'Klaviyo', 'Gorgias', 'Recharge'],
+    handles: ['New SKUs from draft to live with alt-text', 'Gorgias queue cleared, replies under 4 hrs', 'Promo launches end to end: theme, email, socials'],
   },
   {
-    initials: 'AC',
+    initials: 'PN',
     color: '#46A758',
-    name: 'Ana C.',
-    role: 'Transaction Coordinator',
+    name: 'Priya Nair',
+    role: 'White-Label Production VA',
     years: '7 yrs',
-    knows: ['Dotloop', 'DocuSign', 'Skyslope'],
-    handles: ['Contract-to-close management', 'Compliance docs & signatures', 'Deadline & milestone tracking'],
+    knows: ['Asana', 'Meta Ads Manager', 'Looker Studio', 'Canva'],
+    handles: ['Monthly client reporting decks from live ad data', 'Social scheduled across the agency roster', 'Ad ops: budgets, pacing, creative swaps'],
   },
 ]
 </script>
@@ -49,9 +49,7 @@ const pros = [
       <!-- Header -->
       <div v-reveal class="text-center max-w-2xl mx-auto mb-14">
         <div class="flex items-center gap-3 mb-3 justify-center">
-          <div class="w-8 h-0.5 rounded-full bg-gradient-to-r from-primary to-plum"></div>
           <span class="text-xs font-medium uppercase tracking-wider text-primary">The people you hire</span>
-          <div class="w-8 h-0.5 rounded-full bg-gradient-to-l from-primary to-plum"></div>
         </div>
         <h2 class="font-display text-3xl md:text-4xl tracking-tight leading-tight text-base-content">
           They already know your CRM and your tools.
