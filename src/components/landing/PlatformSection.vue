@@ -478,7 +478,7 @@ const sparkStyle = computed(() => ({
   --pri: #b266bb; --acc: #8a3a93; --amber: #e3a24a; --green: #6cc788;
   --blue: #8fb0f7; --coral: #ef8497; --hex: url(#hc-hex-clip);
 }
-.ps-stage { position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden; display: flex; align-items: center; padding: 5vh 0; }
+.ps-stage { position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden; display: flex; align-items: safe center; padding: 5vh 0; }
 .ps-aura { position: absolute; inset: 0; pointer-events: none; }
 .ps-aura span { position: absolute; border-radius: 9999px; filter: blur(100px); opacity: 0.4; }
 .ps-aura span:nth-child(1) { width: 42vw; height: 42vw; left: -10vw; top: -8vw; background: #5b2bb0; }
@@ -489,7 +489,7 @@ const sparkStyle = computed(() => ({
 
 /* ── left feature rail ── */
 .ps-eyebrow { font-size: 0.72rem; letter-spacing: 0.2em; text-transform: uppercase; color: #c79bef; font-weight: 600; }
-.ps-h2 { font-family: 'Clash Display','Hanken Grotesk',system-ui,sans-serif; font-weight: 600; font-size: clamp(1.9rem, 3.2vw, 3rem); line-height: 1.02; letter-spacing: -0.02em; margin-top: 0.7rem; }
+.ps-h2 { font-family: 'Satoshi','Hanken Grotesk',system-ui,sans-serif; font-weight: 600; font-size: clamp(1.9rem, 3.2vw, 3rem); line-height: 1.02; letter-spacing: -0.02em; margin-top: 0.7rem; }
 .ps-lede { margin-top: 1rem; max-width: 30rem; font-size: 0.98rem; line-height: 1.55; color: rgba(243,236,250,0.62); }
 .ps-feats { margin-top: 1.1rem; display: flex; flex-direction: column; }
 .ps-feat { position: relative; display: flex; gap: 0.9rem; padding: 0.65rem 0; cursor: pointer; border-top: 1px solid rgba(255,255,255,0.08); }
@@ -497,7 +497,7 @@ const sparkStyle = computed(() => ({
 .ps-feat-bar { width: 2px; border-radius: 2px; background: transparent; transition: background 0.3s; }
 .ps-feat.is-active .ps-feat-bar { background: linear-gradient(180deg, #b25cff, #7c3fd1); }
 .ps-feat-head { display: flex; align-items: baseline; gap: 0.6rem; }
-.ps-feat-name { font-family: 'Clash Display','Hanken Grotesk',system-ui,sans-serif; font-weight: 600; font-size: 1.12rem; color: rgba(243,236,250,0.55); transition: color 0.25s; }
+.ps-feat-name { font-family: 'Satoshi','Hanken Grotesk',system-ui,sans-serif; font-weight: 600; font-size: 1.12rem; color: rgba(243,236,250,0.55); transition: color 0.25s; }
 .ps-feat.is-active .ps-feat-name { color: #fff; }
 .ps-feat-type { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(243,236,250,0.4); }
 .ps-feat-body { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 0.4s ease, opacity 0.35s ease; }
