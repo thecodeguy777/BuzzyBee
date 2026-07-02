@@ -1,6 +1,6 @@
 import { computed, type FunctionalComponent, type Ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { AlertTriangle, ListTodo, Crown, Pause } from 'lucide-vue-next'
+import { AlertTriangle, CalendarClock, ListTodo, Crown, Pause } from 'lucide-vue-next'
 import { useClientsStore, type Client } from '@/stores/clients'
 import { useTasksStore } from '@/stores/tasks'
 import { useStatusesStore } from '@/stores/statuses'
@@ -8,7 +8,7 @@ import { useTeamStore } from '@/stores/team'
 import { useProjectsStore } from '@/stores/projects'
 import { displayName, firstName } from '@/lib/format'
 
-export type AlertKind = 'overdue' | 'unassigned' | 'orphan-client' | 'paused-client'
+export type AlertKind = 'overdue' | 'due-today' | 'unassigned' | 'orphan-client' | 'paused-client'
 export interface Alert {
   kind: AlertKind
   label: string
@@ -17,6 +17,7 @@ export interface Alert {
 }
 export const alertMeta: Record<AlertKind, { icon: FunctionalComponent; class: string; label: string }> = {
   overdue: { icon: AlertTriangle, class: 'text-error bg-error/10', label: 'Overdue' },
+  'due-today': { icon: CalendarClock, class: 'text-info bg-info/10', label: 'Due today' },
   unassigned: { icon: ListTodo, class: 'text-warning bg-warning/10', label: 'Unassigned' },
   'orphan-client': { icon: Crown, class: 'text-warning bg-warning/10', label: 'No primary PM' },
   'paused-client': { icon: Pause, class: 'text-base-content/60 bg-base-200', label: 'Paused' }
@@ -45,6 +46,7 @@ export interface ClientRow {
   status: string
   primary_pm: string
   has_primary: boolean
+  timezone: string | null
   open_tasks: number
   overdue_tasks: number
 }
@@ -267,6 +269,7 @@ export function usePmDashboard(cal: CalendarLike, hours: HoursLike) {
           status: c.status,
           primary_pm: primary ? displayName(pmProfile, '…') : '—',
           has_primary: !!primary,
+          timezone: c.timezone,
           open_tasks: openByClient[c.id] ?? 0,
           overdue_tasks: overdueByClient[c.id] ?? 0
         }
