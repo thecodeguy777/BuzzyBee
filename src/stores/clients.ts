@@ -14,6 +14,8 @@ export interface Client {
   slack_webhook_url: string | null
   email_to: string | null
   asana_project_id: string | null
+  /** IANA zone name (e.g. 'America/New_York'); null = not set. */
+  timezone: string | null
   monthly_rate: number | null
   tier: ClientTier | null
   hivemind_enabled: boolean

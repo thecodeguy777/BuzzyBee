@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { Briefcase, ArrowRight } from 'lucide-vue-next'
+import { onUnmounted, ref } from 'vue'
+import { Briefcase, ArrowRight, Sun, Moon } from 'lucide-vue-next'
+import { localTimeIn, isDaytime } from '@/lib/timezones'
 import type { ClientRow } from '@/composables/usePmDashboard'
 
 defineProps<{ clientRows: ClientRow[]; loading?: boolean }>()
@@ -10,6 +12,11 @@ const statusDot: Record<string, string> = {
   paused: 'bg-warning',
   archived: 'bg-base-content/30'
 }
+
+// Ticking clock for the clients' local times (minute precision is plenty).
+const now = ref(Date.now())
+const tick = window.setInterval(() => (now.value = Date.now()), 30_000)
+onUnmounted(() => window.clearInterval(tick))
 </script>
 
 <template>
@@ -39,6 +46,7 @@ const statusDot: Record<string, string> = {
           <tr>
             <th scope="col" class="text-left px-2 py-1.5">Client</th>
             <th scope="col" class="text-left px-2 py-1.5">Primary PM</th>
+            <th scope="col" class="text-left px-2 py-1.5">Local time</th>
             <th scope="col" class="text-right px-2 py-1.5">Overdue</th>
             <th scope="col" class="text-right px-2 py-1.5">Open</th>
             <th scope="col" class="text-left px-2 py-1.5">Status</th>
@@ -60,6 +68,22 @@ const statusDot: Record<string, string> = {
             </td>
             <td class="px-2 py-2" :class="row.has_primary ? 'text-base-content/70' : 'text-warning'">
               {{ row.primary_pm }}
+            </td>
+            <td class="px-2 py-2 whitespace-nowrap">
+              <span
+                v-if="row.timezone && localTimeIn(row.timezone, now)"
+                class="inline-flex items-center gap-1 tabular-nums"
+                :class="isDaytime(row.timezone, now) ? 'text-base-content/70' : 'text-base-content/40'"
+                :title="row.timezone.replace(/_/g, ' ')"
+              >
+                <component
+                  :is="isDaytime(row.timezone, now) ? Sun : Moon"
+                  class="w-3 h-3"
+                  :stroke-width="1.75"
+                />
+                {{ localTimeIn(row.timezone, now) }}
+              </span>
+              <span v-else class="text-base-content/30">—</span>
             </td>
             <td class="px-2 py-2 text-right font-mono tabular-nums">
               <span v-if="row.overdue_tasks > 0" class="text-error font-medium">{{ row.overdue_tasks }}</span>

@@ -15,6 +15,7 @@ import {
 import HexAvatar from '@/components/shared/HexAvatar.vue'
 import ClientDrawer from '@/components/workstation/ClientDrawer.vue'
 import { useClientsStore, type Client, type ClientStatus } from '@/stores/clients'
+import { localTimeIn } from '@/lib/timezones'
 import { useAuthStore } from '@/stores/auth'
 import { useTimeStore } from '@/stores/time'
 import { useTeamStore } from '@/stores/team'
@@ -217,6 +218,11 @@ function onKeydown(e: KeyboardEvent) {
 document.addEventListener('keydown', onKeydown)
 onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 
+// Ticking clock for each client's local time in the roster.
+const now = ref(Date.now())
+const clockTick = window.setInterval(() => (now.value = Date.now()), 30_000)
+onBeforeUnmount(() => window.clearInterval(clockTick))
+
 const GRID = 'minmax(230px,1.5fr) 130px 130px minmax(150px,1fr) 110px 170px'
 </script>
 
@@ -366,6 +372,10 @@ const GRID = 'minmax(230px,1.5fr) 130px 130px minmax(150px,1fr) 110px 170px'
                 <span v-else>no channel</span>
                 <span class="w-[3px] h-[3px] rounded-full bg-base-content/30 shrink-0" />
                 <span class="whitespace-nowrap">since {{ sinceOf(c) }}</span>
+                <template v-if="c.timezone && localTimeIn(c.timezone, now)">
+                  <span class="w-[3px] h-[3px] rounded-full bg-base-content/30 shrink-0" />
+                  <span class="whitespace-nowrap tabular-nums">{{ localTimeIn(c.timezone, now) }} local</span>
+                </template>
               </div>
             </div>
           </div>

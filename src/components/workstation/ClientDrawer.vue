@@ -14,8 +14,11 @@ import {
   StickyNote,
   Tag,
   Users as UsersIcon,
-  ListTodo
+  ListTodo,
+  Globe
 } from 'lucide-vue-next'
+import { localTimeIn, tzShortName } from '@/lib/timezones'
+import TimezonePicker from '@/components/shared/TimezonePicker.vue'
 import HexAvatar from '@/components/shared/HexAvatar.vue'
 import { useClientsStore, type Client, type ClientStatus, type ClientTier } from '@/stores/clients'
 import { useTeamStore } from '@/stores/team'
@@ -45,6 +48,19 @@ const tier = ref<ClientTier | ''>('')
 const hivemind = ref(false)
 const status = ref<ClientStatus>('active')
 const notes = ref('')
+const timezone = ref('')
+
+// Ticking clock so the "it's 3:42 PM for them" preview stays live while open.
+const tzNow = ref(Date.now())
+const tzTick = window.setInterval(() => (tzNow.value = Date.now()), 30_000)
+onBeforeUnmount(() => window.clearInterval(tzTick))
+const tzPreview = computed(() => {
+  if (!timezone.value) return null
+  const t = localTimeIn(timezone.value, tzNow.value)
+  if (!t) return null
+  const abbr = tzShortName(timezone.value, tzNow.value)
+  return abbr ? `${t} ${abbr}` : t
+})
 
 const saveState = ref<'idle' | 'saving' | 'saved'>('idle')
 let savedTimer: ReturnType<typeof setTimeout> | undefined
@@ -64,6 +80,7 @@ function syncFromClient() {
   hivemind.value = c.value.hivemind_enabled
   status.value = c.value.status
   notes.value = c.value.notes ?? ''
+  timezone.value = c.value.timezone ?? ''
   saveState.value = 'idle'
 }
 watch(c, () => syncFromClient(), { immediate: true })
@@ -113,6 +130,14 @@ async function saveStatus(value: ClientStatus) {
 async function saveNotes() {
   if (!c.value || (c.value.notes ?? '') === notes.value) return
   await patchField({ notes: notes.value || null })
+}
+async function saveTimezone() {
+  if (!c.value || (c.value.timezone ?? '') === timezone.value) return
+  await patchField({ timezone: timezone.value || null })
+}
+function onTimezonePick(value: string) {
+  timezone.value = value
+  void saveTimezone()
 }
 
 const myPmList = computed(() => {
@@ -561,6 +586,18 @@ watch(open, (is) => {
               class="w-full text-sm bg-transparent outline-none py-1 border-b border-base-300 focus:border-primary transition-colors"
               @blur="saveEmail"
             />
+          </div>
+
+          <!-- Time zone -->
+          <div class="space-y-1">
+            <label class="flex items-center gap-1.5 text-[0.65rem] text-base-content/50 font-medium">
+              <Globe class="w-3 h-3" :stroke-width="1.75" />
+              Time zone
+            </label>
+            <TimezonePicker :model-value="timezone" @update:model-value="onTimezonePick" />
+            <p v-if="tzPreview" class="text-[0.7rem] text-base-content/50">
+              It's <span class="font-medium text-base-content/70 tabular-nums">{{ tzPreview }}</span> for them right now.
+            </p>
           </div>
         </section>
 
