@@ -120,20 +120,22 @@ const pool = computed(() => {
 })
 
 // The honest funnel: every contact in the pool lands in exactly one bucket.
+// (A complaint sets unsubscribedAt too, so it lands in the opt-out bucket.)
 const breakdown = computed(() => {
   const seen = new Set<string>()
   const recipients: CampaignRecipientInput[] = []
-  let noEmail = 0, invalid = 0, dupes = 0, unsubscribed = 0
+  let noEmail = 0, invalid = 0, dupes = 0, unsubscribed = 0, bounced = 0
   for (const c of pool.value) {
     const email = c.email.trim().toLowerCase()
     if (!email) { noEmail++; continue }
     if (!EMAIL_RE.test(email)) { invalid++; continue }
-    if (c.unsubscribedAt) { unsubscribed++; continue }
+    if (c.unsubscribedAt || c.complainedAt) { unsubscribed++; continue }
+    if (c.emailBouncedAt) { bounced++; continue }
     if (seen.has(email)) { dupes++; continue }
     seen.add(email)
     recipients.push({ contactId: c.id, email, name: c.name })
   }
-  return { recipients, noEmail, invalid, dupes, unsubscribed, total: pool.value.length }
+  return { recipients, noEmail, invalid, dupes, unsubscribed, bounced, total: pool.value.length }
 })
 
 const audienceLabel = computed(() => {
@@ -470,7 +472,8 @@ onBeforeUnmount(() => {
                     <span v-if="breakdown.noEmail">{{ breakdown.noEmail }} missing an email · </span>
                     <span v-if="breakdown.invalid">{{ breakdown.invalid }} invalid · </span>
                     <span v-if="breakdown.dupes">{{ breakdown.dupes }} duplicate{{ breakdown.dupes === 1 ? '' : 's' }} · </span>
-                    <span v-if="breakdown.unsubscribed">{{ breakdown.unsubscribed }} unsubscribed · </span>excluded
+                    <span v-if="breakdown.unsubscribed">{{ breakdown.unsubscribed }} unsubscribed · </span>
+                    <span v-if="breakdown.bounced">{{ breakdown.bounced }} bounced address{{ breakdown.bounced === 1 ? '' : 'es' }} · </span>excluded
                   </div>
                 </div>
               </div>

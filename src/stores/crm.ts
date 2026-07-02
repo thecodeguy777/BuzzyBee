@@ -52,6 +52,8 @@ function mapContact(r: any): Contact {
     address: r.address ?? '', city: r.city ?? '', country: r.country ?? '',
     createdAt: r.created_at, lastActivityAt: r.last_activity_at ?? null,
     unsubscribedAt: r.unsubscribed_at ?? null,
+    emailBouncedAt: r.email_bounced_at ?? null,
+    complainedAt: r.complained_at ?? null,
   }
 }
 function mapActivity(r: any): Activity {
@@ -62,7 +64,7 @@ function mapActivity(r: any): Activity {
 }
 
 const COMPANY_COLS = 'id,name,industry,site,color,is_client,client_id,channel_id,address,city,country,employees,annual_revenue,linkedin,created_at,last_activity_at'
-const CONTACT_COLS = 'id,company_id,name,role,email,phone,color,is_primary,address,city,country,created_at,last_activity_at,unsubscribed_at'
+const CONTACT_COLS = 'id,company_id,name,role,email,phone,color,is_primary,address,city,country,created_at,last_activity_at,unsubscribed_at,email_bounced_at,complained_at'
 const ACTIVITY_COLS = 'id,deal_id,company_id,contact_id,type,actor_id,body,meta,created_at'
 const DEALS_SELECT = 'id,title,company_id,stage,value,owner_id,close_on,source,health,priority,channel_id,sort, channel:channels(name)'
 

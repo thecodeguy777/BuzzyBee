@@ -47,6 +47,10 @@ export interface Contact {
   createdAt: string
   lastActivityAt: string | null
   unsubscribedAt: string | null
+  /** Set by resend-webhook on a hard bounce — address is dead, don't mail it. */
+  emailBouncedAt: string | null
+  /** Set by resend-webhook on a spam complaint (also sets unsubscribedAt). */
+  complainedAt: string | null
 }
 export interface Deal {
   id: string

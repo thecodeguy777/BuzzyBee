@@ -227,7 +227,9 @@ function compileBlock(b: DocBlock, g: EmailDocG): string {
       return `<div style="text-align:center;font:400 12px/1.6 ${font};color:${g.muted}">`
         + `<div style="font-weight:700;color:${g.text}">${p.company}</div>`
         + (p.address ? `<div>${p.address}</div>` : '')
-        + (p.unsub ? `<div style="margin-top:6px">You're receiving this from ${p.company} via BuzzyHive. <a href="#" style="color:${g.accent};text-decoration:underline">Unsubscribe</a></div>` : '')
+        // {{unsubscribe_url}} resolves per recipient at send time; legacy docs
+        // saved with href="#" get patched by send-campaign's ensureUnsubLink.
+        + (p.unsub ? `<div style="margin-top:6px">You're receiving this from ${p.company} via BuzzyHive. <a href="{{unsubscribe_url}}" style="color:${g.accent};text-decoration:underline">Unsubscribe</a></div>` : '')
         + `</div>`
   }
 }

@@ -1,4 +1,5 @@
-// resend-webhook: Resend engagement events → crm_campaign_recipients stamps.
+// resend-webhook: Resend engagement events → crm_campaign_recipients stamps
+// + contact-level suppression (bounces/complaints must stop future sends).
 //
 // Resend signs webhooks with the svix scheme: HMAC-SHA256 over
 // "{id}.{timestamp}.{rawBody}" keyed with the base64-decoded secret. We verify
@@ -7,8 +8,8 @@
 //
 // Setup: Resend dashboard → Webhooks → add
 //   https://<project-ref>.supabase.co/functions/v1/resend-webhook
-// with events email.opened, email.clicked, email.bounced — then put the
-// signing secret (whsec_…) in the RESEND_WEBHOOK_SECRET function secret.
+// with events email.opened, email.clicked, email.bounced, email.complained —
+// then put the signing secret (whsec_…) in the RESEND_WEBHOOK_SECRET secret.
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
@@ -50,7 +51,10 @@ Deno.serve(async (req) => {
       return new Response('bad signature', { status: 401 })
     }
 
-    const event = JSON.parse(raw) as { type: string; data?: { email_id?: string } }
+    const event = JSON.parse(raw) as {
+      type: string
+      data?: { email_id?: string; bounce?: { type?: string } }
+    }
     const emailId = event.data?.email_id
     if (!emailId) return new Response('ok', { status: 200 })
 
@@ -63,6 +67,7 @@ Deno.serve(async (req) => {
       stamp.clicked_at = now
       stamp.opened_at = now
     } else if (event.type === 'email.bounced') stamp.bounced_at = now
+    else if (event.type === 'email.complained') stamp.complained_at = now
     else return new Response('ok', { status: 200 }) // event type we don't track
 
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
@@ -72,7 +77,7 @@ Deno.serve(async (req) => {
     // coalesce-style guard: only fill columns that are still null.
     const { data: rows } = await admin
       .from('crm_campaign_recipients')
-      .select('id,opened_at,clicked_at,bounced_at')
+      .select('id,contact_id,opened_at,clicked_at,bounced_at,complained_at')
       .eq('provider_id', emailId)
       .limit(1)
     const row = rows?.[0]
@@ -84,6 +89,38 @@ Deno.serve(async (req) => {
     }
     if (Object.keys(patch).length) {
       await admin.from('crm_campaign_recipients').update(patch).eq('id', row.id)
+    }
+
+    // ── Contact-level suppression ─────────────────────────────────────────────
+    // A spam complaint is the loudest possible opt-out → unsubscribe the
+    // contact. A bounce marks the address dead unless Resend says it's
+    // transient (mailbox full etc.). The audience builder and send-campaign
+    // both exclude contacts with these stamps.
+    if (row.contact_id) {
+      if (event.type === 'email.complained') {
+        const { data: c } = await admin
+          .from('crm_contacts')
+          .select('unsubscribed_at,complained_at')
+          .eq('id', row.contact_id)
+          .maybeSingle()
+        if (c) {
+          const cPatch: Record<string, string> = {}
+          if (!c.complained_at) cPatch.complained_at = now
+          if (!c.unsubscribed_at) cPatch.unsubscribed_at = now
+          if (Object.keys(cPatch).length) {
+            await admin.from('crm_contacts').update(cPatch).eq('id', row.contact_id)
+          }
+        }
+      } else if (event.type === 'email.bounced') {
+        const transient = /transient/i.test(event.data?.bounce?.type ?? '')
+        if (!transient) {
+          await admin
+            .from('crm_contacts')
+            .update({ email_bounced_at: now })
+            .eq('id', row.contact_id)
+            .is('email_bounced_at', null)
+        }
+      }
     }
 
     return new Response('ok', { status: 200 })

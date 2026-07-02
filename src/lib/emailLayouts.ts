@@ -22,10 +22,13 @@ export const DEFAULT_ACCENT = '#611f69'
 
 const FONT = "Arial, Helvetica, sans-serif"
 
+// {{unsubscribe_url}} resolves per recipient at send time (send-campaign mints
+// a signed token per recipient row); in previews it stays a dead link.
 function footer(fromName: string) {
   const sender = fromName ? `${fromName} via BuzzyHive` : 'BuzzyHive'
   return `<p style="font-size:11px;color:#a3a1a9;line-height:1.6;margin:0;text-align:center">`
-    + `You're receiving this email from ${sender}. Reply with &ldquo;unsubscribe&rdquo; to opt out.</p>`
+    + `You're receiving this email from ${sender}. `
+    + `<a href="{{unsubscribe_url}}" style="color:#a3a1a9;text-decoration:underline">Unsubscribe</a></p>`
 }
 
 /**
