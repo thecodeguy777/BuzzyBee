@@ -18,7 +18,8 @@ import {
   AlertCircle,
   CheckCircle2,
   UserPlus,
-  ListChecks
+  ListChecks,
+  Video
 } from 'lucide-vue-next'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth'
@@ -44,7 +45,8 @@ export interface Notification {
     | 'ticket_status'
     | 'ticket_assigned'
     | 'ticket_comment'
-  source_type: 'task' | 'project' | 'comment' | 'ticket'
+    | 'meeting_starting'
+  source_type: 'task' | 'project' | 'comment' | 'ticket' | 'meeting'
   source_id: string | null
   source_ref: string | null
   actor_id: string | null
@@ -97,6 +99,8 @@ export function typeIcon(t: Notification['type']): Component {
       return MessageCircle
     case 'mention':
       return AtSign
+    case 'meeting_starting':
+      return Video
     default:
       return Bell
   }
@@ -119,6 +123,8 @@ export function typeColor(t: Notification['type']): string {
       return 'text-info'
     case 'mention':
       return 'text-accent'
+    case 'meeting_starting':
+      return 'text-primary'
     default:
       return 'text-base-content/50'
   }

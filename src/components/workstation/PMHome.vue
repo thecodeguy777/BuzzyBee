@@ -10,6 +10,8 @@ import { useTeamHours } from '@/composables/useTeamHours'
 import { usePmDashboard } from '@/composables/usePmDashboard'
 import { formatHours } from '@/lib/format'
 import AmbientHive from '@/components/workstation/home/AmbientHive.vue'
+import LiveMeetings from '@/components/workstation/home/LiveMeetings.vue'
+import UpcomingMeetings from '@/components/workstation/home/UpcomingMeetings.vue'
 import PulseStatCard from '@/components/workstation/home/PulseStatCard.vue'
 import NeedsAttention from '@/components/workstation/home/NeedsAttention.vue'
 import BuzzyHiveBrief from '@/components/workstation/home/BuzzyHiveBrief.vue'
@@ -90,6 +92,9 @@ function planMyWeek() {
     <!-- The Hive — live presence -->
     <AmbientHive />
 
+    <!-- Admin oversight: meetings live right now across the org -->
+    <LiveMeetings v-if="auth.isAdmin" />
+
     <!-- Error banner -->
     <div
       v-if="errorMsg"
@@ -139,6 +144,9 @@ function planMyWeek() {
 
     <!-- Needs attention — highest-value block, promoted full-width -->
     <NeedsAttention :alerts="alerts" :loading="loading" />
+
+    <!-- My next scheduled meetings (hidden when none) -->
+    <UpcomingMeetings />
 
     <!-- BuzzyHiveAI brief -->
     <div ref="briefAnchor" class="scroll-mt-4">

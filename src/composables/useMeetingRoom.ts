@@ -578,11 +578,28 @@ export function useMeetingRoom() {
   // NB: a Supabase rpc() builder is LAZY — it only fires the request when then()/
   // await runs. These wrappers .then() so callers can fire-and-forget AND so any
   // error surfaces (silent 'void rpc()' was the no-row bug).
+  // Durable record (meeting_messages): chat + join lines survive the call so
+  // the host can review the transcript + attendance from /app/meetings.
+  // Fire-and-forget — a failed write must never break the live call.
+  function persistMessage(kind: 'text' | 'system', body: string) {
+    return supabase.rpc('meeting_post_message', {
+      p_token: token.value, p_user_id: myId.value, p_name: myName.value,
+      p_kind: kind, p_body: body, p_file: null,
+    }).then(({ error }) => { if (error) console.warn('[meet] meeting_post_message', error.message) },
+            (e: unknown) => console.warn('[meet] meeting_post_message', e))
+  }
+  // One join line per page session (a reload that rejoins logs again — true).
+  let joinLogged = false
   function rpcJoin(admitted: boolean) {
     return supabase.rpc('meeting_join', {
       p_token: token.value, p_user_id: myId.value, p_name: myName.value, p_role: myRole.value, p_admitted: admitted,
-    }).then(({ error }) => { if (error) console.error('[meet] meeting_join', error.message) },
-            (e: unknown) => console.error('[meet] meeting_join', e))
+    }).then(({ error }) => {
+      if (error) console.error('[meet] meeting_join', error.message)
+      else if (admitted && !joinLogged) {
+        joinLogged = true
+        void persistMessage('system', 'joined the meeting')
+      }
+    }, (e: unknown) => console.error('[meet] meeting_join', e))
   }
   function rpcHeartbeat() {
     return supabase.rpc('meeting_heartbeat', {
@@ -1420,6 +1437,9 @@ export function useMeetingRoom() {
     const msg: MeetingChatMsg = { from: myId.value, name: myName.value, text: t, at: Date.now() }
     chat.value = [...chat.value, msg]
     broadcast(channel, 'chat', msg)
+    // In-call chat stays broadcast-driven (ephemeral UX); the durable copy
+    // feeds the post-meeting transcript.
+    void persistMessage('text', t)
   }
   function launchReaction(emoji: string) {
     const id = Math.random().toString(36).slice(2)

@@ -12,6 +12,7 @@ import {
   UsersRound,
   MessagesSquare,
   MessageCircle,
+  Video,
   Handshake,
   Target,
   FileText,
@@ -66,6 +67,7 @@ const bottomNavItems = computed<NavItem[]>(() => {
   const items: NavItem[] = [
     { to: '/app/comms', label: 'Comms', icon: MessagesSquare },
     { to: '/app/messages', label: 'Messages', icon: MessageCircle },
+    { to: '/app/meetings', label: 'Meetings', icon: Video },
     { to: '/app/crm', label: 'CRM', icon: Handshake },
     { to: '/app/clients', label: 'Clients', icon: Users }
   ]
